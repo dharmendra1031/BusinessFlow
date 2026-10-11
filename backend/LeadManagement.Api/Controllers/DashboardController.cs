@@ -37,9 +37,10 @@ public sealed class DashboardController(AppDbContext db) : ControllerBase
                 leadIds.Contains(f.LeadId) && f.CompletedAtUtc == null &&
                 f.DueAtUtc >= now.Date.AddDays(1)),
             userWise = User.IsInRole("Admin")
-                ? await leads.GroupBy(l => l.AssignedToId)
-                    .Select(g => new { userId = g.Key, customers = g.Count(),
-                        amount = g.Sum(l => l.ProjectAmount ?? 0m) }).Take(100).ToListAsync()
+                ? await leads.GroupBy(l => new { l.AssignedToId, Name = l.AssignedTo == null ? "Unassigned" : l.AssignedTo.FullName })
+                    .Select(g => new { userId = g.Key.AssignedToId, userName = g.Key.Name,
+                        customers = g.Count(), amount = g.Sum(l => l.ProjectAmount ?? 0m) })
+                    .OrderByDescending(g => g.customers).Take(100).ToListAsync()
                 : null
         });
     }
