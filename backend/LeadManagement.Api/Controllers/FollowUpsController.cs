@@ -43,8 +43,18 @@ public sealed class FollowUpsController(AppDbContext db) : ControllerBase
             LeadId = leadId, AssignedToId = lead.AssignedToId ?? creatorId,
             CreatedById = creatorId, DueAtUtc = request.DueAtUtc, Notes = request.Notes.Trim()
         };
+        await using var transaction = await db.Database.BeginTransactionAsync();
         db.LeadFollowUps.Add(followUp);
         await db.SaveChangesAsync();
+        lead.NextFollowUpDate = await db.LeadFollowUps
+            .Where(f => f.LeadId == leadId && f.CompletedAtUtc == null)
+            .MinAsync(f => (DateTime?)f.DueAtUtc);
+        db.AuditLogs.Add(new AuditLog
+        {
+            UserId = creatorId, Action = "Create", TableName = "FollowUps", RecordId = followUp.Id
+        });
+        await db.SaveChangesAsync();
+        await transaction.CommitAsync();
         return Ok(new { followUp.Id });
     }
 
@@ -56,7 +66,59 @@ public sealed class FollowUpsController(AppDbContext db) : ControllerBase
         if (followUp is null) return NotFound();
         if (followUp.CompletedAtUtc is not null) return NoContent();
         followUp.CompletedAtUtc = DateTime.UtcNow;
+        var lead = await db.Leads.FirstAsync(l => l.Id == followUp.LeadId);
+        lead.LastFollowUpDate = followUp.CompletedAtUtc;
+        lead.NextFollowUpDate = await db.LeadFollowUps
+            .Where(f => f.LeadId == lead.Id && f.Id != followUp.Id && f.CompletedAtUtc == null)
+            .MinAsync(f => (DateTime?)f.DueAtUtc);
+        db.AuditLogs.Add(new AuditLog
+        {
+            UserId = LeadAccess.UserId(User), Action = "Complete",
+            TableName = "FollowUps", RecordId = id
+        });
         await db.SaveChangesAsync();
         return NoContent();
+    }
+
+    [HttpPut("{id:long}")]
+    public async Task<IActionResult> Update(long id, UpdateFollowUpRequest request)
+    {
+        var leadIds = LeadAccess.VisibleTo(db.Leads, User).Select(l => l.Id);
+        var followUp = await db.LeadFollowUps
+            .FirstOrDefaultAsync(f => f.Id == id && leadIds.Contains(f.LeadId));
+        if (followUp is null) return NotFound();
+        if (followUp.CompletedAtUtc.HasValue)
+            return BadRequest(new { message = "Completed follow-ups cannot be edited." });
+        if (request.DueAtUtc <= DateTime.UtcNow || string.IsNullOrWhiteSpace(request.Notes))
+            return BadRequest(new { message = "Enter a future due date and remarks." });
+
+        followUp.DueAtUtc = request.DueAtUtc;
+        followUp.Notes = request.Notes.Trim();
+        var lead = await db.Leads.FirstAsync(l => l.Id == followUp.LeadId);
+        var otherDue = await db.LeadFollowUps.AsNoTracking()
+            .Where(f => f.LeadId == lead.Id && f.Id != id && f.CompletedAtUtc == null)
+            .MinAsync(f => (DateTime?)f.DueAtUtc);
+        lead.NextFollowUpDate = otherDue.HasValue && otherDue.Value < followUp.DueAtUtc
+            ? otherDue : followUp.DueAtUtc;
+        db.AuditLogs.Add(new AuditLog
+        {
+            UserId = LeadAccess.UserId(User), Action = "Update",
+            TableName = "FollowUps", RecordId = id, ChangedFields = "Due date, remarks"
+        });
+        await db.SaveChangesAsync();
+        return NoContent();
+    }
+
+    [HttpGet("/api/leads/{leadId:long}/followups")]
+    public async Task<IActionResult> History(long leadId)
+    {
+        if (!await LeadAccess.VisibleTo(db.Leads, User).AnyAsync(l => l.Id == leadId))
+            return NotFound();
+        var followUps = await db.LeadFollowUps.AsNoTracking()
+            .Where(f => f.LeadId == leadId)
+            .OrderByDescending(f => f.CreatedAtUtc)
+            .Select(f => new { f.Id, f.Notes, f.DueAtUtc, f.CompletedAtUtc, f.CreatedAtUtc, f.AssignedToId })
+            .ToListAsync();
+        return Ok(followUps);
     }
 }

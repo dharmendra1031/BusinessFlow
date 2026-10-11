@@ -29,6 +29,13 @@ public sealed class Lead
     public string Phone { get; set; } = string.Empty;
     public string? Email { get; set; }
     public string? CompanyName { get; set; }
+    public string? CustomerCode { get; set; }
+    public string? Address { get; set; }
+    public string? LeadGivenBy { get; set; }
+    public decimal? ProjectAmount { get; set; }
+    public DateTime? LastFollowUpDate { get; set; }
+    public DateTime? NextFollowUpDate { get; set; }
+    public long? ModifiedByUserId { get; set; }
     public string? Requirement { get; set; }
     public long SourceId { get; set; }
     public LeadSource Source { get; set; } = null!;
@@ -71,5 +78,16 @@ public sealed class LeadFollowUp
     public DateTime DueAtUtc { get; set; }
     public DateTime? CompletedAtUtc { get; set; }
     public long CreatedById { get; set; }
+    public DateTime CreatedAtUtc { get; set; } = DateTime.UtcNow;
+}
+
+public sealed class AuditLog
+{
+    public long Id { get; set; }
+    public long UserId { get; set; }
+    public string Action { get; set; } = string.Empty;
+    public string TableName { get; set; } = string.Empty;
+    public long RecordId { get; set; }
+    public string? ChangedFields { get; set; }
     public DateTime CreatedAtUtc { get; set; } = DateTime.UtcNow;
 }

@@ -3,6 +3,7 @@ import { api } from './api';
 import { Icon } from './Icon';
 import { useFeedback } from './Feedback';
 import LeadDetails from './LeadDetails';
+import EmployeeManager from './EmployeeManager';
 import type { Dashboard, Employee, FollowUp, Lead, Lookup, User } from './types';
 
 function useResource<T>(path: string, token: string) {
@@ -52,7 +53,32 @@ export function DashboardPage({ token, onNavigate }: {
   token: string;
   onNavigate: (screen: 'leads' | 'followups') => void;
 }) {
-  const { data, error, loading, refresh } = useResource<Dashboard>('/api/dashboard', token);
+  const [from, setFrom] = useState('');
+  const [to, setTo] = useState('');
+
+  function setPeriod(value: string) {
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const date = (day: Date) => [day.getFullYear(),
+      String(day.getMonth() + 1).padStart(2, '0'),
+      String(day.getDate()).padStart(2, '0')].join('-');
+    if (value === 'all' || value === 'custom') {
+      if (value === 'all') { setFrom(''); setTo(''); }
+      return;
+    }
+    let start = new Date(today);
+    if (value === 'yesterday') start.setDate(start.getDate() - 1);
+    if (value === 'week') start.setDate(start.getDate() - ((start.getDay() + 6) % 7));
+    if (value === 'month') start = new Date(today.getFullYear(), today.getMonth(), 1);
+    setFrom(date(start));
+    setTo(date(value === 'yesterday' ? start : today));
+  }
+
+  const filters = new URLSearchParams();
+  if (from) filters.set('from', from);
+  if (to) filters.set('to', to);
+  const path = '/api/dashboard' + (filters.size ? '?' + filters : '');
+  const { data, error, loading, refresh } = useResource<Dashboard>(path, token);
   const { data: recent } = useResource<{ items: Lead[] }>('/api/leads?page=1&pageSize=5', token);
   const { data: followups } = useResource<FollowUp[]>('/api/followups', token);
   const due = (followups ?? []).filter(item => !item.completedAtUtc)
@@ -63,6 +89,8 @@ export function DashboardPage({ token, onNavigate }: {
     { label: 'New leads', value: data?.newLeads, icon: 'plus', tone: 'violet', helper: 'Awaiting first contact' },
     { label: 'Won leads', value: data?.wonLeads, icon: 'check', tone: 'green', helper: 'Successfully converted' },
     { label: 'Overdue follow-ups', value: data?.overdueFollowUps, icon: 'clock', tone: 'orange', helper: 'Need your attention' },
+    { label: 'Project amount (KWD)', value: data?.totalProjectAmount, icon: 'clipboard', tone: 'green', helper: 'Expected project value' },
+    { label: "Today's follow-ups", value: data?.todayFollowUps, icon: 'calendar', tone: 'blue', helper: 'Due today' },
   ] as const;
   const total = data?.totalLeads ?? 0;
   const won = data?.wonLeads ?? 0;
@@ -78,9 +106,17 @@ export function DashboardPage({ token, onNavigate }: {
     <header className="page-header">
       <div><span className="section-kicker">OVERVIEW</span><h1>Good to see you!</h1>
         <p>Here's what is happening with your leads.</p></div>
-      <button className="secondary-action" onClick={() => void refresh()} disabled={loading}>
-        <Icon name="refresh" size={17} /> Refresh
-      </button>
+      <div className="table-toolbar">
+        <label>Lead creation period<select defaultValue="all" onChange={event => setPeriod(event.target.value)}>
+          <option value="all">All dates</option><option value="today">Today</option>
+          <option value="yesterday">Yesterday</option><option value="week">This week</option>
+          <option value="month">This month</option><option value="custom">Custom</option>
+        </select></label>
+        <input aria-label="From date" type="date" value={from} onChange={event => setFrom(event.target.value)} />
+        <input aria-label="To date" type="date" value={to} onChange={event => setTo(event.target.value)} />
+        <button className="secondary-action" onClick={() => void refresh()} disabled={loading}>
+          <Icon name="refresh" size={17} /> Refresh</button>
+      </div>
     </header>
     {error && <ErrorState message={error} retry={() => void refresh()} />}
     <div className="metrics">
@@ -132,6 +168,17 @@ export function DashboardPage({ token, onNavigate }: {
           <td><StatusBadge status={lead.status} /></td><td>{lead.assignedTo || 'Unassigned'}</td></tr>)}
       </tbody></table></div> : <EmptyState title="No leads yet" detail="Create a lead to see it here." />}
     </section>
+    {!!data?.userWise?.length && <section className="panel">
+      <div className="panel-heading"><div><h2>User-wise performance</h2>
+        <p>Customer count and expected project amount by owner</p></div></div>
+      <div className="table-scroll"><table><thead><tr><th>Employee</th><th>Customers</th>
+        <th>Project amount (KWD)</th></tr></thead><tbody>
+        {data.userWise.map(item => <tr key={item.userId ?? 0}>
+          <td>{item.userName}</td><td>{item.customers}</td>
+          <td>{item.amount.toLocaleString('en-KW')}</td>
+        </tr>)}
+      </tbody></table></div>
+    </section>}
   </section>;
 }
 
@@ -152,6 +199,10 @@ export function LeadsPage({ token, user, newLeadRequest, onNewLeadOpened }: {
   const [email, setEmail] = useState('');
   const [requirement, setRequirement] = useState('');
   const [sourceId, setSourceId] = useState(1);
+  const [address, setAddress] = useState('');
+  const [leadGivenBy, setLeadGivenBy] = useState(user.fullName);
+  const [projectAmount, setProjectAmount] = useState('');
+  const [newStatusId, setNewStatusId] = useState(1);
 
   useEffect(() => {
     if (!showNew) return;
@@ -189,8 +240,10 @@ export function LeadsPage({ token, user, newLeadRequest, onNewLeadOpened }: {
     setWorking(true);
     try {
       await api('/api/leads', token, { method: 'POST',
-        body: JSON.stringify({ name, phone, email: email || null, companyName, requirement, sourceId }) });
+        body: JSON.stringify({ name, phone, email: email || null, companyName, requirement, sourceId,
+          address, leadGivenBy, projectAmount: projectAmount ? Number(projectAmount) : null, statusId: newStatusId }) });
       setName(''); setPhone(''); setEmail(''); setCompanyName(''); setRequirement('');
+      setAddress(''); setLeadGivenBy(user.fullName); setProjectAmount(''); setNewStatusId(1);
       setShowNew(false);
       setPage(1);
       await refresh();
@@ -265,12 +318,13 @@ export function LeadsPage({ token, user, newLeadRequest, onNewLeadOpened }: {
       {error && <ErrorState message={error} retry={() => void refresh()} />}
       {loading && !data ? <div className="loading-state">Loading leads…</div> :
         data?.items.length ? <div className="table-scroll">
-          <table><thead><tr><th>Customer</th><th>Contact</th><th>Source</th>
+          <table><thead><tr><th>Customer</th><th>Contact</th><th>Amount (KWD)</th><th>Source</th>
             <th>Status</th><th>Assigned to</th><th /></tr></thead><tbody>
             {data.items.map(lead => <tr key={lead.id}>
               <td><button type="button" className="lead-link" onClick={() => setSelectedLead(lead)}>{lead.name}</button>
-                <small>{lead.companyName || lead.requirement || 'Individual'}</small></td>
+                <small>{lead.customerCode || ('Lead #' + lead.id)} · {lead.companyName || lead.requirement || 'Individual'}</small></td>
               <td><a className="table-phone" href={'tel:' + lead.phone}>{lead.phone}</a></td>
+              <td>{lead.projectAmount?.toLocaleString('en-KW') ?? '—'}</td>
               <td><span className="source-tag">{lead.source}</span></td>
               <td><select className="inline-select" aria-label={'Status for ' + lead.name} value={lead.statusId}
                 onChange={event => void changeStatus(lead, Number(event.target.value))}>
@@ -278,8 +332,8 @@ export function LeadsPage({ token, user, newLeadRequest, onNewLeadOpened }: {
               <td>{canAssign ? <select className="inline-select" aria-label={'Assign ' + lead.name}
                 value={lead.assignedToId ?? ''} onChange={event => void assignLead(lead, Number(event.target.value))}>
                 <option value="" disabled>Unassigned</option>
-                {employees?.map(employee => <option key={employee.id} value={employee.id}>{employee.fullName}</option>)}
-                {!employees?.some(employee => employee.id === lead.assignedToId) && lead.assignedToId &&
+                {employees?.filter(employee => employee.isActive).map(employee => <option key={employee.id} value={employee.id}>{employee.fullName}</option>)}
+                {!employees?.some(employee => employee.id === lead.assignedToId && employee.isActive) && lead.assignedToId &&
                   <option value={lead.assignedToId}>{lead.assignedTo || 'Current employee'}</option>}
               </select> : (lead.assignedTo || 'Unassigned')}</td>
               <td><button className="icon-button row-edit" aria-label={'Edit ' + lead.name}
@@ -315,6 +369,15 @@ export function LeadsPage({ token, user, newLeadRequest, onNewLeadOpened }: {
             value={email} onChange={event => setEmail(event.target.value)} /></label>
           <label>Company name<input maxLength={200} placeholder="Optional"
             value={companyName} onChange={event => setCompanyName(event.target.value)} /></label>
+          <label>Address<input maxLength={500} value={address}
+            onChange={event => setAddress(event.target.value)} /></label>
+          <label>Lead given by <span className="required">*</span><input required maxLength={150} value={leadGivenBy}
+            onChange={event => setLeadGivenBy(event.target.value)} /></label>
+          <label>Project amount (KWD)<input type="number" min="0" step="0.001" value={projectAmount}
+            onChange={event => setProjectAmount(event.target.value)} /></label>
+          <label>Lead status<select value={newStatusId} onChange={event => setNewStatusId(Number(event.target.value))}>
+            {statuses?.map(status => <option key={status.id} value={status.id}>{status.name}</option>)}
+          </select></label>
           <label>Lead source<select value={sourceId} onChange={event => setSourceId(Number(event.target.value))}>
             {sources?.map(source => <option key={source.id} value={source.id}>{source.name}</option>)}</select></label>
           <label>Requirement<textarea maxLength={2000} placeholder="What is the customer interested in?"
@@ -333,6 +396,9 @@ export function FollowUpsPage({ token }: { token: string }) {
   const { data, refresh, error, loading } = useResource<FollowUp[]>('/api/followups', token);
   const [tab, setTab] = useState<'pending' | 'overdue' | 'completed' | 'all'>('pending');
   const [working, setWorking] = useState<number | null>(null);
+  const [editing, setEditing] = useState<FollowUp | null>(null);
+  const [editDueAt, setEditDueAt] = useState('');
+  const [editNotes, setEditNotes] = useState('');
   const now = Date.now();
   const tasks = (data ?? []).filter(item => {
     if (tab === 'completed') return !!item.completedAtUtc;
@@ -340,6 +406,28 @@ export function FollowUpsPage({ token }: { token: string }) {
     if (tab === 'overdue') return !item.completedAtUtc && new Date(item.dueAtUtc).getTime() < now;
     return true;
   });
+
+  function startEdit(item: FollowUp) {
+    setEditing(item);
+    const due = new Date(item.dueAtUtc);
+    setEditDueAt(new Date(due.getTime() - due.getTimezoneOffset() * 60000).toISOString().slice(0, 16));
+    setEditNotes(item.notes);
+  }
+
+  async function saveFollowUp(event: React.FormEvent) {
+    event.preventDefault();
+    if (!editing) return;
+    setWorking(editing.id);
+    try {
+      await api('/api/followups/' + editing.id, token, { method: 'PUT',
+        body: JSON.stringify({ dueAtUtc: new Date(editDueAt).toISOString(), notes: editNotes }) });
+      setEditing(null);
+      await refresh();
+      notify('success', 'Follow-up updated');
+    } catch (err) {
+      notify('error', 'Update failed', err instanceof Error ? err.message : undefined);
+    } finally { setWorking(null); }
+  }
 
   async function complete(item: FollowUp) {
     const accepted = await confirm({
@@ -376,12 +464,25 @@ export function FollowUpsPage({ token }: { token: string }) {
           <div className="followup-due"><Icon name="calendar" size={16} />
             <span className={!item.completedAtUtc && new Date(item.dueAtUtc).getTime() < now ? 'overdue-text' : ''}>
               {dateLabel(item.dueAtUtc)}</span></div>
-          <div className="followup-action">{item.completedAtUtc ? <StatusBadge status="Completed" /> :
+          <div className="followup-action">{item.completedAtUtc ? <StatusBadge status="Completed" /> : <>
+            <button disabled={working === item.id} onClick={() => startEdit(item)}>Edit</button>
             <button disabled={working === item.id} onClick={() => void complete(item)}>
-              <Icon name="check" size={16} /> {working === item.id ? 'Saving…' : 'Complete'}</button>}</div>
+              <Icon name="check" size={16} /> {working === item.id ? 'Saving…' : 'Complete'}</button></>}</div>
         </article>)}</div> : !error && <EmptyState title="All caught up"
           detail={tab === 'overdue' ? 'No overdue follow-ups in this list.' : 'No follow-ups in this view.'} />}
     </section>
+    {editing && <div className="drawer-backdrop"><aside className="detail-drawer" role="dialog" aria-modal="true">
+      <div className="drawer-header"><div><h2>Edit follow-up</h2><p>{editing.leadName}</p></div>
+        <button className="icon-button" aria-label="Close" onClick={() => setEditing(null)}
+          disabled={working !== null}><Icon name="close" /></button></div>
+      <form className="drawer-form" onSubmit={saveFollowUp}>
+        <label>Next follow-up<input required type="datetime-local" value={editDueAt}
+          onChange={event => setEditDueAt(event.target.value)} /></label>
+        <label>Remarks<textarea required maxLength={2000} value={editNotes}
+          onChange={event => setEditNotes(event.target.value)} /></label>
+        <button className="primary" disabled={working !== null}>Save changes</button>
+      </form>
+    </aside></div>}
   </section>;
 }
 
@@ -389,8 +490,10 @@ export function EmployeesPage({ token, user }: { token: string; user: User }) {
   const { notify } = useFeedback();
   const { data, refresh, error } = useResource<Employee[]>('/api/employees', token);
   const [showForm, setShowForm] = useState(false);
+  const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null);
   const [working, setWorking] = useState(false);
   const [fullName, setFullName] = useState('');
+  const [phoneNumber, setPhoneNumber] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [role, setRole] = useState('Employee');
@@ -411,9 +514,9 @@ export function EmployeesPage({ token, user }: { token: string; user: User }) {
     setWorking(true);
     try {
       await api('/api/employees', token, { method: 'POST', body: JSON.stringify({
-        fullName, email, password, role, managerId: managerId ? Number(managerId) : null,
+        fullName, email, password, role, phoneNumber, managerId: managerId ? Number(managerId) : null,
       }) });
-      setFullName(''); setEmail(''); setPassword(''); setManagerId('');
+      setFullName(''); setPhoneNumber(''); setEmail(''); setPassword(''); setManagerId('');
       setShowForm(false);
       await refresh();
       notify('success', 'Employee created', fullName + ' can now access the CRM.');
@@ -429,13 +532,15 @@ export function EmployeesPage({ token, user }: { token: string; user: User }) {
   </header>
     {error && <ErrorState message={error} retry={() => void refresh()} />}
     <section className="panel team-panel">
-      <div className="panel-heading"><div><h2>Team directory</h2><p>{data?.length ?? 0} active members</p></div></div>
+      <div className="panel-heading"><div><h2>Team directory</h2><p>{data?.filter(member => member.isActive).length ?? 0} active members</p></div></div>
       {data?.length ? <div className="table-scroll"><table><thead><tr><th>Employee</th><th>Email</th>
-        <th>Reporting manager</th></tr></thead><tbody>
+        <th>Reporting manager</th><th>Status</th><th /></tr></thead><tbody>
         {data.map(member => <tr key={member.id}><td><div className="person-cell">
           <span className="avatar avatar-person">{member.fullName.charAt(0).toUpperCase()}</span>
           <strong>{member.fullName}</strong></div></td>
           <td>{member.email}</td><td>{data.find(person => person.id === member.managerId)?.fullName || '—'}</td>
+          <td>{member.isActive ? 'Active' : 'Inactive'}</td>
+          <td>{canCreate && <button className="text-action" onClick={() => setSelectedEmployee(member)}>Manage</button>}</td>
         </tr>)}</tbody></table></div> : <EmptyState title="No employees found" detail="Team members will appear here." />}
     </section>
     {showForm && <div className="drawer-backdrop" onMouseDown={event => {
@@ -448,6 +553,7 @@ export function EmployeesPage({ token, user }: { token: string; user: User }) {
       <form className="drawer-form" onSubmit={save}>
         <label>Full name <span className="required">*</span><input autoFocus required maxLength={150}
           value={fullName} onChange={event => setFullName(event.target.value)} /></label>
+        <label>Mobile<input value={phoneNumber} onChange={event => setPhoneNumber(event.target.value)} /></label>
         <label>Email <span className="required">*</span><input type="email" required
           value={email} onChange={event => setEmail(event.target.value)} /></label>
         <label>Temporary password <span className="required">*</span><input type="password" required minLength={12}
@@ -464,5 +570,7 @@ export function EmployeesPage({ token, user }: { token: string; user: User }) {
           <button className="primary" disabled={working}>{working ? 'Creating…' : 'Create employee'}</button></div>
       </form>
     </aside></div>}
+    {selectedEmployee && <EmployeeManager employee={selectedEmployee} team={data ?? []}
+      token={token} onClose={() => setSelectedEmployee(null)} onSaved={refresh} />}
   </section>;
 }

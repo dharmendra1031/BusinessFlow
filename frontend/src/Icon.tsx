@@ -3,7 +3,7 @@ import type { SVGProps } from 'react';
 type Name = 'grid' | 'users' | 'clipboard' | 'calendar' | 'menu' | 'close' |
   'plus' | 'arrow' | 'search' | 'check' | 'clock' | 'target' | 'logout' |
   'refresh' | 'chevron' | 'phone' | 'mail' | 'filter' | 'briefcase' |
-  'edit' | 'warning' | 'info' | 'download';
+  'edit' | 'warning' | 'info' | 'download' | 'lock';
 
 const paths: Record<Name, string> = {
   grid: 'M3 3h7v7H3z M14 3h7v7h-7z M3 14h7v7H3z M14 14h7v7h-7z',
@@ -28,7 +28,8 @@ const paths: Record<Name, string> = {
   edit: 'M12 20h9 M16 4l4 4-11 11-5 1 1-5z',
   warning: 'M12 3 2 21h20L12 3z M12 9v5 M12 18h.01',
   info: 'M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20 M12 11v6 M12 7h.01',
-  download: 'M12 3v12 M7 10l5 5 5-5 M5 19h14'
+  download: 'M12 3v12 M7 10l5 5 5-5 M5 19h14',
+  lock: 'M5 11h14v10H5z M8 11V7a4 4 0 0 1 8 0v4'
 };
 
 export function Icon({ name, size = 20, ...props }: SVGProps<SVGSVGElement> & { name: Name; size?: number }) {

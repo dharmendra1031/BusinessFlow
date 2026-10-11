@@ -89,6 +89,38 @@ public sealed class LeadPermissionsTests
         Assert.Single(await db.LeadAssignments.ToListAsync());
         Assert.Equal(manager.Id, (await db.LeadFollowUps.SingleAsync(f => f.Notes == "Pending")).AssignedToId);
         Assert.Equal(employee.Id, (await db.LeadFollowUps.SingleAsync(f => f.Notes == "Completed")).AssignedToId);
+
+        var createdResponse = await employeeController.Create(new LeadRequest(
+            "New SRS customer", "1000000003", null, "Customer Co", "Project", 1,
+            "Kuwait City", "Manager", 15000.500m, 7));
+        Assert.IsType<CreatedAtActionResult>(createdResponse);
+        var createdLead = await db.Leads.SingleAsync(l => l.Name == "New SRS customer");
+        Assert.Equal($"CUS-{DateTime.UtcNow.Year}-{createdLead.Id:D6}", createdLead.CustomerCode);
+        Assert.Equal("Manager", createdLead.LeadGivenBy);
+        Assert.Equal(15000.500m, createdLead.ProjectAmount);
+        Assert.Equal(7, createdLead.StatusId);
+
+        var reports = new ReportsController(db)
+        {
+            ControllerContext = new ControllerContext
+            {
+                HttpContext = new DefaultHttpContext { User = Principal(employee.Id, "Employee") }
+            }
+        };
+        var result = Assert.IsType<OkObjectResult>(await reports.Get());
+        var json = System.Text.Json.JsonSerializer.Serialize(result.Value);
+        Assert.Contains("New SRS customer", json);
+        Assert.DoesNotContain("Outside lead", json);
+
+        var followUps = new FollowUpsController(db)
+        {
+            ControllerContext = new ControllerContext
+            {
+                HttpContext = new DefaultHttpContext { User = Principal(employee.Id, "Employee") }
+            }
+        };
+        Assert.IsType<NotFoundResult>(await followUps.History(outsideLead.Id));
+        Assert.IsType<OkObjectResult>(await followUps.History(createdLead.Id));
     }
 
     private static LeadsController Controller(AppDbContext db, long userId, string role) =>

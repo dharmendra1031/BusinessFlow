@@ -14,6 +14,7 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
     public DbSet<LeadAssignment> LeadAssignments => Set<LeadAssignment>();
     public DbSet<LeadStatusChange> LeadStatusChanges => Set<LeadStatusChange>();
     public DbSet<LeadFollowUp> LeadFollowUps => Set<LeadFollowUp>();
+    public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -31,6 +32,14 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
             entity.Property(x => x.Phone).HasMaxLength(30).IsRequired();
             entity.Property(x => x.Email).HasMaxLength(256);
             entity.Property(x => x.CompanyName).HasMaxLength(200);
+            entity.Property(x => x.CustomerCode).HasMaxLength(30);
+            entity.Property(x => x.Address).HasMaxLength(500);
+            entity.Property(x => x.LeadGivenBy).HasMaxLength(150);
+            entity.Property(x => x.ProjectAmount).HasPrecision(18, 3);
+            entity.HasIndex(x => x.CustomerCode).IsUnique().HasFilter("[CustomerCode] IS NOT NULL");
+            entity.HasIndex(x => x.LeadGivenBy);
+            entity.HasOne<ApplicationUser>().WithMany().HasForeignKey(x => x.ModifiedByUserId)
+                .OnDelete(DeleteBehavior.NoAction);
             entity.Property(x => x.Requirement).HasMaxLength(2000);
             entity.HasIndex(x => new { x.AssignedToId, x.StatusId, x.CreatedAtUtc });
             entity.HasIndex(x => x.Phone);
@@ -57,7 +66,10 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
             new LeadStatus { Id = 3, Name = "Qualified", SortOrder = 3 },
             new LeadStatus { Id = 4, Name = "Proposal", SortOrder = 4 },
             new LeadStatus { Id = 5, Name = "Won", SortOrder = 5 },
-            new LeadStatus { Id = 6, Name = "Lost", SortOrder = 6 });
+            new LeadStatus { Id = 6, Name = "Lost", SortOrder = 6 },
+            new LeadStatus { Id = 7, Name = "Active", SortOrder = 7 },
+            new LeadStatus { Id = 8, Name = "Closed", SortOrder = 8 },
+            new LeadStatus { Id = 9, Name = "Not Interested", SortOrder = 9 });
 
         modelBuilder.Entity<LeadAssignment>().HasIndex(x => x.LeadId);
         modelBuilder.Entity<LeadAssignment>().HasOne<Lead>().WithMany().HasForeignKey(x => x.LeadId)
@@ -65,6 +77,13 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
         modelBuilder.Entity<LeadStatusChange>().HasIndex(x => x.LeadId);
         modelBuilder.Entity<LeadStatusChange>().HasOne<Lead>().WithMany().HasForeignKey(x => x.LeadId)
             .OnDelete(DeleteBehavior.Cascade);
+        modelBuilder.Entity<AuditLog>(entity =>
+        {
+            entity.Property(x => x.Action).HasMaxLength(50);
+            entity.Property(x => x.TableName).HasMaxLength(60);
+            entity.Property(x => x.ChangedFields).HasMaxLength(1000);
+            entity.HasIndex(x => new { x.TableName, x.RecordId });
+        });
         modelBuilder.Entity<LeadFollowUp>(entity =>
         {
             entity.Property(x => x.Notes).HasMaxLength(2000);
