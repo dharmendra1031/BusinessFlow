@@ -63,3 +63,29 @@ Do not deploy publicly until HTTPS/proxy configuration, secrets management, test
 ## UI feedback and accessibility
 
 The frontend uses a shared feedback provider: success/error/warning notifications and keyboard-accessible confirmations for lead assignment, terminal status changes, and follow-up completion. It also includes responsive navigation and lead/employee drawers. This is a UI implementation, not evidence of production security or completed browser testing.
+
+## Kuwait SRS extensions (feature branch)
+
+Customer entries now include a database-generated numeric ID, separate immutable
+`CUS-YYYY-000001` display code, address, lead referrer, KWD project amount,
+last and next follow-up summaries, and optional SRS lead statuses.
+Lead sources remain separate from the person who provided the lead.
+
+- Lead screen: customer details, amount, status, and per-customer follow-up history.
+- Admin: employee maintenance, activation/deactivation, secure reset password, and totals.
+- Account: change own password.
+- Dashboard: project value, follow-ups, and active/closed/not-interested counts.
+- Reports: ten SRS categories with date, status, referrer, and permitted user filters.
+  Results are capped at 5,000 rows per request; CSV only exports returned rows.
+- Audit: lead create/edit/status/assignment, follow-up edits, and user management.
+  Password contents are never included in the audit trail.
+
+Existing SQL Server installations must back up their database before applying
+`database/20261011_srs_upgrade.sql`. Do not apply this upgrade to an empty
+database: generate the EF Core initial migration from the current model instead.
+Existing installations with an EF migration history should reconcile their
+migration baseline before future `dotnet ef database update` calls.
+
+This feature branch is not deployable until the SQL Server integration tests,
+API compile and frontend build pass against the new schema. Live deployment,
+security testing, PDF export and unrestricted report pagination are not verified.
