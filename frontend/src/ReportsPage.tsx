@@ -69,7 +69,7 @@ export default function ReportsPage({ token, user }: { token: string; user: User
     const keys = Object.keys(report.rows[0]);
     const escape = (value: unknown) => {
       const text = String(value ?? '');
-      const safe = /^[=+\\-@\\t\\r]/.test(text) ? "'" + text : text;
+      const safe = /^[-=+@]/.test(text.trimStart()) ? "'" + text : text;
       return '"' + safe.replace(/"/g, '""') + '"';
     };
     const lines = [keys.map(escape).join(','), ...report.rows.map(row =>
