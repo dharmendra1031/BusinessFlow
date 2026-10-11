@@ -332,8 +332,8 @@ export function LeadsPage({ token, user, newLeadRequest, onNewLeadOpened }: {
               <td>{canAssign ? <select className="inline-select" aria-label={'Assign ' + lead.name}
                 value={lead.assignedToId ?? ''} onChange={event => void assignLead(lead, Number(event.target.value))}>
                 <option value="" disabled>Unassigned</option>
-                {employees?.map(employee => <option key={employee.id} value={employee.id}>{employee.fullName}</option>)}
-                {!employees?.some(employee => employee.id === lead.assignedToId) && lead.assignedToId &&
+                {employees?.filter(employee => employee.isActive).map(employee => <option key={employee.id} value={employee.id}>{employee.fullName}</option>)}
+                {!employees?.some(employee => employee.id === lead.assignedToId && employee.isActive) && lead.assignedToId &&
                   <option value={lead.assignedToId}>{lead.assignedTo || 'Current employee'}</option>}
               </select> : (lead.assignedTo || 'Unassigned')}</td>
               <td><button className="icon-button row-edit" aria-label={'Edit ' + lead.name}
