@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { api } from './api';
 import { useFeedback } from './Feedback';
 
-export default function PasswordSettings({ token }: { token: string }) {
+export default function PasswordSettings({ token, onChanged }: { token: string; onChanged: () => void }) {
   const { notify } = useFeedback();
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
@@ -16,7 +16,8 @@ export default function PasswordSettings({ token }: { token: string }) {
         body: JSON.stringify({ currentPassword, newPassword }) });
       setCurrentPassword('');
       setNewPassword('');
-      notify('success', 'Password changed', 'Please sign in again when your session expires.');
+      onChanged();
+      notify('success', 'Password changed', 'Sign in with your new password.');
     } catch (err) {
       notify('error', 'Unable to change password', err instanceof Error ? err.message : undefined);
     } finally { setWorking(false); }
