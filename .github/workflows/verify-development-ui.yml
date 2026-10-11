@@ -1,14 +1,65 @@
-name: CRM UI
+name: Verify CRM UI
+
 on:
   push:
     branches: [development]
   workflow_dispatch:
+
+permissions:
+  contents: read
+
 jobs:
-  verify:
+  playwright:
     runs-on: ubuntu-latest
+    timeout-minutes: 25
+    services:
+      sqlserver:
+        image: mcr.microsoft.com/mssql/server:2022-latest
+        env:
+          ACCEPT_EULA: "Y"
+          MSSQL_SA_PASSWORD: "CRM_TestOnly_12345!"
+        ports:
+          - 1433:1433
+    env:
+      ConnectionStrings__DefaultConnection: "Server=localhost,1433;Database=LeadManagement_UITests;User ID=sa;Password=CRM_TestOnly_12345!;Encrypt=True;TrustServerCertificate=True"
+      Jwt__Key: "CRM_UI_TestOnly_Key_2026_Secure_Runner"
+      CRM_ADMIN_EMAIL: "admin-ui@example.test"
+      CRM_ADMIN_PASSWORD: "AdminUiPassword123!"
+      ASPNETCORE_ENVIRONMENT: Development
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
       - uses: actions/setup-node@v4
         with:
-          node-version: '22'
-      - run: echo 'Playwright workflow setup'
+          node-version: "22"
+      - name: Prepare SQL Server
+        working-directory: backend/LeadManagement.Api
+        run: |
+          dotnet tool install --global dotnet-ef --version 10.0.0
+          dotnet ef migrations add InitialCreate --output-dir Data/Migrations
+          for attempt in $(seq 1 24); do
+            if dotnet ef database update; then
+              exit 0
+            fi
+            sleep 5
+          done
+          exit 1
+      - name: Install frontend and Chromium
+        working-directory: frontend
+        run: |
+          npm install --no-audit --no-fund
+          npx playwright install --with-deps chromium
+      - name: Run browser tests
+        working-directory: frontend
+        run: npm run test:e2e
+      - name: Upload Playwright evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: crm-ui-playwright
+          path: |
+            frontend/playwright-report/
+            frontend/test-results/
+          if-no-files-found: warn
