@@ -411,6 +411,7 @@ export function EmployeesPage({ token, user }: { token: string; user: User }) {
   const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null);
   const [working, setWorking] = useState(false);
   const [fullName, setFullName] = useState('');
+  const [phoneNumber, setPhoneNumber] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [role, setRole] = useState('Employee');
@@ -431,9 +432,9 @@ export function EmployeesPage({ token, user }: { token: string; user: User }) {
     setWorking(true);
     try {
       await api('/api/employees', token, { method: 'POST', body: JSON.stringify({
-        fullName, email, password, role, managerId: managerId ? Number(managerId) : null,
+        fullName, email, password, role, phoneNumber, managerId: managerId ? Number(managerId) : null,
       }) });
-      setFullName(''); setEmail(''); setPassword(''); setManagerId('');
+      setFullName(''); setPhoneNumber(''); setEmail(''); setPassword(''); setManagerId('');
       setShowForm(false);
       await refresh();
       notify('success', 'Employee created', fullName + ' can now access the CRM.');
@@ -470,6 +471,7 @@ export function EmployeesPage({ token, user }: { token: string; user: User }) {
       <form className="drawer-form" onSubmit={save}>
         <label>Full name <span className="required">*</span><input autoFocus required maxLength={150}
           value={fullName} onChange={event => setFullName(event.target.value)} /></label>
+        <label>Mobile<input value={phoneNumber} onChange={event => setPhoneNumber(event.target.value)} /></label>
         <label>Email <span className="required">*</span><input type="email" required
           value={email} onChange={event => setEmail(event.target.value)} /></label>
         <label>Temporary password <span className="required">*</span><input type="password" required minLength={12}
