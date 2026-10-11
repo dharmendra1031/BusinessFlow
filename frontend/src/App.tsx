@@ -3,16 +3,18 @@ import { api } from './api';
 import { FeedbackProvider, useFeedback } from './Feedback';
 import { Icon } from './Icon';
 import { DashboardPage, EmployeesPage, FollowUpsPage, LeadsPage } from './pages';
+import ReportsPage from './ReportsPage';
 import type { User } from './types';
 
 type Session = { token: string; user: User };
-type Screen = 'dashboard' | 'leads' | 'followups' | 'employees';
+type Screen = 'dashboard' | 'leads' | 'followups' | 'employees' | 'reports';
 
 const navigation = [
   { id: 'dashboard', label: 'Dashboard', icon: 'grid' },
   { id: 'leads', label: 'All leads', icon: 'clipboard' },
   { id: 'followups', label: 'Follow-ups', icon: 'calendar' },
   { id: 'employees', label: 'Team', icon: 'users' },
+  { id: 'reports', label: 'Reports', icon: 'clipboard' },
 ] as const;
 
 export default function App() {
@@ -52,7 +54,7 @@ function Workspace() {
   const user = session.user;
   const canSeeTeam = user.roles.includes('Admin') || user.roles.includes('Manager');
   const items = navigation.filter(item => item.id !== 'employees' || canSeeTeam);
-  const pageTitle = { dashboard: 'Dashboard', leads: 'All leads', followups: 'Follow-ups', employees: 'Team' }[screen];
+  const pageTitle = { dashboard: 'Dashboard', leads: 'All leads', followups: 'Follow-ups', employees: 'Team', reports: 'Reports' }[screen];
 
   return <div className="app-shell">
     {menuOpen && <button className="mobile-backdrop" aria-label="Close navigation"
@@ -101,6 +103,7 @@ function Workspace() {
           newLeadRequest={newLeadRequest} onNewLeadOpened={() => setNewLeadRequest(0)} />}
         {screen === 'followups' && <FollowUpsPage token={session.token} />}
         {screen === 'employees' && canSeeTeam && <EmployeesPage token={session.token} user={user} />}
+        {screen === 'reports' && <ReportsPage token={session.token} user={user} />}
       </main>
     </div>
   </div>;
