@@ -63,6 +63,8 @@ export function DashboardPage({ token, onNavigate }: {
     { label: 'New leads', value: data?.newLeads, icon: 'plus', tone: 'violet', helper: 'Awaiting first contact' },
     { label: 'Won leads', value: data?.wonLeads, icon: 'check', tone: 'green', helper: 'Successfully converted' },
     { label: 'Overdue follow-ups', value: data?.overdueFollowUps, icon: 'clock', tone: 'orange', helper: 'Need your attention' },
+    { label: 'Project amount (KWD)', value: data?.totalProjectAmount, icon: 'clipboard', tone: 'green', helper: 'Expected project value' },
+    { label: "Today's follow-ups", value: data?.todayFollowUps, icon: 'calendar', tone: 'blue', helper: 'Due today' },
   ] as const;
   const total = data?.totalLeads ?? 0;
   const won = data?.wonLeads ?? 0;
@@ -152,6 +154,10 @@ export function LeadsPage({ token, user, newLeadRequest, onNewLeadOpened }: {
   const [email, setEmail] = useState('');
   const [requirement, setRequirement] = useState('');
   const [sourceId, setSourceId] = useState(1);
+  const [address, setAddress] = useState('');
+  const [leadGivenBy, setLeadGivenBy] = useState(user.fullName);
+  const [projectAmount, setProjectAmount] = useState('');
+  const [newStatusId, setNewStatusId] = useState(1);
 
   useEffect(() => {
     if (!showNew) return;
@@ -189,8 +195,10 @@ export function LeadsPage({ token, user, newLeadRequest, onNewLeadOpened }: {
     setWorking(true);
     try {
       await api('/api/leads', token, { method: 'POST',
-        body: JSON.stringify({ name, phone, email: email || null, companyName, requirement, sourceId }) });
+        body: JSON.stringify({ name, phone, email: email || null, companyName, requirement, sourceId,
+          address, leadGivenBy, projectAmount: projectAmount ? Number(projectAmount) : null, statusId: newStatusId }) });
       setName(''); setPhone(''); setEmail(''); setCompanyName(''); setRequirement('');
+      setAddress(''); setLeadGivenBy(user.fullName); setProjectAmount(''); setNewStatusId(1);
       setShowNew(false);
       setPage(1);
       await refresh();
@@ -265,12 +273,13 @@ export function LeadsPage({ token, user, newLeadRequest, onNewLeadOpened }: {
       {error && <ErrorState message={error} retry={() => void refresh()} />}
       {loading && !data ? <div className="loading-state">Loading leads…</div> :
         data?.items.length ? <div className="table-scroll">
-          <table><thead><tr><th>Customer</th><th>Contact</th><th>Source</th>
+          <table><thead><tr><th>Customer</th><th>Contact</th><th>Amount (KWD)</th><th>Source</th>
             <th>Status</th><th>Assigned to</th><th /></tr></thead><tbody>
             {data.items.map(lead => <tr key={lead.id}>
               <td><button type="button" className="lead-link" onClick={() => setSelectedLead(lead)}>{lead.name}</button>
-                <small>{lead.companyName || lead.requirement || 'Individual'}</small></td>
+                <small>{lead.customerCode || ('Lead #' + lead.id)} · {lead.companyName || lead.requirement || 'Individual'}</small></td>
               <td><a className="table-phone" href={'tel:' + lead.phone}>{lead.phone}</a></td>
+              <td>{lead.projectAmount?.toLocaleString('en-KW') ?? '—'}</td>
               <td><span className="source-tag">{lead.source}</span></td>
               <td><select className="inline-select" aria-label={'Status for ' + lead.name} value={lead.statusId}
                 onChange={event => void changeStatus(lead, Number(event.target.value))}>
@@ -315,6 +324,15 @@ export function LeadsPage({ token, user, newLeadRequest, onNewLeadOpened }: {
             value={email} onChange={event => setEmail(event.target.value)} /></label>
           <label>Company name<input maxLength={200} placeholder="Optional"
             value={companyName} onChange={event => setCompanyName(event.target.value)} /></label>
+          <label>Address<input maxLength={500} value={address}
+            onChange={event => setAddress(event.target.value)} /></label>
+          <label>Lead given by <span className="required">*</span><input required maxLength={150} value={leadGivenBy}
+            onChange={event => setLeadGivenBy(event.target.value)} /></label>
+          <label>Project amount (KWD)<input type="number" min="0" step="0.001" value={projectAmount}
+            onChange={event => setProjectAmount(event.target.value)} /></label>
+          <label>Lead status<select value={newStatusId} onChange={event => setNewStatusId(Number(event.target.value))}>
+            {statuses?.map(status => <option key={status.id} value={status.id}>{status.name}</option>)}
+          </select></label>
           <label>Lead source<select value={sourceId} onChange={event => setSourceId(Number(event.target.value))}>
             {sources?.map(source => <option key={source.id} value={source.id}>{source.name}</option>)}</select></label>
           <label>Requirement<textarea maxLength={2000} placeholder="What is the customer interested in?"
