@@ -12,10 +12,15 @@ namespace LeadManagement.Api.Controllers;
 public sealed class DashboardController(AppDbContext db) : ControllerBase
 {
     [HttpGet]
-    public async Task<IActionResult> Get()
+    public async Task<IActionResult> Get(DateTime? from = null, DateTime? to = null)
     {
-        var leads = LeadAccess.VisibleTo(db.Leads.AsNoTracking(), User);
-        var leadIds = leads.Select(l => l.Id);
+        if (from.HasValue && to.HasValue && from.Value.Date > to.Value.Date)
+            return BadRequest(new { message = "Invalid date range." });
+        var visibleLeads = LeadAccess.VisibleTo(db.Leads.AsNoTracking(), User);
+        var leads = visibleLeads;
+        if (from.HasValue) leads = leads.Where(l => l.CreatedAtUtc >= from.Value.Date);
+        if (to.HasValue) leads = leads.Where(l => l.CreatedAtUtc < to.Value.Date.AddDays(1));
+        var leadIds = visibleLeads.Select(l => l.Id);
         var now = DateTime.UtcNow;
         return Ok(new
         {
