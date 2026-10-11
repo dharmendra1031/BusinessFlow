@@ -4,10 +4,11 @@ import { FeedbackProvider, useFeedback } from './Feedback';
 import { Icon } from './Icon';
 import { DashboardPage, EmployeesPage, FollowUpsPage, LeadsPage } from './pages';
 import ReportsPage from './ReportsPage';
+import PasswordSettings from './PasswordSettings';
 import type { User } from './types';
 
 type Session = { token: string; user: User };
-type Screen = 'dashboard' | 'leads' | 'followups' | 'employees' | 'reports';
+type Screen = 'dashboard' | 'leads' | 'followups' | 'employees' | 'reports' | 'settings';
 
 const navigation = [
   { id: 'dashboard', label: 'Dashboard', icon: 'grid' },
@@ -15,6 +16,7 @@ const navigation = [
   { id: 'followups', label: 'Follow-ups', icon: 'calendar' },
   { id: 'employees', label: 'Team', icon: 'users' },
   { id: 'reports', label: 'Reports', icon: 'clipboard' },
+  { id: 'settings', label: 'Change password', icon: 'lock' },
 ] as const;
 
 export default function App() {
@@ -54,7 +56,7 @@ function Workspace() {
   const user = session.user;
   const canSeeTeam = user.roles.includes('Admin') || user.roles.includes('Manager');
   const items = navigation.filter(item => item.id !== 'employees' || canSeeTeam);
-  const pageTitle = { dashboard: 'Dashboard', leads: 'All leads', followups: 'Follow-ups', employees: 'Team', reports: 'Reports' }[screen];
+  const pageTitle = { dashboard: 'Dashboard', leads: 'All leads', followups: 'Follow-ups', employees: 'Team', reports: 'Reports', settings: 'Change password' }[screen];
 
   return <div className="app-shell">
     {menuOpen && <button className="mobile-backdrop" aria-label="Close navigation"
@@ -104,6 +106,7 @@ function Workspace() {
         {screen === 'followups' && <FollowUpsPage token={session.token} />}
         {screen === 'employees' && canSeeTeam && <EmployeesPage token={session.token} user={user} />}
         {screen === 'reports' && <ReportsPage token={session.token} user={user} />}
+        {screen === 'settings' && <PasswordSettings token={session.token} />}
       </main>
     </div>
   </div>;
