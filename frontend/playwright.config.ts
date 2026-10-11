@@ -15,8 +15,8 @@ export default defineConfig({
   projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],
   webServer: [
     {
-      command: 'dotnet run --project ../backend/LeadManagement.Api --no-launch-profile --no-restore --urls http://localhost:5060',
-      url: 'http://localhost:5060/health/ready',
+      command: 'dotnet run --project ../backend/LeadManagement.Api --no-launch-profile --no-restore --urls http://localhost:5081',
+      url: 'http://localhost:5081/health/ready',
       timeout: 120_000,
       reuseExistingServer: !process.env.CI,
     },
