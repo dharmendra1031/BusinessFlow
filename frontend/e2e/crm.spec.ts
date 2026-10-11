@@ -184,12 +184,12 @@ test('Reports: all ten categories, filters and CSV export', async ({ page, reque
     'followups', 'overdue', 'project', 'user-project', 'created',
   ];
   for (const type of options) {
-    await page.getByLabel('Report', { exact: true }).selectOption(type);
+    await page.locator('.table-toolbar label').first().locator('select').selectOption(type);
     await page.getByRole('button', { name: 'Run report' }).click();
     await expect(page.getByRole('heading', { name: /\d+ records/ })).toBeVisible();
   }
 
-  await page.getByLabel('Report', { exact: true }).selectOption('customers');
+  await page.locator('.table-toolbar label').first().locator('select').selectOption('customers');
   await page.getByLabel('Lead given by').fill('Playwright QA');
   await page.getByRole('button', { name: 'Run report' }).click();
   await expect(page.getByRole('table').getByText(name)).toBeVisible();
@@ -206,7 +206,7 @@ test('Team: create, manage, reset password and deactivate', async ({ page }) => 
   const dialog = page.getByRole('dialog', { name: 'Add employee' });
   await dialog.getByLabel('Full name').fill('Playwright Employee');
   await dialog.getByLabel('Mobile').fill('+96555501234');
-  await dialog.getByLabel('Email', { exact: true }).fill(email);
+  await dialog.locator('input[type="email"]').fill(email);
   await dialog.getByLabel('Temporary password').fill(employeePassword);
   await dialog.getByRole('button', { name: 'Create employee' }).click();
   await expect(page.getByRole('status').filter({ hasText: 'Employee created' })).toBeVisible();
