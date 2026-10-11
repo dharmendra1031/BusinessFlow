@@ -53,7 +53,32 @@ export function DashboardPage({ token, onNavigate }: {
   token: string;
   onNavigate: (screen: 'leads' | 'followups') => void;
 }) {
-  const { data, error, loading, refresh } = useResource<Dashboard>('/api/dashboard', token);
+  const [from, setFrom] = useState('');
+  const [to, setTo] = useState('');
+
+  function setPeriod(value: string) {
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const date = (day: Date) => [day.getFullYear(),
+      String(day.getMonth() + 1).padStart(2, '0'),
+      String(day.getDate()).padStart(2, '0')].join('-');
+    if (value === 'all' || value === 'custom') {
+      if (value === 'all') { setFrom(''); setTo(''); }
+      return;
+    }
+    let start = new Date(today);
+    if (value === 'yesterday') start.setDate(start.getDate() - 1);
+    if (value === 'week') start.setDate(start.getDate() - ((start.getDay() + 6) % 7));
+    if (value === 'month') start = new Date(today.getFullYear(), today.getMonth(), 1);
+    setFrom(date(start));
+    setTo(date(value === 'yesterday' ? start : today));
+  }
+
+  const filters = new URLSearchParams();
+  if (from) filters.set('from', from);
+  if (to) filters.set('to', to);
+  const path = '/api/dashboard' + (filters.size ? '?' + filters : '');
+  const { data, error, loading, refresh } = useResource<Dashboard>(path, token);
   const { data: recent } = useResource<{ items: Lead[] }>('/api/leads?page=1&pageSize=5', token);
   const { data: followups } = useResource<FollowUp[]>('/api/followups', token);
   const due = (followups ?? []).filter(item => !item.completedAtUtc)
@@ -81,9 +106,17 @@ export function DashboardPage({ token, onNavigate }: {
     <header className="page-header">
       <div><span className="section-kicker">OVERVIEW</span><h1>Good to see you!</h1>
         <p>Here's what is happening with your leads.</p></div>
-      <button className="secondary-action" onClick={() => void refresh()} disabled={loading}>
-        <Icon name="refresh" size={17} /> Refresh
-      </button>
+      <div className="table-toolbar">
+        <label>Lead creation period<select defaultValue="all" onChange={event => setPeriod(event.target.value)}>
+          <option value="all">All dates</option><option value="today">Today</option>
+          <option value="yesterday">Yesterday</option><option value="week">This week</option>
+          <option value="month">This month</option><option value="custom">Custom</option>
+        </select></label>
+        <input aria-label="From date" type="date" value={from} onChange={event => setFrom(event.target.value)} />
+        <input aria-label="To date" type="date" value={to} onChange={event => setTo(event.target.value)} />
+        <button className="secondary-action" onClick={() => void refresh()} disabled={loading}>
+          <Icon name="refresh" size={17} /> Refresh</button>
+      </div>
     </header>
     {error && <ErrorState message={error} retry={() => void refresh()} />}
     <div className="metrics">
