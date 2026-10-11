@@ -135,6 +135,17 @@ export function DashboardPage({ token, onNavigate }: {
           <td><StatusBadge status={lead.status} /></td><td>{lead.assignedTo || 'Unassigned'}</td></tr>)}
       </tbody></table></div> : <EmptyState title="No leads yet" detail="Create a lead to see it here." />}
     </section>
+    {!!data?.userWise?.length && <section className="panel">
+      <div className="panel-heading"><div><h2>User-wise performance</h2>
+        <p>Customer count and expected project amount by owner</p></div></div>
+      <div className="table-scroll"><table><thead><tr><th>Employee</th><th>Customers</th>
+        <th>Project amount (KWD)</th></tr></thead><tbody>
+        {data.userWise.map(item => <tr key={item.userId ?? 0}>
+          <td>{item.userName}</td><td>{item.customers}</td>
+          <td>{item.amount.toLocaleString('en-KW')}</td>
+        </tr>)}
+      </tbody></table></div>
+    </section>}
   </section>;
 }
 
