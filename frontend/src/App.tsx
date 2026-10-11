@@ -106,7 +106,7 @@ function Workspace() {
         {screen === 'followups' && <FollowUpsPage token={session.token} />}
         {screen === 'employees' && canSeeTeam && <EmployeesPage token={session.token} user={user} />}
         {screen === 'reports' && <ReportsPage token={session.token} user={user} />}
-        {screen === 'settings' && <PasswordSettings token={session.token} />}
+        {screen === 'settings' && <PasswordSettings token={session.token} onChanged={logout} />}
       </main>
     </div>
   </div>;
