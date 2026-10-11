@@ -1,0 +1,43 @@
+using LeadManagement.Api.Contracts;
+using LeadManagement.Api.Data;
+using LeadManagement.Api.Models;
+using LeadManagement.Api.Services;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.Mvc;
+
+namespace LeadManagement.Api.Controllers;
+
+[ApiController]
+[Authorize]
+[Route("api/password")]
+public sealed class PasswordsController(UserManager<ApplicationUser> users, AppDbContext db) : ControllerBase
+{
+    [HttpPost("change")]
+    public async Task<IActionResult> Change(ChangePasswordRequest request)
+    {
+        var user = await users.FindByIdAsync(LeadAccess.UserId(User).ToString());
+        if (user is null) return Unauthorized();
+        var result = await users.ChangePasswordAsync(user, request.CurrentPassword, request.NewPassword);
+        if (!result.Succeeded) return BadRequest(new { errors = result.Errors.Select(x => x.Description) });
+        return NoContent();
+    }
+
+    [Authorize(Roles = "Admin")]
+    [HttpPost("reset/{id:long}")]
+    public async Task<IActionResult> Reset(long id, ResetEmployeePasswordRequest request)
+    {
+        var user = await users.FindByIdAsync(id.ToString());
+        if (user is null) return NotFound();
+        var token = await users.GeneratePasswordResetTokenAsync(user);
+        var result = await users.ResetPasswordAsync(user, token, request.NewPassword);
+        if (!result.Succeeded) return BadRequest(new { errors = result.Errors.Select(x => x.Description) });
+        db.AuditLogs.Add(new AuditLog
+        {
+            UserId = LeadAccess.UserId(User), Action = "ResetPassword",
+            TableName = "Users", RecordId = id
+        });
+        await db.SaveChangesAsync();
+        return NoContent();
+    }
+}
