@@ -1,8 +1,8 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { api } from './api';
 import { Icon } from './Icon';
 import { useFeedback } from './Feedback';
-import type { ReportResult, User } from './types';
+import type { Employee, Lookup, ReportResult, User } from './types';
 
 const reportOptions = [
   ['customers', 'Customer List'], ['user-customers', 'User-wise Customers'],
@@ -18,6 +18,16 @@ export default function ReportsPage({ token, user }: { token: string; user: User
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
   const [leadGivenBy, setLeadGivenBy] = useState('');
+  const [userId, setUserId] = useState('');
+  const [statusId, setStatusId] = useState('');
+  const [employees, setEmployees] = useState<Employee[]>([]);
+  const [statuses, setStatuses] = useState<Lookup[]>([]);
+
+  useEffect(() => {
+    void api<Lookup[]>('/api/masters/lead-statuses', token).then(setStatuses).catch(() => {});
+    if (user.roles.includes('Admin') || user.roles.includes('Manager'))
+      void api<Employee[]>('/api/employees', token).then(setEmployees).catch(() => {});
+  }, [token, user.roles]);
   const [report, setReport] = useState<ReportResult | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -28,6 +38,8 @@ export default function ReportsPage({ token, user }: { token: string; user: User
       if (from) params.set('from', from);
       if (to) params.set('to', to);
       if (leadGivenBy) params.set('leadGivenBy', leadGivenBy);
+      if (userId) params.set('userId', userId);
+      if (statusId) params.set('statusId', statusId);
       const result = await api<ReportResult>('/api/reports?' + params, token);
       setReport(result);
     } catch (err) {
@@ -83,6 +95,14 @@ export default function ReportsPage({ token, user }: { token: string; user: User
         <label>From <input type="date" value={from} onChange={event => setFrom(event.target.value)} /></label>
         <label>To <input type="date" value={to} onChange={event => setTo(event.target.value)} /></label>
         <label>Lead given by <input value={leadGivenBy} onChange={event => setLeadGivenBy(event.target.value)} /></label>
+        <label>Status <select value={statusId} onChange={event => setStatusId(event.target.value)}>
+          <option value="">All statuses</option>
+          {statuses.map(status => <option key={status.id} value={status.id}>{status.name}</option>)}
+        </select></label>
+        {employees.length > 0 && <label>User <select value={userId} onChange={event => setUserId(event.target.value)}>
+          <option value="">All permitted users</option>
+          {employees.map(employee => <option key={employee.id} value={employee.id}>{employee.fullName}</option>)}
+        </select></label>}
         <button className="primary" disabled={loading} onClick={() => void load()}>
           <Icon name="search" size={17} /> {loading ? 'Loading…' : 'Run report'}</button>
       </div>
