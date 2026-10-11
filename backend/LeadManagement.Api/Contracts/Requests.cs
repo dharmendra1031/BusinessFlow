@@ -9,7 +9,7 @@ public sealed record CreateEmployeeRequest(
     [Required, EmailAddress] string Email,
     [Required] string Password,
     [Required] string Role,
-    long? ManagerId);
+    long? ManagerId, string? PhoneNumber = null);
 
 public sealed record LeadRequest(
     [Required, MaxLength(150)] string Name,
