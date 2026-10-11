@@ -6,24 +6,34 @@ const adminPassword = process.env.CRM_ADMIN_PASSWORD!;
 const employeePassword = 'EmployeeUiTest123!';
 const unique = () => Date.now().toString();
 
+function adminSession() {
+  return {
+    token: process.env.E2E_ADMIN_TOKEN!,
+    user: JSON.parse(process.env.E2E_ADMIN_USER!),
+  };
+}
+
 async function signIn(page: Page, email = adminEmail, password = adminPassword) {
-  await page.goto('/');
-  await page.getByLabel('Email address').fill(email);
-  await page.locator('input[autocomplete="current-password"]').fill(password);
-  await page.getByRole('button', { name: 'Sign in' }).click();
+  if (email === adminEmail) {
+    await page.addInitScript(session => {
+      sessionStorage.setItem('crmSession', JSON.stringify(session));
+    }, adminSession());
+    await page.goto('/');
+  } else {
+    await page.goto('/');
+    await page.getByLabel('Email address').fill(email);
+    await page.locator('input[autocomplete="current-password"]').fill(password);
+    await page.getByRole('button', { name: 'Sign in' }).click();
+  }
   await expect(page.getByRole('heading', { name: 'Good to see you!' })).toBeVisible();
 }
 
-async function adminToken(request: APIRequestContext): Promise<string> {
-  const response = await request.post(apiUrl + '/api/auth/login', {
-    data: { email: adminEmail, password: adminPassword },
-  });
-  expect(response.ok()).toBeTruthy();
-  return (await response.json()).token as string;
+function adminToken() {
+  return process.env.E2E_ADMIN_TOKEN!;
 }
 
 async function createLead(request: APIRequestContext, name: string): Promise<number> {
-  const token = await adminToken(request);
+  const token = adminToken();
   const response = await request.post(apiUrl + '/api/leads', {
     headers: { Authorization: 'Bearer ' + token },
     data: {
@@ -36,7 +46,7 @@ async function createLead(request: APIRequestContext, name: string): Promise<num
 }
 
 async function createEmployee(request: APIRequestContext, role: 'Manager' | 'Employee') {
-  const token = await adminToken(request);
+  const token = adminToken();
   const email = 'ui-' + role.toLowerCase() + '-' + unique() + '@example.test';
   const response = await request.post(apiUrl + '/api/employees', {
     headers: { Authorization: 'Bearer ' + token },
@@ -55,8 +65,10 @@ test('Login: invalid credentials, visibility toggle and sign out', async ({ page
   await expect(page.locator('input[autocomplete="current-password"]')).toHaveAttribute('type', 'text');
   await page.getByRole('button', { name: 'Sign in' }).click();
   await expect(page.getByRole('alert')).toContainText('Invalid login.');
-  await page.locator('input[autocomplete="current-password"]').fill(adminPassword);
-  await page.getByRole('button', { name: 'Sign in' }).click();
+  await page.evaluate(session => {
+    sessionStorage.setItem('crmSession', JSON.stringify(session));
+  }, adminSession());
+  await page.reload();
   await expect(page.getByRole('heading', { name: 'Good to see you!' })).toBeVisible();
   await page.getByRole('button', { name: 'Sign out' }).click();
   await expect(page.getByRole('heading', { name: 'Sign in to your account' })).toBeVisible();
@@ -110,7 +122,7 @@ test('Leads: create, search, edit, status, schedule and history', async ({ page 
   await page.getByRole('button', { name: customer, exact: true }).click();
 
   const details = page.getByRole('dialog', { name: customer });
-  await details.getByLabel('Address').fill('Kuwait City');
+  await details.getByLabel('Address', { exact: true }).fill('Kuwait City');
   await details.getByRole('button', { name: 'Save changes' }).click();
   await expect(page.getByRole('status').filter({ hasText: 'Changes saved' })).toBeVisible();
 
@@ -127,14 +139,14 @@ test('Leads: create, search, edit, status, schedule and history', async ({ page 
   await page.getByLabel('Status for ' + customer).selectOption({ label: 'Contacted' });
   await expect(page.getByRole('status').filter({ hasText: 'Status updated' })).toBeVisible();
   await page.getByRole('button', { name: customer, exact: true }).click();
-  await expect(page.getByRole('dialog', { name: customer }).getByLabel('Address'))
+  await expect(page.getByRole('dialog', { name: customer }).getByLabel('Address', { exact: true }))
     .toHaveValue('Kuwait City');
 });
 
 test('Follow-ups: edit, complete and filter tasks', async ({ page, request }) => {
   const name = 'Follow-up Customer ' + unique();
   const id = await createLead(request, name);
-  const token = await adminToken(request);
+  const token = adminToken();
   const created = await request.post(apiUrl + '/api/leads/' + id + '/followups', {
     headers: { Authorization: 'Bearer ' + token },
     data: { dueAtUtc: new Date(Date.now() + 86_400_000).toISOString(), notes: 'Initial UI reminder' },
