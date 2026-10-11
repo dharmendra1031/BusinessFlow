@@ -37,7 +37,7 @@ jobs:
       - name: Prepare SQL Server
         working-directory: backend/LeadManagement.Api
         run: |
-          dotnet tool install --global dotnet-ef --version 10.0.0
+          dotnet restore && dotnet tool install --global dotnet-ef --version 10.0.0
           dotnet ef migrations add InitialCreate --output-dir Data/Migrations
           for attempt in $(seq 1 24); do
             if dotnet ef database update; then
