@@ -1,6 +1,6 @@
 import { expect, test, type APIRequestContext, type Page } from '@playwright/test';
 
-const apiUrl = 'http://localhost:5060';
+const apiUrl = 'http://localhost:5081';
 const adminEmail = process.env.CRM_ADMIN_EMAIL!;
 const adminPassword = process.env.CRM_ADMIN_PASSWORD!;
 const employeePassword = 'EmployeeUiTest123!';
