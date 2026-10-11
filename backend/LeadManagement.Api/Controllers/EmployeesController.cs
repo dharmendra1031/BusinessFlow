@@ -58,6 +58,7 @@ public sealed class EmployeesController(AppDbContext db, UserManager<Application
         var user = new ApplicationUser
         {
             FullName = request.FullName.Trim(),
+            PhoneNumber = request.PhoneNumber?.Trim(),
             UserName = request.Email.Trim(),
             Email = request.Email.Trim(),
             ManagerId = request.ManagerId,
