@@ -3,6 +3,7 @@ import { api } from './api';
 import { Icon } from './Icon';
 import { useFeedback } from './Feedback';
 import LeadDetails from './LeadDetails';
+import EmployeeManager from './EmployeeManager';
 import type { Dashboard, Employee, FollowUp, Lead, Lookup, User } from './types';
 
 function useResource<T>(path: string, token: string) {
@@ -407,6 +408,7 @@ export function EmployeesPage({ token, user }: { token: string; user: User }) {
   const { notify } = useFeedback();
   const { data, refresh, error } = useResource<Employee[]>('/api/employees', token);
   const [showForm, setShowForm] = useState(false);
+  const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null);
   const [working, setWorking] = useState(false);
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
@@ -447,13 +449,15 @@ export function EmployeesPage({ token, user }: { token: string; user: User }) {
   </header>
     {error && <ErrorState message={error} retry={() => void refresh()} />}
     <section className="panel team-panel">
-      <div className="panel-heading"><div><h2>Team directory</h2><p>{data?.length ?? 0} active members</p></div></div>
+      <div className="panel-heading"><div><h2>Team directory</h2><p>{data?.filter(member => member.isActive).length ?? 0} active members</p></div></div>
       {data?.length ? <div className="table-scroll"><table><thead><tr><th>Employee</th><th>Email</th>
-        <th>Reporting manager</th></tr></thead><tbody>
+        <th>Reporting manager</th><th>Status</th><th /></tr></thead><tbody>
         {data.map(member => <tr key={member.id}><td><div className="person-cell">
           <span className="avatar avatar-person">{member.fullName.charAt(0).toUpperCase()}</span>
           <strong>{member.fullName}</strong></div></td>
           <td>{member.email}</td><td>{data.find(person => person.id === member.managerId)?.fullName || '—'}</td>
+          <td>{member.isActive ? 'Active' : 'Inactive'}</td>
+          <td>{canCreate && <button className="text-action" onClick={() => setSelectedEmployee(member)}>Manage</button>}</td>
         </tr>)}</tbody></table></div> : <EmptyState title="No employees found" detail="Team members will appear here." />}
     </section>
     {showForm && <div className="drawer-backdrop" onMouseDown={event => {
@@ -482,5 +486,7 @@ export function EmployeesPage({ token, user }: { token: string; user: User }) {
           <button className="primary" disabled={working}>{working ? 'Creating…' : 'Create employee'}</button></div>
       </form>
     </aside></div>}
+    {selectedEmployee && <EmployeeManager employee={selectedEmployee} team={data ?? []}
+      token={token} onClose={() => setSelectedEmployee(null)} onSaved={refresh} />}
   </section>;
 }
