@@ -1,0 +1,62 @@
+name: Verify CRM
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    services:
+      sqlserver:
+        image: mcr.microsoft.com/mssql/server:2022-latest
+        env:
+          ACCEPT_EULA: "Y"
+          MSSQL_SA_PASSWORD: "CRM_TestOnly_12345!"
+        ports:
+          - 1433:1433
+    env:
+      CRM_TEST_CONNECTION: "Server=localhost,1433;Database=LeadManagement_CITests;User ID=sa;Password=CRM_TestOnly_12345!;Encrypt=True;TrustServerCertificate=True"
+      ConnectionStrings__DefaultConnection: "Server=localhost,1433;Database=LeadManagement_CITests;User ID=sa;Password=CRM_TestOnly_12345!;Encrypt=True;TrustServerCertificate=True"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Restore and build
+        run: |
+          dotnet restore tests/LeadManagement.Tests/LeadManagement.Tests.csproj
+          dotnet build backend/LeadManagement.Api/LeadManagement.Api.csproj --no-restore -c Release
+      - name: Prepare SQL Server schema
+        working-directory: backend/LeadManagement.Api
+        run: |
+          dotnet tool install --global dotnet-ef --version 10.0.0
+          if [ ! -d Data/Migrations ]; then
+            dotnet ef migrations add InitialCreate --output-dir Data/Migrations
+          fi
+          for attempt in $(seq 1 24); do
+            if dotnet ef database update; then
+              exit 0
+            fi
+            sleep 5
+          done
+          exit 1
+      - name: Test permissions on SQL Server
+        run: dotnet test tests/LeadManagement.Tests/LeadManagement.Tests.csproj -c Release --no-restore
+      - name: Build React
+        working-directory: frontend
+        run: |
+          npm install --no-audit --no-fund
+          npm run build
+      - name: Upload generated migration
+        uses: actions/upload-artifact@v4
+        with:
+          name: sql-server-migrations
+          path: backend/LeadManagement.Api/Data/Migrations/
+          if-no-files-found: error

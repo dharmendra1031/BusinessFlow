@@ -1,0 +1,107 @@
+using System.Security.Claims;
+using LeadManagement.Api.Contracts;
+using LeadManagement.Api.Controllers;
+using LeadManagement.Api.Data;
+using LeadManagement.Api.Models;
+using LeadManagement.Api.Services;
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.Data.SqlClient;
+using Microsoft.EntityFrameworkCore;
+using Xunit;
+
+namespace LeadManagement.Tests;
+
+public sealed class LeadPermissionsTests
+{
+    [Fact]
+    public async Task Roles_and_assignments_are_enforced_in_sql_server()
+    {
+        var connection = Environment.GetEnvironmentVariable("CRM_TEST_CONNECTION")
+            ?? throw new InvalidOperationException("CRM_TEST_CONNECTION is required.");
+
+        Assert.Equal("LeadManagement_CITests",
+            new SqlConnectionStringBuilder(connection).InitialCatalog);
+
+        var options = new DbContextOptionsBuilder<AppDbContext>()
+            .UseSqlServer(connection).Options;
+        await using var db = new AppDbContext(options);
+        await db.Database.MigrateAsync();
+
+        var admin = new ApplicationUser { FullName = "Admin", UserName = "admin@test.local" };
+        var manager = new ApplicationUser { FullName = "Manager", UserName = "manager@test.local" };
+        var employee = new ApplicationUser { FullName = "Employee", UserName = "employee@test.local" };
+        var outsider = new ApplicationUser { FullName = "Other employee", UserName = "other@test.local" };
+
+        db.Users.AddRange(admin, manager, employee, outsider);
+        await db.SaveChangesAsync();
+        employee.ManagerId = manager.Id;
+
+        var ownLead = new Lead
+        {
+            Name = "Employee lead", Phone = "1000000001", SourceId = 1,
+            StatusId = 1, AssignedToId = employee.Id, CreatedById = admin.Id
+        };
+        var outsideLead = new Lead
+        {
+            Name = "Outside lead", Phone = "1000000002", SourceId = 1,
+            StatusId = 1, AssignedToId = outsider.Id, CreatedById = admin.Id
+        };
+        db.Leads.AddRange(ownLead, outsideLead);
+        await db.SaveChangesAsync();
+
+        Assert.True(admin.Id > 0 && employee.Id > 0 && ownLead.Id > 0);
+        Assert.Equal(2, await LeadAccess.VisibleTo(db.Leads, Principal(admin.Id, "Admin")).CountAsync());
+        Assert.Equal(1, await LeadAccess.VisibleTo(db.Leads, Principal(manager.Id, "Manager")).CountAsync());
+        Assert.Equal(1, await LeadAccess.VisibleTo(db.Leads, Principal(employee.Id, "Employee")).CountAsync());
+        Assert.DoesNotContain(outsideLead.Id, await LeadAccess.VisibleTo(
+            db.Leads, Principal(employee.Id, "Employee")).Select(l => l.Id).ToListAsync());
+
+        var employeeController = Controller(db, employee.Id, "Employee");
+        Assert.IsType<NotFoundResult>(await employeeController.Get(outsideLead.Id));
+        Assert.IsType<NotFoundResult>(await employeeController.Update(outsideLead.Id,
+            new LeadRequest("Unauthorized", "999999", null, null, null, 1)));
+
+        db.LeadFollowUps.AddRange(
+            new LeadFollowUp
+            {
+                LeadId = ownLead.Id, AssignedToId = employee.Id, CreatedById = admin.Id,
+                Notes = "Pending", DueAtUtc = DateTime.UtcNow.AddDays(1)
+            },
+            new LeadFollowUp
+            {
+                LeadId = ownLead.Id, AssignedToId = employee.Id, CreatedById = admin.Id,
+                Notes = "Completed", DueAtUtc = DateTime.UtcNow.AddDays(-1),
+                CompletedAtUtc = DateTime.UtcNow
+            });
+        await db.SaveChangesAsync();
+
+        var managerController = Controller(db, manager.Id, "Manager");
+        Assert.IsType<ForbidResult>(await managerController.Assign(ownLead.Id, new AssignLeadRequest(outsider.Id)));
+        await db.Entry(ownLead).ReloadAsync();
+        Assert.Equal(employee.Id, ownLead.AssignedToId);
+        Assert.Empty(await db.LeadAssignments.ToListAsync());
+
+        Assert.IsType<NoContentResult>(await managerController.Assign(ownLead.Id,
+            new AssignLeadRequest(manager.Id)));
+        await db.Entry(ownLead).ReloadAsync();
+        Assert.Equal(manager.Id, ownLead.AssignedToId);
+        Assert.Single(await db.LeadAssignments.ToListAsync());
+        Assert.Equal(manager.Id, (await db.LeadFollowUps.SingleAsync(f => f.Notes == "Pending")).AssignedToId);
+        Assert.Equal(employee.Id, (await db.LeadFollowUps.SingleAsync(f => f.Notes == "Completed")).AssignedToId);
+    }
+
+    private static LeadsController Controller(AppDbContext db, long userId, string role) =>
+        new(db)
+        {
+            ControllerContext = new ControllerContext
+            {
+                HttpContext = new DefaultHttpContext { User = Principal(userId, role) }
+            }
+        };
+
+    private static ClaimsPrincipal Principal(long userId, string role) =>
+        new(new ClaimsIdentity(
+            [new Claim("sub", userId.ToString()), new Claim(ClaimTypes.Role, role)],
+            "Test"));
+}
