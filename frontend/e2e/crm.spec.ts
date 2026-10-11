@@ -64,6 +64,8 @@ test('Login: invalid credentials, visibility toggle and sign out', async ({ page
 
 test('Admin: every main screen loads with a real API', async ({ page }, testInfo) => {
   await signIn(page);
+  const pageErrors: string[] = [];
+  page.on('pageerror', error => pageErrors.push(error.message));
   const screens = [
     ['Dashboard', 'Good to see you!'],
     ['All leads', 'Manage leads'],
@@ -76,7 +78,8 @@ test('Admin: every main screen loads with a real API', async ({ page }, testInfo
   for (const [nav, heading] of screens) {
     await page.getByRole('navigation', { name: 'Main navigation' })
       .getByRole('button', { name: nav, exact: true }).click();
-    await expect(page.getByRole('main', { name: '' }).getByRole('heading', { name: heading })).toBeVisible();
+    await expect(page.locator('main.content').getByRole('heading', { name: heading })).toBeVisible();
+    await expect(page.locator('.loading-state')).toHaveCount(0);
     await expect(page.locator('.error-state')).toHaveCount(0);
     await page.screenshot({ path: testInfo.outputPath(nav.replaceAll(' ', '-') + '.png'), fullPage: true });
   }
@@ -86,6 +89,7 @@ test('Admin: every main screen loads with a real API', async ({ page }, testInfo
   await page.getByLabel('Lead creation period').selectOption('today');
   await expect(page.getByLabel('From date')).not.toHaveValue('');
   await page.getByRole('button', { name: 'Refresh' }).click();
+  expect(pageErrors).toEqual([]);
 });
 
 test('Leads: create, search, edit, status, schedule and history', async ({ page }) => {
@@ -99,7 +103,7 @@ test('Leads: create, search, edit, status, schedule and history', async ({ page 
   await create.getByLabel('Lead given by').fill('Playwright QA');
   await create.getByLabel('Project amount (KWD)').fill('315.750');
   await create.getByRole('button', { name: 'Create lead' }).click();
-  await expect(page.getByRole('status')).toContainText('Lead created');
+  await expect(page.getByRole('status').filter({ hasText: 'Lead created' })).toBeVisible();
 
   await page.getByLabel('Search leads').fill(customer);
   await expect(page.getByRole('button', { name: customer, exact: true })).toBeVisible();
@@ -108,20 +112,20 @@ test('Leads: create, search, edit, status, schedule and history', async ({ page 
   const details = page.getByRole('dialog', { name: customer });
   await details.getByLabel('Address').fill('Kuwait City');
   await details.getByRole('button', { name: 'Save changes' }).click();
-  await expect(page.getByRole('status')).toContainText('Changes saved');
+  await expect(page.getByRole('status').filter({ hasText: 'Changes saved' })).toBeVisible();
 
   await details.getByRole('button', { name: 'New follow-up' }).click();
   await details.getByLabel('Due date and time').fill(
     new Date(Date.now() + 2 * 86_400_000).toISOString().slice(0, 16));
   await details.getByLabel('Notes').fill('Playwright follow-up check');
   await details.getByRole('button', { name: 'Schedule follow-up' }).click();
-  await expect(page.getByRole('status')).toContainText('Follow-up scheduled');
+  await expect(page.getByRole('status').filter({ hasText: 'Follow-up scheduled' })).toBeVisible();
   await details.getByRole('button', { name: 'History' }).click();
   await expect(details.getByText('Playwright follow-up check')).toBeVisible();
   await details.getByRole('button', { name: 'Close lead details' }).click();
 
   await page.getByLabel('Status for ' + customer).selectOption({ label: 'Contacted' });
-  await expect(page.getByRole('status')).toContainText('Status updated');
+  await expect(page.getByRole('status').filter({ hasText: 'Status updated' })).toBeVisible();
   await page.getByRole('button', { name: customer, exact: true }).click();
   await expect(page.getByRole('dialog', { name: customer }).getByLabel('Address'))
     .toHaveValue('Kuwait City');
@@ -193,7 +197,7 @@ test('Team: create, manage, reset password and deactivate', async ({ page }) => 
   await dialog.getByLabel('Email', { exact: true }).fill(email);
   await dialog.getByLabel('Temporary password').fill(employeePassword);
   await dialog.getByRole('button', { name: 'Create employee' }).click();
-  await expect(page.getByRole('status')).toContainText('Employee created');
+  await expect(page.getByRole('status').filter({ hasText: 'Employee created' })).toBeVisible();
 
   const row = page.getByRole('row').filter({ hasText: email });
   await expect(row).toBeVisible();
@@ -209,7 +213,7 @@ test('Team: create, manage, reset password and deactivate', async ({ page }) => 
     .getByLabel('New password').fill('ResetUiPassword123!');
   await page.getByRole('dialog', { name: 'Playwright Staff' })
     .getByRole('button', { name: 'Reset password' }).click();
-  await expect(page.getByRole('status')).toContainText('Password reset');
+  await expect(page.getByRole('status').filter({ hasText: 'Password reset' })).toBeVisible();
 
   await page.getByRole('dialog', { name: 'Playwright Staff' })
     .getByRole('button', { name: 'Deactivate' }).click();
