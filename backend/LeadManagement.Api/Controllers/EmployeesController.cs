@@ -24,9 +24,20 @@ public sealed class EmployeesController(AppDbContext db, UserManager<Application
             query = query.Where(u => u.ManagerId == managerId || u.Id == managerId);
         }
 
-        var result = await query.OrderBy(u => u.FullName)
+        var employees = await query.OrderBy(u => u.FullName)
             .Select(u => new { u.Id, u.FullName, u.Email, u.ManagerId }).ToListAsync();
-        return Ok(result);
+
+        var ids = employees.Select(u => u.Id).ToArray();
+        var roles = await (from userRole in db.UserRoles
+                           join role in db.Roles on userRole.RoleId equals role.Id
+                           where ids.Contains(userRole.UserId)
+                           select new { userRole.UserId, role.Name }).ToListAsync();
+
+        return Ok(employees.Select(u => new
+        {
+            u.Id, u.FullName, u.Email, u.ManagerId,
+            roles = roles.Where(r => r.UserId == u.Id).Select(r => r.Name).ToArray()
+        }));
     }
 
     [Authorize(Roles = "Admin")]
@@ -60,6 +71,6 @@ public sealed class EmployeesController(AppDbContext db, UserManager<Application
         if (!assigned.Succeeded)
             return StatusCode(500, new { message = "Could not assign employee role." });
         await transaction.CommitAsync();
-        return Created($"/api/employees/{user.Id}", new { user.Id, user.FullName, user.Email });
+        return Created("/api/employees/" + user.Id, new { user.Id, user.FullName, user.Email });
     }
 }

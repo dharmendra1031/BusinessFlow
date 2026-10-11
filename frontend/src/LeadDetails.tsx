@@ -1,5 +1,7 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { api } from './api';
+import { Icon } from './Icon';
+import { useFeedback } from './Feedback';
 import type { Lead, Lookup } from './types';
 
 type Props = {
@@ -11,6 +13,7 @@ type Props = {
 };
 
 export default function LeadDetails({ lead, sources, token, onClose, onSaved }: Props) {
+  const { notify } = useFeedback();
   const [name, setName] = useState(lead.name);
   const [phone, setPhone] = useState(lead.phone);
   const [email, setEmail] = useState(lead.email ?? '');
@@ -19,12 +22,20 @@ export default function LeadDetails({ lead, sources, token, onClose, onSaved }: 
   const [sourceId, setSourceId] = useState(lead.sourceId);
   const [dueAt, setDueAt] = useState('');
   const [notes, setNotes] = useState('');
-  const [message, setMessage] = useState('');
-  const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
+  const [tab, setTab] = useState<'details' | 'followup'>('details');
+
+  useEffect(() => {
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === 'Escape' && !saving) onClose();
+    }
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  }, [onClose, saving]);
 
   async function saveLead(event: React.FormEvent) {
     event.preventDefault();
+    if (saving) return;
     setSaving(true);
     try {
       await api('/api/leads/' + lead.id, token, {
@@ -32,20 +43,18 @@ export default function LeadDetails({ lead, sources, token, onClose, onSaved }: 
         body: JSON.stringify({ name, phone, email: email || null, companyName, requirement, sourceId }),
       });
       await onSaved();
-      setError('');
-      setMessage('Lead updated');
+      notify('success', 'Changes saved', name + ' was updated successfully.');
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Unable to update lead');
-    } finally {
-      setSaving(false);
-    }
+      notify('error', 'Unable to update lead', err instanceof Error ? err.message : undefined);
+    } finally { setSaving(false); }
   }
 
   async function createFollowUp(event: React.FormEvent) {
     event.preventDefault();
+    if (saving) return;
     const date = new Date(dueAt);
     if (!Number.isFinite(date.getTime()) || date <= new Date()) {
-      setError('Choose a future date and time');
+      notify('warning', 'Check the due date', 'Please select a future date and time.');
       return;
     }
     setSaving(true);
@@ -56,39 +65,57 @@ export default function LeadDetails({ lead, sources, token, onClose, onSaved }: 
       });
       setNotes('');
       setDueAt('');
-      setError('');
-      setMessage('Follow-up scheduled');
+      notify('success', 'Follow-up scheduled', 'A reminder has been saved for ' + name + '.');
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Unable to schedule follow-up');
-    } finally {
-      setSaving(false);
-    }
+      notify('error', 'Unable to schedule follow-up', err instanceof Error ? err.message : undefined);
+    } finally { setSaving(false); }
   }
 
-  return <div className="panel">
-    <header className="page-header"><div><h2>{lead.name}</h2><p>Lead #{lead.id}</p></div>
-      <button type="button" onClick={onClose}>Close</button></header>
-    {error && <p className="error" role="alert">{error}</p>}
-    {message && <p role="status">{message}</p>}
-    <form className="form-grid" onSubmit={saveLead}>
-      <label>Name<input required maxLength={150} value={name} onChange={e => setName(e.target.value)} /></label>
-      <label>Phone<input required maxLength={30} value={phone} onChange={e => setPhone(e.target.value)} /></label>
-      <label>Email<input type="email" value={email} onChange={e => setEmail(e.target.value)} /></label>
-      <label>Company<input maxLength={200} value={companyName} onChange={e => setCompanyName(e.target.value)} /></label>
-      <label>Source<select value={sourceId} onChange={e => setSourceId(Number(e.target.value))}>
-        {sources.map(source => <option key={source.id} value={source.id}>{source.name}</option>)}
-      </select></label>
-      <label className="wide">Requirement<textarea maxLength={2000} value={requirement}
-        onChange={e => setRequirement(e.target.value)} /></label>
-      <div className="wide"><button className="primary" disabled={saving}>Save changes</button></div>
-    </form>
-    <h3>Schedule follow-up</h3>
-    <form className="form-grid" onSubmit={createFollowUp}>
-      <label>Due date and time<input required type="datetime-local" value={dueAt}
-        onChange={e => setDueAt(e.target.value)} /></label>
-      <label className="wide">Notes<textarea required maxLength={2000} value={notes}
-        onChange={e => setNotes(e.target.value)} /></label>
-      <div className="wide"><button disabled={saving}>Add follow-up</button></div>
-    </form>
+  return <div className="drawer-backdrop" onMouseDown={event => {
+    if (event.target === event.currentTarget && !saving) onClose();
+  }}>
+    <aside className="detail-drawer" role="dialog" aria-modal="true" aria-labelledby="lead-details-title">
+      <div className="drawer-header"><div><span className="section-kicker">LEAD DETAILS</span>
+        <h2 id="lead-details-title">{lead.name}</h2>
+        <p>Lead #{lead.id} · {lead.source}</p></div>
+        <button className="icon-button" aria-label="Close lead details" onClick={onClose}>
+          <Icon name="close" /></button>
+      </div>
+      <div className="lead-quick-actions">
+        <a href={'tel:' + lead.phone}><Icon name="phone" size={17} /> Call</a>
+        {lead.email && <a href={'mailto:' + lead.email}><Icon name="mail" size={17} /> Email</a>}
+        <span className="source-tag">{lead.status}</span>
+      </div>
+      <div className="drawer-tabs">
+        <button className={tab === 'details' ? 'selected' : ''} onClick={() => setTab('details')}>Lead information</button>
+        <button className={tab === 'followup' ? 'selected' : ''} onClick={() => setTab('followup')}>New follow-up</button>
+      </div>
+      {tab === 'details' ? <form className="drawer-form" onSubmit={saveLead}>
+        <label>Full name <span className="required">*</span>
+          <input autoFocus required maxLength={150} value={name} onChange={event => setName(event.target.value)} /></label>
+        <label>Phone number <span className="required">*</span>
+          <input required maxLength={30} value={phone} onChange={event => setPhone(event.target.value)} /></label>
+        <label>Email address<input type="email" maxLength={256} value={email}
+          onChange={event => setEmail(event.target.value)} /></label>
+        <label>Company name<input maxLength={200} value={companyName}
+          onChange={event => setCompanyName(event.target.value)} /></label>
+        <label>Lead source<select value={sourceId} onChange={event => setSourceId(Number(event.target.value))}>
+          {sources.map(source => <option key={source.id} value={source.id}>{source.name}</option>)}
+        </select></label>
+        <label>Requirement<textarea maxLength={2000} value={requirement}
+          onChange={event => setRequirement(event.target.value)} /></label>
+        <div className="drawer-actions"><button type="button" disabled={saving} onClick={onClose}>Cancel</button>
+          <button className="primary" disabled={saving}>{saving ? 'Saving…' : 'Save changes'}</button></div>
+      </form> : <form className="drawer-form" onSubmit={createFollowUp}>
+        <p className="form-intro">Choose when to contact this lead again. The follow-up will be assigned to the lead owner.</p>
+        <label>Due date and time <span className="required">*</span><input required autoFocus
+          type="datetime-local" value={dueAt} onChange={event => setDueAt(event.target.value)} /></label>
+        <label>Notes <span className="required">*</span><textarea required maxLength={2000}
+          placeholder="What should happen on the next call?" value={notes}
+          onChange={event => setNotes(event.target.value)} /></label>
+        <div className="drawer-actions"><button type="button" disabled={saving} onClick={onClose}>Cancel</button>
+          <button className="primary" disabled={saving}>{saving ? 'Saving…' : 'Schedule follow-up'}</button></div>
+      </form>}
+    </aside>
   </div>;
 }

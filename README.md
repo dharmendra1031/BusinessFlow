@@ -57,3 +57,7 @@ The admin is seeded only if `CRM_ADMIN_EMAIL` and `CRM_ADMIN_PASSWORD` are set a
 This is **Phase 1 starter**, not a production-complete CRM. Lead deletion and automated integrations are not included yet. Meta Lead Ads, WhatsApp webhooks, bulk Excel import, reminders, attachments, notifications, audit logs, tests, deployment and production-grade browser session handling are pending. The frontend is a basic MVP; the backend has additional functionality available for UI expansion.
 
 Do not deploy publicly until HTTPS, secrets management, testing, rate limits, monitoring, and secure cookie-based web auth have been reviewed.
+
+## UI feedback and accessibility
+
+The frontend uses a shared feedback provider: success/error/warning notifications and keyboard-accessible confirmations for lead assignment, terminal status changes, and follow-up completion. It also includes responsive navigation and lead/employee drawers. This is a UI implementation, not evidence of production security or completed browser testing.
