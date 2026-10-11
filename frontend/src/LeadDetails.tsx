@@ -127,7 +127,7 @@ export default function LeadDetails({ lead, sources, token, onClose, onSaved }: 
           onChange={event => setRequirement(event.target.value)} /></label>
         <div className="drawer-actions"><button type="button" disabled={saving} onClick={onClose}>Cancel</button>
           <button className="primary" disabled={saving}>{saving ? 'Saving…' : 'Save changes'}</button></div>
-      </form> : <form className="drawer-form" onSubmit={createFollowUp}>
+      </form> : tab === 'followup' ? <form className="drawer-form" onSubmit={createFollowUp}>
         <p className="form-intro">Choose when to contact this lead again. The follow-up will be assigned to the lead owner.</p>
         <label>Due date and time <span className="required">*</span><input required autoFocus
           type="datetime-local" value={dueAt} onChange={event => setDueAt(event.target.value)} /></label>
