@@ -67,7 +67,11 @@ export default function ReportsPage({ token, user }: { token: string; user: User
   function exportCsv() {
     if (!report?.rows.length) return;
     const keys = Object.keys(report.rows[0]);
-    const escape = (value: unknown) => '"' + String(value ?? '').replace(/"/g, '""') + '"';
+    const escape = (value: unknown) => {
+      const text = String(value ?? '');
+      const safe = /^[=+\\-@\\t\\r]/.test(text) ? "'" + text : text;
+      return '"' + safe.replace(/"/g, '""') + '"';
+    };
     const lines = [keys.map(escape).join(','), ...report.rows.map(row =>
       keys.map(key => escape(row[key])).join(','))].join('\r\n');
     const blob = new Blob(['\uFEFF' + lines], { type: 'text/csv;charset=utf-8' });
