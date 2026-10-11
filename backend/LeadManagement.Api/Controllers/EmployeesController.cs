@@ -16,16 +16,16 @@ public sealed class EmployeesController(AppDbContext db, UserManager<Application
     [HttpGet]
     public async Task<IActionResult> List()
     {
-        var query = db.Users.AsNoTracking().Where(u => u.IsActive);
+        var query = db.Users.AsNoTracking().AsQueryable();
         if (!User.IsInRole("Admin"))
         {
             if (!User.IsInRole("Manager")) return Forbid();
             var managerId = Services.LeadAccess.UserId(User);
-            query = query.Where(u => u.ManagerId == managerId || u.Id == managerId);
+            query = query.Where(u => u.IsActive && (u.ManagerId == managerId || u.Id == managerId));
         }
 
         var employees = await query.OrderBy(u => u.FullName)
-            .Select(u => new { u.Id, u.FullName, u.Email, u.ManagerId }).ToListAsync();
+            .Select(u => new { u.Id, u.FullName, u.Email, u.PhoneNumber, u.IsActive, u.ManagerId }).ToListAsync();
 
         var ids = employees.Select(u => u.Id).ToArray();
         var roles = await (from userRole in db.UserRoles
@@ -35,7 +35,7 @@ public sealed class EmployeesController(AppDbContext db, UserManager<Application
 
         return Ok(employees.Select(u => new
         {
-            u.Id, u.FullName, u.Email, u.ManagerId,
+            u.Id, u.FullName, u.Email, u.PhoneNumber, u.IsActive, u.ManagerId,
             roles = roles.Where(r => r.UserId == u.Id).Select(r => r.Name).ToArray()
         }));
     }
