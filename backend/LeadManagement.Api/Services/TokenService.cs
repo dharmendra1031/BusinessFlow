@@ -14,7 +14,8 @@ public sealed class TokenService(IConfiguration configuration)
         var claims = new List<Claim>
         {
             new(JwtRegisteredClaimNames.Sub, user.Id.ToString()),
-            new("name", user.FullName)
+            new("name", user.FullName),
+            new("security_stamp", user.SecurityStamp ?? string.Empty)
         };
         claims.AddRange(roles.Select(role => new Claim("role", role)));
 

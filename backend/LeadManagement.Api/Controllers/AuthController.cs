@@ -4,6 +4,7 @@ using LeadManagement.Api.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 
 namespace LeadManagement.Api.Controllers;
 
@@ -12,6 +13,7 @@ namespace LeadManagement.Api.Controllers;
 public sealed class AuthController(UserManager<ApplicationUser> users, TokenService tokens) : ControllerBase
 {
     [AllowAnonymous]
+    [EnableRateLimiting("login")]
     [HttpPost("login")]
     public async Task<IActionResult> Login(LoginRequest request)
     {

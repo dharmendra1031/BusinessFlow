@@ -56,7 +56,9 @@ The admin is seeded only if `CRM_ADMIN_EMAIL` and `CRM_ADMIN_PASSWORD` are set a
 
 This is **Phase 1 starter**, not a production-complete CRM. Lead deletion and automated integrations are not included yet. Meta Lead Ads, WhatsApp webhooks, bulk Excel import, reminders, attachments, notifications, audit logs, tests, deployment and production-grade browser session handling are pending. The frontend is a basic MVP; the backend has additional functionality available for UI expansion.
 
-Do not deploy publicly until HTTPS, secrets management, testing, rate limits, monitoring, and secure cookie-based web auth have been reviewed.
+Security hardening in this starter includes login rate limiting (five attempts per minute per remote IP), disabled-user checks, security-stamp and role revalidation for JWTs, HSTS outside development, and liveness/readiness endpoints. These are source changes, not verified deployment controls. Old tokens expire immediately after the security-stamp claim is introduced; users must sign in again.
+
+Do not deploy publicly until HTTPS/proxy configuration, secrets management, tested migrations, observability, and secure cookie-based web authentication have been reviewed.
 
 ## UI feedback and accessibility
 
