@@ -363,6 +363,9 @@ export function FollowUpsPage({ token }: { token: string }) {
   const { data, refresh, error, loading } = useResource<FollowUp[]>('/api/followups', token);
   const [tab, setTab] = useState<'pending' | 'overdue' | 'completed' | 'all'>('pending');
   const [working, setWorking] = useState<number | null>(null);
+  const [editing, setEditing] = useState<FollowUp | null>(null);
+  const [editDueAt, setEditDueAt] = useState('');
+  const [editNotes, setEditNotes] = useState('');
   const now = Date.now();
   const tasks = (data ?? []).filter(item => {
     if (tab === 'completed') return !!item.completedAtUtc;
@@ -370,6 +373,28 @@ export function FollowUpsPage({ token }: { token: string }) {
     if (tab === 'overdue') return !item.completedAtUtc && new Date(item.dueAtUtc).getTime() < now;
     return true;
   });
+
+  function startEdit(item: FollowUp) {
+    setEditing(item);
+    const due = new Date(item.dueAtUtc);
+    setEditDueAt(new Date(due.getTime() - due.getTimezoneOffset() * 60000).toISOString().slice(0, 16));
+    setEditNotes(item.notes);
+  }
+
+  async function saveFollowUp(event: React.FormEvent) {
+    event.preventDefault();
+    if (!editing) return;
+    setWorking(editing.id);
+    try {
+      await api('/api/followups/' + editing.id, token, { method: 'PUT',
+        body: JSON.stringify({ dueAtUtc: new Date(editDueAt).toISOString(), notes: editNotes }) });
+      setEditing(null);
+      await refresh();
+      notify('success', 'Follow-up updated');
+    } catch (err) {
+      notify('error', 'Update failed', err instanceof Error ? err.message : undefined);
+    } finally { setWorking(null); }
+  }
 
   async function complete(item: FollowUp) {
     const accepted = await confirm({
@@ -406,12 +431,25 @@ export function FollowUpsPage({ token }: { token: string }) {
           <div className="followup-due"><Icon name="calendar" size={16} />
             <span className={!item.completedAtUtc && new Date(item.dueAtUtc).getTime() < now ? 'overdue-text' : ''}>
               {dateLabel(item.dueAtUtc)}</span></div>
-          <div className="followup-action">{item.completedAtUtc ? <StatusBadge status="Completed" /> :
+          <div className="followup-action">{item.completedAtUtc ? <StatusBadge status="Completed" /> : <>
+            <button disabled={working === item.id} onClick={() => startEdit(item)}>Edit</button>
             <button disabled={working === item.id} onClick={() => void complete(item)}>
-              <Icon name="check" size={16} /> {working === item.id ? 'Saving…' : 'Complete'}</button>}</div>
+              <Icon name="check" size={16} /> {working === item.id ? 'Saving…' : 'Complete'}</button></>}</div>
         </article>)}</div> : !error && <EmptyState title="All caught up"
           detail={tab === 'overdue' ? 'No overdue follow-ups in this list.' : 'No follow-ups in this view.'} />}
     </section>
+    {editing && <div className="drawer-backdrop"><aside className="detail-drawer" role="dialog" aria-modal="true">
+      <div className="drawer-header"><div><h2>Edit follow-up</h2><p>{editing.leadName}</p></div>
+        <button className="icon-button" aria-label="Close" onClick={() => setEditing(null)}
+          disabled={working !== null}><Icon name="close" /></button></div>
+      <form className="drawer-form" onSubmit={saveFollowUp}>
+        <label>Next follow-up<input required type="datetime-local" value={editDueAt}
+          onChange={event => setEditDueAt(event.target.value)} /></label>
+        <label>Remarks<textarea required maxLength={2000} value={editNotes}
+          onChange={event => setEditNotes(event.target.value)} /></label>
+        <button className="primary" disabled={working !== null}>Save changes</button>
+      </form>
+    </aside></div>}
   </section>;
 }
 
