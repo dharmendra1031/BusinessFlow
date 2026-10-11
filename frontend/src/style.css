@@ -319,3 +319,16 @@ td select {
         grid-template-columns: 1fr;
     }
 }
+
+
+.lead-link {
+    padding: 0;
+    border: 0;
+    background: none;
+    font-weight: 600;
+    color: #225bba;
+}
+
+.lead-link:hover {
+    text-decoration: underline;
+}

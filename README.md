@@ -18,7 +18,7 @@ Single-company lead management system for admins, managers and employees.
 - Status changes and status history
 - Follow-ups, completion and overdue list
 - Dashboard counts scoped to each user's permissions
-- Basic React dashboard and lead screens
+- React dashboard, lead listing, lead editing, and follow-up scheduling
 
 ## Local setup
 
@@ -26,7 +26,7 @@ Requirements: .NET 10 SDK, Node.js 22+, SQL Server, and EF Core CLI (`dotnet too
 
 1. Configure a local SQL Server connection in `backend/LeadManagement.Api/appsettings.json` or via environment variable `ConnectionStrings__DefaultConnection`.
 2. Set environment variables `Jwt__Key` (a random secret of at least 32 bytes), `CRM_ADMIN_EMAIL`, and `CRM_ADMIN_PASSWORD` (12+ characters with upper/lower-case letters, numbers and symbols).
-3. In `backend/LeadManagement.Api`, run:
+3. In `backend/LeadManagement.Api`, run (design-time factory reads the configured connection string):
 
    ```powershell
    dotnet restore
@@ -54,6 +54,6 @@ The admin is seeded only if `CRM_ADMIN_EMAIL` and `CRM_ADMIN_PASSWORD` are set a
 
 ## In scope / pending
 
-This is **Phase 1 starter**, not a production-complete CRM. Lead deletion, lead editing UI and automated integrations are not included yet. Meta Lead Ads, WhatsApp webhooks, bulk Excel import, reminders, attachments, notifications, audit logs, tests, deployment and production-grade browser session handling are pending. The frontend is a basic MVP; the backend has additional functionality available for UI expansion.
+This is **Phase 1 starter**, not a production-complete CRM. Lead deletion and automated integrations are not included yet. Meta Lead Ads, WhatsApp webhooks, bulk Excel import, reminders, attachments, notifications, audit logs, tests, deployment and production-grade browser session handling are pending. The frontend is a basic MVP; the backend has additional functionality available for UI expansion.
 
 Do not deploy publicly until HTTPS, secrets management, testing, rate limits, monitoring, and secure cookie-based web auth have been reviewed.

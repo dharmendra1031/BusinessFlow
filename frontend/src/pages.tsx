@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { api } from './api';
+import LeadDetails from './LeadDetails';
 import type { Dashboard, Employee, FollowUp, Lead, Lookup, User } from './types';
 
 function Message({ error }: { error: string }) {
@@ -35,6 +36,7 @@ export function LeadsPage({ token, user }: { token: string; user: User }) {
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
   const [editing, setEditing] = useState(false);
+  const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
   const [error, setError] = useState('');
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
@@ -73,6 +75,8 @@ export function LeadsPage({ token, user }: { token: string; user: User }) {
       <button className="primary" onClick={() => setEditing(value => !value)}>
         {editing ? 'Close form' : '+ New lead'}</button></header>
     <Message error={error || loadError} />
+    {selectedLead && <LeadDetails key={selectedLead.id} lead={selectedLead} sources={sources ?? []}
+      token={token} onClose={() => setSelectedLead(null)} onSaved={refresh} />}
     {editing && <form className="panel form-grid" onSubmit={saveLead}>
       <label>Name<input required value={name} maxLength={150} onChange={e => setName(e.target.value)} /></label>
       <label>Phone<input required value={phone} maxLength={30} onChange={e => setPhone(e.target.value)} /></label>
@@ -88,7 +92,8 @@ export function LeadsPage({ token, user }: { token: string; user: User }) {
       <div className="table-scroll"><table><thead><tr><th>Lead</th><th>Phone</th><th>Source</th>
         <th>Status</th><th>Assigned to</th></tr></thead><tbody>
         {data?.items.map(lead => <tr key={lead.id}>
-          <td><strong>{lead.name}</strong><small>{lead.companyName || lead.requirement || '—'}</small></td>
+          <td><button type="button" className="lead-link" onClick={() => setSelectedLead(lead)}>{lead.name}</button>
+            <small>{lead.companyName || lead.requirement || '—'}</small></td>
           <td>{lead.phone}</td><td>{lead.source}</td><td><select aria-label={`Status for ${lead.name}`}
             value={lead.statusId} onChange={e => void update(lead.id, 'status', { statusId: Number(e.target.value) })}>
             {statuses?.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}</select></td>
