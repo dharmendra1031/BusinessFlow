@@ -82,9 +82,9 @@ export default function EmployeeManager({ employee, team, token, onClose, onSave
       </div>
       <form className="drawer-form" onSubmit={save} onInput={clearFieldError}
         onKeyDown={handleFormKeyDown}>
-        <label>Full name<input autoFocus required maxLength={150} value={fullName} onChange={event => setFullName(event.target.value)} /></label>
+        <label>Full name<input autoFocus required minLength={2} maxLength={150} value={fullName} onChange={event => setFullName(event.target.value)} /></label>
         <label>Mobile<input type="tel" autoComplete="tel" maxLength={30}
-          title="Enter a valid phone number or leave blank." value={phoneNumber} onChange={event => setPhoneNumber(event.target.value)} /></label>
+          title="Enter 7 to 15 digits or leave blank." value={phoneNumber} onChange={event => setPhoneNumber(event.target.value)} /></label>
         {!isAdmin && <label>Role<select value={role} onChange={event => setRole(event.target.value)}>
           <option>Employee</option><option>Manager</option></select></label>}
         <label>Reporting manager<select value={managerId} onChange={event => setManagerId(event.target.value)}>
@@ -100,10 +100,10 @@ export default function EmployeeManager({ employee, team, token, onClose, onSave
       <form className="drawer-form" onSubmit={resetPassword} onInput={clearFieldError}
         onKeyDown={handleFormKeyDown}>
         <h3>Reset password</h3>
-        <label>New password<input type="password" minLength={12} autoComplete="new-password" required
+        <label>New password<input type="password" minLength={12} maxLength={128} autoComplete="new-password" required
           pattern="(?=.*[a-z])(?=.*[A-Z])(?=.*[0-9])(?=.*[^A-Za-z0-9]).{12,}"
           value={newPassword} onChange={event => setNewPassword(event.target.value)} /></label>
-        <label>Confirm new password<input type="password" required autoComplete="new-password"
+        <label>Confirm new password<input type="password" required maxLength={128} autoComplete="new-password"
           value={confirmPassword} onChange={event => setConfirmPassword(event.target.value)} /></label>
         <p className="field-help">At least 12 characters, uppercase, lowercase, digit and symbol.</p>
         <button className="secondary-action" disabled={working || !newPassword}>Reset password</button>
