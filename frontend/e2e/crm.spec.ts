@@ -222,7 +222,9 @@ test('Team: create, manage, reset password and deactivate', async ({ page }) => 
   await page.getByRole('row').filter({ hasText: email })
     .getByRole('button', { name: 'Manage' }).click();
   await page.getByRole('dialog', { name: 'Playwright Staff' })
-    .getByLabel('New password').fill('ResetUiPassword123!');
+    .getByLabel('New password', { exact: true }).fill('ResetUiPassword123!');
+  await page.getByRole('dialog', { name: 'Playwright Staff' })
+    .getByLabel('Confirm new password').fill('ResetUiPassword123!');
   await page.getByRole('dialog', { name: 'Playwright Staff' })
     .getByRole('button', { name: 'Reset password' }).click();
   await expect(page.getByRole('status').filter({ hasText: 'Password reset' })).toBeVisible();
@@ -248,7 +250,8 @@ test('Employee: permissions, password change and mobile navigation', async ({ pa
   await page.getByRole('button', { name: 'Open navigation' }).click();
   await page.getByRole('button', { name: 'Change password', exact: true }).click();
   await page.getByLabel('Current password').fill(employeePassword);
-  await page.getByLabel('New password').fill('ChangedUiPassword123!');
+  await page.getByLabel('New password', { exact: true }).fill('ChangedUiPassword123!');
+  await page.getByLabel('Confirm new password').fill('ChangedUiPassword123!');
   await page.getByRole('main').getByRole('button', { name: 'Change password' }).click();
   await expect(page.getByRole('heading', { name: 'Sign in to your account' })).toBeVisible();
   await signIn(page, employee.email, 'ChangedUiPassword123!');
@@ -261,4 +264,88 @@ test('Manager: team is read-only and employee creation is restricted', async ({ 
   await expect(page.getByRole('heading', { name: 'Team members' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Add employee' })).toHaveCount(0);
   await expect(page.locator('.error-state')).toHaveCount(0);
+});
+
+
+test('Keyboard: Login moves with Enter and forms reject invalid values', async ({ page }) => {
+  await page.goto('/');
+  await page.getByLabel('Email address').fill(adminEmail);
+  await page.getByLabel('Email address').press('Enter');
+  await expect(page.locator('input[autocomplete="current-password"]')).toBeFocused();
+  await page.getByRole('button', { name: 'Show password' }).focus();
+  await page.keyboard.press('Enter');
+  await expect(page.locator('input[autocomplete="current-password"]')).toHaveAttribute('type', 'text');
+
+  await signIn(page);
+  await page.getByRole('button', { name: 'All leads', exact: true }).click();
+  await page.getByRole('button', { name: 'Add lead' }).focus();
+  await page.keyboard.press('Enter');
+  const dialog = page.getByRole('dialog', { name: 'Add a lead' });
+  await expect(dialog.getByPlaceholder('Customer name')).toBeFocused();
+
+  await dialog.getByPlaceholder('Customer name').fill('    ');
+  await dialog.getByPlaceholder('+965 ...').fill('+96555501234');
+  await dialog.getByRole('button', { name: 'Create lead' }).click();
+  await expect(dialog.getByPlaceholder('Customer name')).toBeFocused();
+  expect(await dialog.getByPlaceholder('Customer name').evaluate(
+    (input: HTMLInputElement) => input.validity.customError)).toBe(true);
+
+  await dialog.getByPlaceholder('Customer name').fill('Keyboard Test');
+  await dialog.getByPlaceholder('Customer name').press('Enter');
+  await expect(dialog.getByPlaceholder('+965 ...')).toBeFocused();
+  await dialog.getByPlaceholder('+965 ...').fill('invalid');
+  expect(await dialog.getByPlaceholder('+965 ...').evaluate(
+    (input: HTMLInputElement) => input.validity.patternMismatch)).toBe(true);
+  await dialog.getByPlaceholder('+965 ...').fill('+96555501011');
+  await dialog.getByPlaceholder('+965 ...').press('Enter');
+  await expect(dialog.getByPlaceholder('customer@example.com')).toBeFocused();
+
+  await dialog.getByPlaceholder('Customer name').focus();
+  await page.keyboard.press('Shift+Tab');
+  await expect(dialog.getByRole('button', { name: 'Close form' })).toBeFocused();
+  await page.keyboard.press('Escape');
+  await expect(dialog).toHaveCount(0);
+});
+
+test('Keyboard: Team validation, dialog focus, and password confirmation', async ({ page }) => {
+  await signIn(page);
+  await page.getByRole('button', { name: 'Team', exact: true }).click();
+  await page.getByRole('button', { name: 'Add employee' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Add employee' });
+  await expect(dialog.getByLabel('Full name')).toBeFocused();
+  await dialog.getByLabel('Full name').fill('  ');
+  await dialog.locator('input[type="email"]').fill('invalid-email');
+  expect(await dialog.locator('input[type="email"]').evaluate(
+    (input: HTMLInputElement) => input.validity.typeMismatch)).toBe(true);
+  await dialog.locator('input[type="email"]').fill('valid@example.test');
+  await dialog.getByLabel('Temporary password').fill('password123');
+  expect(await dialog.getByLabel('Temporary password').evaluate(
+    (input: HTMLInputElement) => input.validity.patternMismatch)).toBe(true);
+  await dialog.getByLabel('Temporary password').fill(employeePassword);
+  await dialog.getByRole('button', { name: 'Create employee' }).click();
+  await expect(dialog.getByLabel('Full name')).toBeFocused();
+  await page.keyboard.press('Escape');
+  await expect(dialog).toHaveCount(0);
+
+  await page.getByRole('button', { name: 'Change password', exact: true }).click();
+  await page.getByLabel('Current password').fill('NotUsedHere123!');
+  await page.getByLabel('New password', { exact: true }).fill('ValidNewPassword123!');
+  await page.getByLabel('Confirm new password').fill('DifferentPassword123!');
+  await page.locator('main.content').getByRole('button', { name: 'Change password' }).click();
+  await expect(page.getByRole('status').filter({ hasText: 'Passwords do not match' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Change password' })).toBeVisible();
+});
+
+test('Reports: keyboard submit and custom date choice', async ({ page }) => {
+  await signIn(page);
+  await page.getByRole('button', { name: 'Reports', exact: true }).click();
+  await page.getByLabel('From', { exact: true }).fill('2026-01-01');
+  await page.getByLabel('Period').selectOption('custom');
+  await expect(page.getByLabel('From', { exact: true })).toHaveValue('2026-01-01');
+  await page.getByLabel('Lead given by').fill('Playwright QA');
+  await page.getByLabel('Lead given by').press('Enter');
+  await expect(page.getByLabel('Status', { exact: true })).toBeFocused();
+  await page.getByRole('button', { name: 'Run report' }).focus();
+  await page.keyboard.press('Enter');
+  await expect(page.getByRole('heading', { name: /\\d+ records/ })).toBeVisible();
 });
