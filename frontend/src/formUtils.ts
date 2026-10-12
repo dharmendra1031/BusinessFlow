@@ -27,6 +27,14 @@ export function validateForm(form: HTMLFormElement): boolean {
     field.focus();
     return false;
   }
+  for (const field of form.querySelectorAll<HTMLInputElement>('input[type="number"]')) {
+    const value = field.value.trim();
+    if (!value || /^\d{1,15}(\.\d{1,3})?$/.test(value)) continue;
+    field.setCustomValidity('Enter an amount from 0 to 999,999,999,999,999.999 with up to 3 decimals.');
+    field.reportValidity();
+    field.focus();
+    return false;
+  }
   return form.reportValidity();
 }
 
