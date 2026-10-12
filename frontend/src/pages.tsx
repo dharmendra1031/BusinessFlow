@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { api } from './api';
+import { clearFieldError, handleDialogKeyDown, handleFormKeyDown, validateForm } from './formUtils';
 import { Icon } from './Icon';
 import { useFeedback } from './Feedback';
 import LeadDetails from './LeadDetails';
@@ -236,7 +237,7 @@ export function LeadsPage({ token, user, newLeadRequest, onNewLeadOpened }: {
 
   async function saveLead(event: React.FormEvent) {
     event.preventDefault();
-    if (working) return;
+    if (!validateForm(event.currentTarget) || working) return;
     setWorking(true);
     try {
       await api('/api/leads', token, { method: 'POST',
@@ -349,21 +350,28 @@ export function LeadsPage({ token, user, newLeadRequest, onNewLeadOpened }: {
     </section>
     {selectedLead && <LeadDetails key={selectedLead.id} lead={selectedLead} sources={sources ?? []}
       token={token} onClose={() => setSelectedLead(null)}
-      onSaved={async () => { await refresh(); }} />}
+      onSaved={async () => {
+        await refresh();
+        const latest = await api<Partial<Lead>>('/api/leads/' + selectedLead.id, token);
+        setSelectedLead(current => current?.id === selectedLead.id ? { ...current, ...latest } : current);
+      }} />}
     {showNew && <div className="drawer-backdrop" onMouseDown={event => {
       if (event.currentTarget === event.target && !working) setShowNew(false);
     }}>
-      <aside className="detail-drawer" role="dialog" aria-modal="true" aria-labelledby="new-lead-title">
+      <aside className="detail-drawer" role="dialog" aria-modal="true" aria-labelledby="new-lead-title"
+        onKeyDown={event => handleDialogKeyDown(event, () => { if (!working) setShowNew(false); })}>
         <div className="drawer-header"><div><span className="section-kicker">NEW OPPORTUNITY</span>
           <h2 id="new-lead-title">Add a lead</h2><p>Capture the key details to get started.</p></div>
           <button className="icon-button" aria-label="Close form" onClick={() => setShowNew(false)}>
             <Icon name="close" /></button></div>
-        <form className="drawer-form" onSubmit={saveLead}>
+        <form className="drawer-form" onSubmit={saveLead} onInput={clearFieldError}
+          onKeyDown={handleFormKeyDown}>
           <label>Full name <span className="required">*</span>
             <input autoFocus required maxLength={150} placeholder="Customer name" value={name}
               onChange={event => setName(event.target.value)} /></label>
           <label>Phone number <span className="required">*</span>
-            <input required maxLength={30} placeholder="+965 ..." value={phone}
+            <input required type="tel" autoComplete="tel" maxLength={30} placeholder="+965 ..." value={phone}
+              pattern="\\+?[0-9() .-]{7,30}" title="Enter a valid phone number (at least 7 digits)."
               onChange={event => setPhone(event.target.value)} /></label>
           <label>Email address<input type="email" maxLength={256} placeholder="customer@example.com"
             value={email} onChange={event => setEmail(event.target.value)} /></label>
@@ -416,7 +424,11 @@ export function FollowUpsPage({ token }: { token: string }) {
 
   async function saveFollowUp(event: React.FormEvent) {
     event.preventDefault();
-    if (!editing) return;
+    if (!editing || !validateForm(event.currentTarget)) return;
+    if (new Date(editDueAt) <= new Date()) {
+      notify('warning', 'Invalid due date', 'Choose a future date and time.');
+      return;
+    }
     setWorking(editing.id);
     try {
       await api('/api/followups/' + editing.id, token, { method: 'PUT',
@@ -471,12 +483,14 @@ export function FollowUpsPage({ token }: { token: string }) {
         </article>)}</div> : !error && <EmptyState title="All caught up"
           detail={tab === 'overdue' ? 'No overdue follow-ups in this list.' : 'No follow-ups in this view.'} />}
     </section>
-    {editing && <div className="drawer-backdrop"><aside className="detail-drawer" role="dialog" aria-modal="true">
+    {editing && <div className="drawer-backdrop"><aside className="detail-drawer" role="dialog" aria-modal="true" aria-label="Edit follow-up"
+      onKeyDown={event => handleDialogKeyDown(event, () => { if (working === null) setEditing(null); })}>
       <div className="drawer-header"><div><h2>Edit follow-up</h2><p>{editing.leadName}</p></div>
         <button className="icon-button" aria-label="Close" onClick={() => setEditing(null)}
           disabled={working !== null}><Icon name="close" /></button></div>
-      <form className="drawer-form" onSubmit={saveFollowUp}>
-        <label>Next follow-up<input required type="datetime-local" value={editDueAt}
+      <form className="drawer-form" onSubmit={saveFollowUp} onInput={clearFieldError}
+        onKeyDown={handleFormKeyDown}>
+        <label>Next follow-up<input autoFocus required type="datetime-local" value={editDueAt}
           onChange={event => setEditDueAt(event.target.value)} /></label>
         <label>Remarks<textarea required maxLength={2000} value={editNotes}
           onChange={event => setEditNotes(event.target.value)} /></label>
@@ -510,7 +524,7 @@ export function EmployeesPage({ token, user }: { token: string; user: User }) {
 
   async function save(event: React.FormEvent) {
     event.preventDefault();
-    if (working) return;
+    if (!validateForm(event.currentTarget) || working) return;
     setWorking(true);
     try {
       await api('/api/employees', token, { method: 'POST', body: JSON.stringify({
@@ -545,18 +559,23 @@ export function EmployeesPage({ token, user }: { token: string; user: User }) {
     </section>
     {showForm && <div className="drawer-backdrop" onMouseDown={event => {
       if (event.target === event.currentTarget && !working) setShowForm(false);
-    }}><aside className="detail-drawer" role="dialog" aria-modal="true" aria-labelledby="employee-dialog-title">
+    }}><aside className="detail-drawer" role="dialog" aria-modal="true" aria-labelledby="employee-dialog-title"
+      onKeyDown={event => handleDialogKeyDown(event, () => { if (!working) setShowForm(false); })}>
       <div className="drawer-header"><div><span className="section-kicker">TEAM MANAGEMENT</span>
         <h2 id="employee-dialog-title">Add employee</h2><p>Set up an account for a team member.</p></div>
         <button className="icon-button" aria-label="Close form" onClick={() => setShowForm(false)}>
           <Icon name="close" /></button></div>
-      <form className="drawer-form" onSubmit={save}>
+      <form className="drawer-form" onSubmit={save} onInput={clearFieldError}
+        onKeyDown={handleFormKeyDown}>
         <label>Full name <span className="required">*</span><input autoFocus required maxLength={150}
           value={fullName} onChange={event => setFullName(event.target.value)} /></label>
-        <label>Mobile<input value={phoneNumber} onChange={event => setPhoneNumber(event.target.value)} /></label>
+        <label>Mobile<input type="tel" autoComplete="tel" maxLength={30}
+          pattern="\\+?[0-9() .-]{7,30}" title="Enter a valid phone number or leave blank." value={phoneNumber} onChange={event => setPhoneNumber(event.target.value)} /></label>
         <label>Email <span className="required">*</span><input type="email" required
           value={email} onChange={event => setEmail(event.target.value)} /></label>
         <label>Temporary password <span className="required">*</span><input type="password" required minLength={12}
+          pattern="(?=.*[a-z])(?=.*[A-Z])(?=.*[0-9])(?=.*[^A-Za-z0-9]).{12,}"
+          title="Use at least 12 characters with uppercase, lowercase, number and symbol."
           autoComplete="new-password" value={password} onChange={event => setPassword(event.target.value)} /></label>
         <p className="field-help">Use 12+ characters with upper/lowercase letters, numbers and symbols.</p>
         <label>Role<select value={role} onChange={event => setRole(event.target.value)}>
