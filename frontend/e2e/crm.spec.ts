@@ -364,6 +364,11 @@ test('Lead form rejects short names, bad phones, invalid email and amount bounda
   await name.fill('A');
   await expect.poll(() => name.evaluate((field: HTMLInputElement) => field.validity.tooShort))
     .toBe(true);
+  await name.fill('A ');
+  await phone.fill('+96555501001');
+  await dialog.getByRole('button', { name: 'Create lead' }).click();
+  await expect.poll(() => name.evaluate((field: HTMLInputElement) => field.validity.customError))
+    .toBe(true);
   await name.fill('Validation Customer');
   await phone.fill('123456');
   await dialog.getByRole('button', { name: 'Create lead' }).click();
