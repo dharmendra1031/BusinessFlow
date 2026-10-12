@@ -18,6 +18,10 @@ public sealed class LeadsController(AppDbContext db) : ControllerBase
         long? userId = null, string? leadGivenBy = null, DateTime? from = null, DateTime? to = null)
     {
         if (page < 1 || pageSize is < 1 or > 100) return BadRequest();
+        if (search?.Length > 150 || leadGivenBy?.Length > 150)
+            return BadRequest(new { message = "Search filters must not exceed 150 characters." });
+        if (from.HasValue && to.HasValue && from.Value.Date > to.Value.Date)
+            return BadRequest(new { message = "Invalid date range." });
         var query = LeadAccess.VisibleTo(db.Leads.AsNoTracking(), User);
         if (!string.IsNullOrWhiteSpace(search))
         {
