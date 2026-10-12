@@ -24,13 +24,12 @@ Single-company lead management system for admins, managers and employees.
 
 Requirements: .NET 10 SDK, Node.js 22+, SQL Server, and EF Core CLI (`dotnet tool install --global dotnet-ef --version 10.0.0`).
 
-1. Configure a local SQL Server connection in `backend/LeadManagement.Api/appsettings.json` or via environment variable `ConnectionStrings__DefaultConnection`.
-2. Set environment variables `Jwt__Key` (a random secret of at least 32 bytes), `CRM_ADMIN_EMAIL`, and `CRM_ADMIN_PASSWORD` (12+ characters with upper/lower-case letters, numbers and symbols).
+1. Development settings are in `backend/LeadManagement.Api/appsettings.Development.json`. It contains the LocalDB connection, JWT key, and bootstrap admin credentials. Change the credentials before sharing this repository.
+2. Production settings are in `backend/LeadManagement.Api/appsettings.Production.json`. Replace its SQL Server and JWT placeholders with real deployment values before running in Production. `appsettings.json` contains settings common to both environments.
 3. In `backend/LeadManagement.Api`, run (design-time factory reads the configured connection string):
 
    ```powershell
    dotnet restore
-   dotnet ef migrations add InitialCreate
    dotnet ef database update
    dotnet run
    ```
@@ -44,7 +43,7 @@ Requirements: .NET 10 SDK, Node.js 22+, SQL Server, and EF Core CLI (`dotnet too
 
 5. Open the Vite URL and sign in with the bootstrap admin credentials.
 
-The admin is seeded only if `CRM_ADMIN_EMAIL` and `CRM_ADMIN_PASSWORD` are set and the database has no admin user. Remove the environment variables after initial setup. **Never commit credentials.**
+The admin is seeded only if `CRM_ADMIN_EMAIL` and `CRM_ADMIN_PASSWORD` are configured and the database has no admin user. Development credentials in this repository are for local use only; replace them before sharing the repository. Never commit production credentials.
 
 ## Roles
 
@@ -54,7 +53,7 @@ The admin is seeded only if `CRM_ADMIN_EMAIL` and `CRM_ADMIN_PASSWORD` are set a
 
 ## In scope / pending
 
-This is **Phase 1 starter**, not a production-complete CRM. Lead deletion and automated integrations are not included yet. Meta Lead Ads, WhatsApp webhooks, bulk Excel import, reminders, attachments, notifications, audit logs, tests, deployment and production-grade browser session handling are pending. The frontend is a basic MVP; the backend has additional functionality available for UI expansion.
+This is **Phase 1 starter**, not a production-complete CRM. Lead deletion and automated integrations are not included yet. Meta Lead Ads, WhatsApp webhooks, bulk Excel import, reminders, attachments, and notifications are pending. The frontend is a basic MVP; the backend has additional functionality available for UI expansion. An IIS deployment package exists, but live deployment and broader production validation are pending.
 
 Security hardening in this starter includes login rate limiting (five attempts per minute per remote IP), disabled-user checks, security-stamp and role revalidation for JWTs, HSTS outside development, and liveness/readiness endpoints. These are source changes, not verified deployment controls. Old tokens expire immediately after the security-stamp claim is introduced; users must sign in again.
 
@@ -86,6 +85,7 @@ database: generate the EF Core initial migration from the current model instead.
 Existing installations with an EF migration history should reconcile their
 migration baseline before future `dotnet ef database update` calls.
 
-This feature branch is not deployable until the SQL Server integration tests,
-API compile and frontend build pass against the new schema. Live deployment,
-security testing, PDF export and unrestricted report pagination are not verified.
+The SQL Server integration test, API build, and frontend build pass locally
+against the new schema. Live deployment, security testing, PDF export, and
+unrestricted report pagination are not verified. See [Windows VPS deployment](DEPLOY_WINDOWS.md)
+for the single-domain IIS package and setup steps.

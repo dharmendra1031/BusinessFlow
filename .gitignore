@@ -2,9 +2,11 @@
 **/obj/
 **/node_modules/
 **/dist/
+backend/LeadManagement.Api/wwwroot/
+artifacts/
+**/*.tsbuildinfo
 **/.vs/
 .env
 .env.*
 !.env.example
-**/appsettings.Development.json
 *.user

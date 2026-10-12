@@ -7,9 +7,21 @@ public sealed class DesignTimeDbContextFactory : IDesignTimeDbContextFactory<App
 {
     public AppDbContext CreateDbContext(string[] args)
     {
+        var basePath = Directory.GetCurrentDirectory();
+        var environment = Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT")
+            ?? Environment.GetEnvironmentVariable("DOTNET_ENVIRONMENT")
+            ?? (File.Exists(Path.Combine(basePath, "appsettings.Development.json"))
+                ? "Development"
+                : "Production");
+        if (environment == "Development" &&
+            !File.Exists(Path.Combine(basePath, "appsettings.Development.json")) &&
+            File.Exists(Path.Combine(basePath, "appsettings.Production.json")))
+            environment = "Production";
+
         var configuration = new ConfigurationBuilder()
-            .SetBasePath(Directory.GetCurrentDirectory())
+            .SetBasePath(basePath)
             .AddJsonFile("appsettings.json")
+            .AddJsonFile($"appsettings.{environment}.json", optional: true)
             .AddEnvironmentVariables()
             .Build();
 

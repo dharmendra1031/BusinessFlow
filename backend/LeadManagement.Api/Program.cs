@@ -13,6 +13,8 @@ var builder = WebApplication.CreateBuilder(args);
 var secret = builder.Configuration["Jwt:Key"];
 if (string.IsNullOrWhiteSpace(secret) || Encoding.UTF8.GetByteCount(secret) < 32)
     throw new InvalidOperationException("Configure Jwt:Key with at least 32 UTF-8 bytes.");
+if (builder.Environment.IsProduction() && secret.StartsWith("REPLACE_WITH_", StringComparison.Ordinal))
+    throw new InvalidOperationException("Replace the production Jwt:Key placeholder before starting the API.");
 
 builder.Services.AddControllers();
 builder.Services.AddProblemDetails();
@@ -31,6 +33,8 @@ builder.Services.AddRateLimiter(options =>
 });
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection")
     ?? throw new InvalidOperationException("Configure DefaultConnection.");
+if (builder.Environment.IsProduction() && connectionString.Contains("YOUR_SQL_", StringComparison.Ordinal))
+    throw new InvalidOperationException("Replace the production SQL Server connection placeholders before starting the API.");
 builder.Services.AddDbContext<AppDbContext>(options => options.UseSqlServer(connectionString));
 builder.Services.AddIdentityCore<ApplicationUser>(options =>
 {
@@ -108,6 +112,8 @@ app.Use(async (context, next) =>
 });
 
 app.UseHttpsRedirection();
+app.UseDefaultFiles();
+app.UseStaticFiles();
 app.UseRouting();
 app.UseCors("Frontend");
 app.UseRateLimiter();
@@ -119,5 +125,23 @@ app.MapGet("/health/ready", async (AppDbContext db) =>
     await db.Database.CanConnectAsync()
         ? Results.Ok(new { status = "ready" })
         : Results.StatusCode(StatusCodes.Status503ServiceUnavailable)).AllowAnonymous();
+app.MapFallback(async context =>
+{
+    if (context.Request.Path.StartsWithSegments("/api") || context.Request.Path.StartsWithSegments("/health"))
+    {
+        context.Response.StatusCode = StatusCodes.Status404NotFound;
+        return;
+    }
+
+    var index = Path.Combine(app.Environment.WebRootPath ?? "", "index.html");
+    if (!File.Exists(index))
+    {
+        context.Response.StatusCode = StatusCodes.Status404NotFound;
+        return;
+    }
+
+    context.Response.ContentType = "text/html; charset=utf-8";
+    await context.Response.SendFileAsync(index);
+});
 await DbInitializer.SeedAdminAsync(app.Services, app.Configuration);
 app.Run();

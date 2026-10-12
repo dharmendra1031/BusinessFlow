@@ -1,4 +1,4 @@
-const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5081';
+const apiUrl = import.meta.env.VITE_API_URL || '';
 
 function errorText(data: unknown, status: number): string {
   if (!data || typeof data !== 'object') return 'Request failed (' + status + ')';

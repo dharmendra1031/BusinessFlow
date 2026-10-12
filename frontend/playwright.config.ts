@@ -9,7 +9,7 @@ export default defineConfig({
   retries: 0,
   reporter: [['list'], ['html', { open: 'never' }]],
   use: {
-    baseURL: 'http://localhost:5173',
+    baseURL: 'http://localhost:5178',
     trace: 'retain-on-failure',
     screenshot: 'only-on-failure',
   },
@@ -22,8 +22,8 @@ export default defineConfig({
       reuseExistingServer: !process.env.CI,
     },
     {
-      command: 'npm run dev -- --host localhost --port 5173 --strictPort',
-      url: 'http://localhost:5173',
+      command: 'npm run dev -- --host localhost --port 5178 --strictPort',
+      url: 'http://localhost:5178',
       timeout: 60_000,
       reuseExistingServer: !process.env.CI,
     },
