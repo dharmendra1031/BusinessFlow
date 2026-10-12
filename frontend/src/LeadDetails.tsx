@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { api } from './api';
+import { clearFieldError, handleDialogKeyDown, handleFormKeyDown, validateForm } from './formUtils';
 import { Icon } from './Icon';
 import { useFeedback } from './Feedback';
 import type { Lead, LeadFollowUpHistory, Lookup } from './types';
@@ -35,17 +36,9 @@ export default function LeadDetails({ lead, sources, token, onClose, onSaved }: 
       .then(setHistory).catch(() => notify('error', 'Unable to load follow-up history'));
   }, [tab, lead.id, token, notify]);
 
-  useEffect(() => {
-    function onKeyDown(event: KeyboardEvent) {
-      if (event.key === 'Escape' && !saving) onClose();
-    }
-    document.addEventListener('keydown', onKeyDown);
-    return () => document.removeEventListener('keydown', onKeyDown);
-  }, [onClose, saving]);
-
   async function saveLead(event: React.FormEvent) {
     event.preventDefault();
-    if (saving) return;
+    if (!validateForm(event.currentTarget) || saving) return;
     setSaving(true);
     try {
       await api('/api/leads/' + lead.id, token, {
@@ -86,7 +79,8 @@ export default function LeadDetails({ lead, sources, token, onClose, onSaved }: 
   return <div className="drawer-backdrop" onMouseDown={event => {
     if (event.target === event.currentTarget && !saving) onClose();
   }}>
-    <aside className="detail-drawer" role="dialog" aria-modal="true" aria-labelledby="lead-details-title">
+    <aside className="detail-drawer" role="dialog" aria-modal="true" aria-labelledby="lead-details-title"
+      onKeyDown={event => handleDialogKeyDown(event, () => { if (!saving) onClose(); })}>
       <div className="drawer-header"><div><span className="section-kicker">LEAD DETAILS</span>
         <h2 id="lead-details-title">{lead.name}</h2>
         <p>{lead.customerCode ?? ('Lead #' + lead.id)} · {lead.source}</p></div>
@@ -103,11 +97,13 @@ export default function LeadDetails({ lead, sources, token, onClose, onSaved }: 
         <button className={tab === 'followup' ? 'selected' : ''} onClick={() => setTab('followup')}>New follow-up</button>
         <button className={tab === 'history' ? 'selected' : ''} onClick={() => setTab('history')}>History</button>
       </div>
-      {tab === 'details' ? <form className="drawer-form" onSubmit={saveLead}>
+      {tab === 'details' ? <form className="drawer-form" onSubmit={saveLead} onInput={clearFieldError}
+        onKeyDown={handleFormKeyDown}>
         <label>Full name <span className="required">*</span>
           <input autoFocus required maxLength={150} value={name} onChange={event => setName(event.target.value)} /></label>
         <label>Phone number <span className="required">*</span>
-          <input required maxLength={30} value={phone} onChange={event => setPhone(event.target.value)} /></label>
+          <input required type="tel" autoComplete="tel" maxLength={30}
+          pattern="\\+?[0-9() .-]{7,30}" title="Enter a valid phone number (at least 7 digits)." value={phone} onChange={event => setPhone(event.target.value)} /></label>
         <label>Email address<input type="email" maxLength={256} value={email}
           onChange={event => setEmail(event.target.value)} /></label>
         <label>Company name<input maxLength={200} value={companyName}
@@ -127,7 +123,8 @@ export default function LeadDetails({ lead, sources, token, onClose, onSaved }: 
           onChange={event => setRequirement(event.target.value)} /></label>
         <div className="drawer-actions"><button type="button" disabled={saving} onClick={onClose}>Cancel</button>
           <button className="primary" disabled={saving}>{saving ? 'Saving…' : 'Save changes'}</button></div>
-      </form> : tab === 'followup' ? <form className="drawer-form" onSubmit={createFollowUp}>
+      </form> : tab === 'followup' ? <form className="drawer-form" onSubmit={createFollowUp} onInput={clearFieldError}
+        onKeyDown={handleFormKeyDown}>
         <p className="form-intro">Choose when to contact this lead again. The follow-up will be assigned to the lead owner.</p>
         <label>Due date and time <span className="required">*</span><input required autoFocus
           type="datetime-local" value={dueAt} onChange={event => setDueAt(event.target.value)} /></label>
