@@ -17,6 +17,15 @@ export function validateForm(form: HTMLFormElement): boolean {
     field.focus();
     return false;
   }
+  for (const field of form.querySelectorAll<HTMLInputElement>('input[type="tel"]')) {
+    const value = field.value.trim();
+    if (!value) continue;
+    if (/^\\+?[0-9().\\s-]+$/.test(value) && value.replace(/\\D/g, '').length >= 7) continue;
+    field.setCustomValidity('Enter a valid phone number with at least 7 digits.');
+    field.reportValidity();
+    field.focus();
+    return false;
+  }
   return form.reportValidity();
 }
 
