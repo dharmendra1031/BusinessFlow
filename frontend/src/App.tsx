@@ -60,6 +60,7 @@ function Workspace() {
   const pageTitle = { dashboard: 'Dashboard', leads: 'All leads', followups: 'Follow-ups', employees: 'Team', reports: 'Reports', settings: 'Change password' }[screen];
 
   return <div className="app-shell">
+    <a className="skip-link" href="#main-content">Skip to main content</a>
     {menuOpen && <button className="mobile-backdrop" aria-label="Close navigation"
       onClick={() => setMenuOpen(false)} />}
     <aside className={'sidebar ' + (menuOpen ? 'sidebar-open' : '')}>
@@ -100,7 +101,7 @@ function Workspace() {
           <span className="avatar avatar-small" title={user.fullName}>{initials(user.fullName)}</span>
         </div>
       </header>
-      <main className="content" id="main-content">
+      <main className="content" id="main-content" tabIndex={-1}>
         {screen === 'dashboard' && <DashboardPage token={session.token} onNavigate={navigate} />}
         {screen === 'leads' && <LeadsPage token={session.token} user={user}
           newLeadRequest={newLeadRequest} onNewLeadOpened={() => setNewLeadRequest(0)} />}
