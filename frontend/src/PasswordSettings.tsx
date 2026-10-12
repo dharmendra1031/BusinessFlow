@@ -39,11 +39,11 @@ export default function PasswordSettings({ token, onChanged }: { token: string; 
         onKeyDown={handleFormKeyDown}>
         <label>Current password<input type="password" required autoComplete="current-password"
           value={currentPassword} onChange={event => setCurrentPassword(event.target.value)} /></label>
-        <label>New password<input type="password" required minLength={12} autoComplete="new-password"
+        <label>New password<input type="password" required minLength={12} maxLength={128} autoComplete="new-password"
           pattern="(?=.*[a-z])(?=.*[A-Z])(?=.*[0-9])(?=.*[^A-Za-z0-9]).{12,}"
           title="Use at least 12 characters with uppercase, lowercase, number and symbol."
           value={newPassword} onChange={event => setNewPassword(event.target.value)} /></label>
-        <label>Confirm new password<input type="password" required autoComplete="new-password"
+        <label>Confirm new password<input type="password" required maxLength={128} autoComplete="new-password"
           value={confirmPassword} onChange={event => setConfirmPassword(event.target.value)} /></label>
         <p className="field-help">At least 12 characters with uppercase, lowercase, a number and a symbol.</p>
         <button className="primary" disabled={working}>{working ? 'Saving…' : 'Change password'}</button>
