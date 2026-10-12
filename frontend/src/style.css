@@ -325,3 +325,7 @@ td small { display: block; font-size: 11px; max-width: 210px; overflow: hidden; 
 .drawer-tabs button.selected, .tab-list button.selected { border-bottom-color: #305ad6; }
 .toast-dismiss { background: transparent; padding: 0; border: 0; }
 @media(max-width:600px) { .dialog-actions button { flex: 1; } }
+
+.skip-link { position: fixed; top: -60px; left: 12px; z-index: 150;
+  background: #fff; color: #1b2b45; padding: 10px 14px; border-radius: 8px; }
+.skip-link:focus { top: 12px; }
