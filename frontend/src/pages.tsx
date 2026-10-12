@@ -371,7 +371,7 @@ export function LeadsPage({ token, user, newLeadRequest, onNewLeadOpened }: {
               onChange={event => setName(event.target.value)} /></label>
           <label>Phone number <span className="required">*</span>
             <input required type="tel" autoComplete="tel" maxLength={30} placeholder="+965 ..." value={phone}
-              pattern="\\+?[0-9() .-]{7,30}" title="Enter a valid phone number (at least 7 digits)."
+              title="Enter a valid phone number (at least 7 digits)."
               onChange={event => setPhone(event.target.value)} /></label>
           <label>Email address<input type="email" maxLength={256} placeholder="customer@example.com"
             value={email} onChange={event => setEmail(event.target.value)} /></label>
@@ -570,7 +570,7 @@ export function EmployeesPage({ token, user }: { token: string; user: User }) {
         <label>Full name <span className="required">*</span><input autoFocus required maxLength={150}
           value={fullName} onChange={event => setFullName(event.target.value)} /></label>
         <label>Mobile<input type="tel" autoComplete="tel" maxLength={30}
-          pattern="\\+?[0-9() .-]{7,30}" title="Enter a valid phone number or leave blank." value={phoneNumber} onChange={event => setPhoneNumber(event.target.value)} /></label>
+          title="Enter a valid phone number or leave blank." value={phoneNumber} onChange={event => setPhoneNumber(event.target.value)} /></label>
         <label>Email <span className="required">*</span><input type="email" required
           value={email} onChange={event => setEmail(event.target.value)} /></label>
         <label>Temporary password <span className="required">*</span><input type="password" required minLength={12}
