@@ -61,8 +61,8 @@ public sealed class LeadsController(AppDbContext db) : ControllerBase
     {
         if (!await db.LeadSources.AnyAsync(s => s.Id == request.SourceId))
             return BadRequest(new { message = "Invalid source." });
-        if (string.IsNullOrWhiteSpace(request.Name) || string.IsNullOrWhiteSpace(request.Phone))
-            return BadRequest(new { message = "Name and phone are required." });
+        if (string.IsNullOrWhiteSpace(request.Name) || request.Name.Trim().Length < 2 || string.IsNullOrWhiteSpace(request.Phone))
+            return BadRequest(new { message = "Enter a name of at least 2 characters and a valid phone number." });
         if (request.ProjectAmount < 0) return BadRequest(new { message = "Project amount cannot be negative." });
         if (request.StatusId.HasValue && !await db.LeadStatuses.AnyAsync(s => s.Id == request.StatusId))
             return BadRequest(new { message = "Invalid status." });
@@ -102,8 +102,8 @@ public sealed class LeadsController(AppDbContext db) : ControllerBase
         if (lead is null) return NotFound();
         if (!await db.LeadSources.AnyAsync(s => s.Id == request.SourceId))
             return BadRequest(new { message = "Invalid source." });
-        if (string.IsNullOrWhiteSpace(request.Name) || string.IsNullOrWhiteSpace(request.Phone))
-            return BadRequest(new { message = "Name and phone are required." });
+        if (string.IsNullOrWhiteSpace(request.Name) || request.Name.Trim().Length < 2 || string.IsNullOrWhiteSpace(request.Phone))
+            return BadRequest(new { message = "Enter a name of at least 2 characters and a valid phone number." });
         if (request.ProjectAmount < 0) return BadRequest(new { message = "Project amount cannot be negative." });
         lead.Name = request.Name.Trim();
         lead.Phone = request.Phone.Trim();
