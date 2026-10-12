@@ -350,3 +350,97 @@ test('Reports: keyboard submit and custom date choice', async ({ page }) => {
   await page.keyboard.press('Enter');
   await expect(page.getByRole('heading', { name: /\d+ records/ })).toBeVisible();
 });
+
+test('Lead form rejects short names, bad phones, invalid email and amount boundaries', async ({ page }) => {
+  await signIn(page);
+  await page.getByRole('button', { name: 'All leads', exact: true }).click();
+  await page.getByRole('button', { name: 'Add lead' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Add a lead' });
+  const name = dialog.getByPlaceholder('Customer name');
+  const phone = dialog.getByPlaceholder('+965 ...');
+  const email = dialog.locator('input[type="email"]');
+  const amount = dialog.getByLabel('Project amount (KWD)');
+
+  await name.fill('A');
+  await expect.poll(() => name.evaluate((field: HTMLInputElement) => field.validity.tooShort))
+    .toBe(true);
+  await name.fill('Validation Customer');
+  await phone.fill('123456');
+  await dialog.getByRole('button', { name: 'Create lead' }).click();
+  await expect.poll(() => phone.evaluate((field: HTMLInputElement) => field.validity.customError))
+    .toBe(true);
+
+  await phone.fill('1234567890123456');
+  await dialog.getByRole('button', { name: 'Create lead' }).click();
+  await expect.poll(() => phone.evaluate((field: HTMLInputElement) => field.validity.customError))
+    .toBe(true);
+  await phone.fill('+96555501001');
+
+  await email.fill('not-an-email');
+  await expect.poll(() => email.evaluate((field: HTMLInputElement) => field.validity.typeMismatch))
+    .toBe(true);
+  await email.fill('valid@example.test');
+
+  await amount.fill('-1');
+  await expect.poll(() => amount.evaluate((field: HTMLInputElement) => field.validity.rangeUnderflow))
+    .toBe(true);
+  await amount.fill('1000000000000000');
+  await expect.poll(() => amount.evaluate((field: HTMLInputElement) => field.validity.rangeOverflow))
+    .toBe(true);
+  await amount.fill('10.0001');
+  await expect.poll(() => amount.evaluate((field: HTMLInputElement) => field.validity.stepMismatch))
+    .toBe(true);
+  await amount.fill('10.125');
+  await dialog.getByRole('button', { name: 'Create lead' }).click();
+  await expect(page.getByRole('status').filter({ hasText: 'Lead created' })).toBeVisible();
+});
+
+test('API rejects invalid lead and employee values even without browser validation', async ({ request }) => {
+  const token = adminToken();
+  const headers = { Authorization: 'Bearer ' + token };
+  const lead = { name: 'Validation Sample', phone: '1234567', sourceId: 1 };
+  for (const data of [
+    { ...lead, name: '  ' },
+    { ...lead, name: 'A' },
+    { ...lead, phone: '123456' },
+    { ...lead, phone: '1234567890123456' },
+    { ...lead, email: 'bad-email' },
+    { ...lead, email: 'a'.repeat(250) + '@example.com' },
+    { ...lead, projectAmount: -1 },
+    { ...lead, projectAmount: 1000000000000000 },
+  ]) {
+    const response = await request.post(apiUrl + '/api/leads', { headers, data });
+    expect(response.status(), JSON.stringify(data)).toBe(400);
+  }
+
+  const employee = {
+    fullName: 'Validation Employee', email: 'valid-' + unique() + '@example.test',
+    password: employeePassword, role: 'Employee',
+  };
+  for (const data of [
+    { ...employee, fullName: '  ' },
+    { ...employee, email: 'invalid' },
+    { ...employee, phoneNumber: '+1234567890123456' },
+    { ...employee, phoneNumber: '12345' },
+    { ...employee, password: 'A1!' },
+    { ...employee, password: 'A1!' + 'x'.repeat(126) },
+  ]) {
+    const response = await request.post(apiUrl + '/api/employees', { headers, data });
+    expect(response.status(), JSON.stringify(data)).toBe(400);
+  }
+});
+
+test('Employee UI and dashboard date fields use aligned constraints', async ({ page }) => {
+  await signIn(page);
+  await page.getByLabel('From date').fill('2026-10-20');
+  await page.getByLabel('To date').fill('2026-10-10');
+  await expect(page.getByLabel('From date')).toHaveValue('2026-10-10');
+  await expect(page.getByLabel('To date')).toHaveValue('2026-10-10');
+
+  await page.getByRole('button', { name: 'Team', exact: true }).click();
+  await page.getByRole('button', { name: 'Add employee' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Add employee' });
+  await expect(dialog.locator('input[type="email"]')).toHaveAttribute('maxlength', '256');
+  await expect(dialog.getByLabel('Mobile')).toHaveAttribute('maxlength', '30');
+  await expect(dialog.getByLabel('Temporary password')).toHaveAttribute('maxlength', '128');
+});
