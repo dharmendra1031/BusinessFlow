@@ -19,6 +19,8 @@ public sealed class AdminUsersController(AppDbContext db, UserManager<Applicatio
     {
         var employee = await users.FindByIdAsync(id.ToString());
         if (employee is null) return NotFound();
+        if (string.IsNullOrWhiteSpace(request.FullName) || request.FullName.Trim().Length < 2)
+            return BadRequest(new { message = "Employee name must contain at least 2 characters." });
         if (request.ManagerId == id) return BadRequest(new { message = "Invalid reporting manager." });
         if (request.ManagerId.HasValue)
         {
