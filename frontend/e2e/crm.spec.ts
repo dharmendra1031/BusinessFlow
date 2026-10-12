@@ -401,6 +401,13 @@ test('API rejects invalid lead and employee values even without browser validati
   const token = adminToken();
   const headers = { Authorization: 'Bearer ' + token };
   const lead = { name: 'Validation Sample', phone: '1234567', sourceId: 1 };
+  for (const phone of ['1234567', '123456789012345']) {
+    const accepted = await request.post(apiUrl + '/api/leads', {
+      headers, data: { ...lead, name: 'Phone Boundary ' + phone, phone },
+    });
+    expect(accepted.status(), phone).toBe(201);
+  }
+
   for (const data of [
     { ...lead, name: '  ' },
     { ...lead, name: 'A' },
@@ -492,6 +499,15 @@ test('API protects edit, follow-up, password and date filter boundaries', async 
       headers, data,
     });
     expect(result.status(), JSON.stringify(data).slice(0, 120)).toBe(400);
+  }
+
+  for (const path of [
+    '/api/leads?search=' + 'x'.repeat(151),
+    '/api/reports?leadGivenBy=' + 'x'.repeat(151),
+    '/api/leads?from=2026-10-12&to=2026-10-11',
+  ]) {
+    const invalidFilter = await request.get(apiUrl + path, { headers });
+    expect(invalidFilter.status(), path.slice(0, 90)).toBe(400);
   }
 
   for (const path of ['dashboard', 'reports']) {
