@@ -446,3 +446,57 @@ test('Employee UI and dashboard date fields use aligned constraints', async ({ p
   await expect(dialog.getByLabel('Mobile')).toHaveAttribute('maxlength', '30');
   await expect(dialog.getByLabel('Temporary password')).toHaveAttribute('maxlength', '128');
 });
+
+test('API protects edit, follow-up, password and date filter boundaries', async ({ request }) => {
+  const token = adminToken();
+  const headers = { Authorization: 'Bearer ' + token };
+  const leadId = await createLead(request, 'Validation Edit Customer');
+  const employee = await createEmployee(request, 'Employee');
+
+  const invalidLead = await request.put(apiUrl + '/api/leads/' + leadId, {
+    headers,
+    data: { name: 'Updated Customer', phone: '1234567890123456', sourceId: 1 },
+  });
+  expect(invalidLead.status()).toBe(400);
+
+  const invalidUser = await request.put(apiUrl + '/api/admin/users/' + employee.id, {
+    headers,
+    data: { fullName: '  ', phoneNumber: '+96555501234', role: 'Employee' },
+  });
+  expect(invalidUser.status()).toBe(400);
+
+  const invalidMobile = await request.put(apiUrl + '/api/admin/users/' + employee.id, {
+    headers,
+    data: { fullName: 'Valid Employee', phoneNumber: '1234567890123456', role: 'Employee' },
+  });
+  expect(invalidMobile.status()).toBe(400);
+
+  const duplicateEmail = await request.post(apiUrl + '/api/employees', {
+    headers,
+    data: { fullName: 'Duplicate Employee', email: employee.email,
+      password: employeePassword, role: 'Employee' },
+  });
+  expect(duplicateEmail.status()).toBe(400);
+
+  const longPassword = await request.post(apiUrl + '/api/password/reset/' + employee.id, {
+    headers, data: { newPassword: 'A1!' + 'x'.repeat(126) },
+  });
+  expect(longPassword.status()).toBe(400);
+
+  for (const data of [
+    { dueAtUtc: new Date(Date.now() - 86_400_000).toISOString(), notes: 'Check date' },
+    { dueAtUtc: new Date(Date.now() + 86_400_000).toISOString(), notes: '  ' },
+    { dueAtUtc: new Date(Date.now() + 86_400_000).toISOString(), notes: 'x'.repeat(2001) },
+  ]) {
+    const result = await request.post(apiUrl + '/api/leads/' + leadId + '/followups', {
+      headers, data,
+    });
+    expect(result.status(), JSON.stringify(data).slice(0, 120)).toBe(400);
+  }
+
+  for (const path of ['dashboard', 'reports']) {
+    const invalidDates = await request.get(
+      apiUrl + '/api/' + path + '?from=2026-10-12&to=2026-10-11', { headers });
+    expect(invalidDates.status()).toBe(400);
+  }
+});
