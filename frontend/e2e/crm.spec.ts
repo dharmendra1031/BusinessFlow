@@ -347,5 +347,5 @@ test('Reports: keyboard submit and custom date choice', async ({ page }) => {
   await expect(page.getByLabel('Status', { exact: true })).toBeFocused();
   await page.getByRole('button', { name: 'Run report' }).focus();
   await page.keyboard.press('Enter');
-  await expect(page.getByRole('heading', { name: /\\d+ records/ })).toBeVisible();
+  await expect(page.getByRole('heading', { name: /\d+ records/ })).toBeVisible();
 });
