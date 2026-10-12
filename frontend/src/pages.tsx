@@ -316,7 +316,7 @@ export function LeadsPage({ token, user, newLeadRequest, onNewLeadOpened }: {
     <section className="panel leads-panel">
       <div className="table-toolbar">
         <div className="search-field"><Icon name="search" size={18} />
-          <input aria-label="Search leads" placeholder="Search by name, phone or company"
+          <input aria-label="Search leads" maxLength={150} placeholder="Search by name, phone or company"
             value={search} onChange={event => setSearch(event.target.value)} /></div>
         <div className="filter-field"><Icon name="filter" size={17} />
           <select aria-label="Filter by status" value={statusId}
