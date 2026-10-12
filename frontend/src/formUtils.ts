@@ -11,8 +11,11 @@ export function clearFieldError(event: FormEvent<HTMLFormElement>) {
 export function validateForm(form: HTMLFormElement): boolean {
   const fields = form.querySelectorAll<Field>('input[required], textarea[required]');
   for (const field of fields) {
-    if (field.value.trim()) continue;
-    field.setCustomValidity('This field cannot be blank.');
+    const value = field instanceof HTMLInputElement && field.type === 'password'
+      ? field.value : field.value.trim();
+    const minimum = field instanceof HTMLInputElement ? field.minLength : -1;
+    if (value && (minimum < 0 || value.length >= minimum)) continue;
+    field.setCustomValidity(value ? 'Enter at least ' + minimum + ' characters.' : 'This field cannot be blank.');
     field.reportValidity();
     field.focus();
     return false;
@@ -21,7 +24,7 @@ export function validateForm(form: HTMLFormElement): boolean {
     const value = field.value.trim();
     if (!value) continue;
     const digits = value.replace(/\D/g, '').length;
-    if (/^\+?[0-9().\s-]+$/.test(value) && digits >= 7 && digits <= 15) continue;
+    if (/^\+?[0-9(). -]+$/.test(value) && digits >= 7 && digits <= 15) continue;
     field.setCustomValidity('Enter a valid phone number with 7 to 15 digits.');
     field.reportValidity();
     field.focus();
