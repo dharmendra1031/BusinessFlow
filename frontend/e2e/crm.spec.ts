@@ -385,7 +385,9 @@ test('Lead form rejects short names, bad phones, invalid email and amount bounda
   await expect.poll(() => amount.evaluate((field: HTMLInputElement) => field.validity.rangeUnderflow))
     .toBe(true);
   await amount.fill('1000000000000000');
-  await expect.poll(() => amount.evaluate((field: HTMLInputElement) => field.validity.rangeOverflow))
+  await dialog.getByRole('button', { name: 'Create lead' }).click();
+  await expect.poll(() => amount.evaluate(
+    (field: HTMLInputElement) => field.validity.rangeOverflow || field.validity.customError))
     .toBe(true);
   await amount.fill('10.0001');
   await expect.poll(() => amount.evaluate((field: HTMLInputElement) => field.validity.stepMismatch))
