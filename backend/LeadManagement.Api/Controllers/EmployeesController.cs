@@ -44,8 +44,8 @@ public sealed class EmployeesController(AppDbContext db, UserManager<Application
     [HttpPost]
     public async Task<IActionResult> Create(CreateEmployeeRequest request)
     {
-        if (string.IsNullOrWhiteSpace(request.FullName))
-            return BadRequest(new { message = "Employee name is required." });
+        if (string.IsNullOrWhiteSpace(request.FullName) || request.FullName.Trim().Length < 2)
+            return BadRequest(new { message = "Employee name must contain at least 2 characters." });
         if (request.Role is not ("Manager" or "Employee"))
             return BadRequest(new { message = "Role must be Manager or Employee." });
         if (request.ManagerId is long managerId)
