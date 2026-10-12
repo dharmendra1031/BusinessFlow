@@ -57,6 +57,16 @@ export function DashboardPage({ token, onNavigate }: {
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
 
+  function changeFrom(value: string) {
+    setFrom(value);
+    if (value && to && value > to) setTo(value);
+  }
+
+  function changeTo(value: string) {
+    setTo(value);
+    if (value && from && value < from) setFrom(value);
+  }
+
   function setPeriod(value: string) {
     const now = new Date();
     const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
@@ -113,8 +123,8 @@ export function DashboardPage({ token, onNavigate }: {
           <option value="yesterday">Yesterday</option><option value="week">This week</option>
           <option value="month">This month</option><option value="custom">Custom</option>
         </select></label>
-        <input aria-label="From date" type="date" value={from} onChange={event => setFrom(event.target.value)} />
-        <input aria-label="To date" type="date" value={to} onChange={event => setTo(event.target.value)} />
+        <input aria-label="From date" type="date" value={from} onChange={event => changeFrom(event.target.value)} />
+        <input aria-label="To date" type="date" value={to} onChange={event => changeTo(event.target.value)} />
         <button className="secondary-action" onClick={() => void refresh()} disabled={loading}>
           <Icon name="refresh" size={17} /> Refresh</button>
       </div>
@@ -367,11 +377,11 @@ export function LeadsPage({ token, user, newLeadRequest, onNewLeadOpened }: {
         <form className="drawer-form" onSubmit={saveLead} onInput={clearFieldError}
           onKeyDown={handleFormKeyDown}>
           <label>Full name <span className="required">*</span>
-            <input autoFocus required maxLength={150} placeholder="Customer name" value={name}
+            <input autoFocus required minLength={2} maxLength={150} placeholder="Customer name" value={name}
               onChange={event => setName(event.target.value)} /></label>
           <label>Phone number <span className="required">*</span>
             <input required type="tel" autoComplete="tel" maxLength={30} placeholder="+965 ..." value={phone}
-              title="Enter a valid phone number (at least 7 digits)."
+              title="Enter a phone number with 7 to 15 digits."
               onChange={event => setPhone(event.target.value)} /></label>
           <label>Email address<input type="email" maxLength={256} placeholder="customer@example.com"
             value={email} onChange={event => setEmail(event.target.value)} /></label>
@@ -381,7 +391,7 @@ export function LeadsPage({ token, user, newLeadRequest, onNewLeadOpened }: {
             onChange={event => setAddress(event.target.value)} /></label>
           <label>Lead given by <span className="required">*</span><input required maxLength={150} value={leadGivenBy}
             onChange={event => setLeadGivenBy(event.target.value)} /></label>
-          <label>Project amount (KWD)<input type="number" min="0" step="0.001" value={projectAmount}
+          <label>Project amount (KWD)<input type="number" min="0" max="999999999999999.999" step="0.001" value={projectAmount}
             onChange={event => setProjectAmount(event.target.value)} /></label>
           <label>Lead status<select value={newStatusId} onChange={event => setNewStatusId(Number(event.target.value))}>
             {statuses?.map(status => <option key={status.id} value={status.id}>{status.name}</option>)}
@@ -567,13 +577,13 @@ export function EmployeesPage({ token, user }: { token: string; user: User }) {
           <Icon name="close" /></button></div>
       <form className="drawer-form" onSubmit={save} onInput={clearFieldError}
         onKeyDown={handleFormKeyDown}>
-        <label>Full name <span className="required">*</span><input autoFocus required maxLength={150}
+        <label>Full name <span className="required">*</span><input autoFocus required minLength={2} maxLength={150}
           value={fullName} onChange={event => setFullName(event.target.value)} /></label>
         <label>Mobile<input type="tel" autoComplete="tel" maxLength={30}
-          title="Enter a valid phone number or leave blank." value={phoneNumber} onChange={event => setPhoneNumber(event.target.value)} /></label>
-        <label>Email <span className="required">*</span><input type="email" required
+          title="Enter 7 to 15 digits or leave blank." value={phoneNumber} onChange={event => setPhoneNumber(event.target.value)} /></label>
+        <label>Email <span className="required">*</span><input type="email" required maxLength={256} autoComplete="email"
           value={email} onChange={event => setEmail(event.target.value)} /></label>
-        <label>Temporary password <span className="required">*</span><input type="password" required minLength={12}
+        <label>Temporary password <span className="required">*</span><input type="password" required minLength={12} maxLength={128}
           pattern="(?=.*[a-z])(?=.*[A-Z])(?=.*[0-9])(?=.*[^A-Za-z0-9]).{12,}"
           title="Use at least 12 characters with uppercase, lowercase, number and symbol."
           autoComplete="new-password" value={password} onChange={event => setPassword(event.target.value)} /></label>
