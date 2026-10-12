@@ -84,7 +84,7 @@ export default function EmployeeManager({ employee, team, token, onClose, onSave
         onKeyDown={handleFormKeyDown}>
         <label>Full name<input autoFocus required maxLength={150} value={fullName} onChange={event => setFullName(event.target.value)} /></label>
         <label>Mobile<input type="tel" autoComplete="tel" maxLength={30}
-          pattern="\\+?[0-9() .-]{7,30}" title="Enter a valid phone number or leave blank." value={phoneNumber} onChange={event => setPhoneNumber(event.target.value)} /></label>
+          title="Enter a valid phone number or leave blank." value={phoneNumber} onChange={event => setPhoneNumber(event.target.value)} /></label>
         {!isAdmin && <label>Role<select value={role} onChange={event => setRole(event.target.value)}>
           <option>Employee</option><option>Manager</option></select></label>}
         <label>Reporting manager<select value={managerId} onChange={event => setManagerId(event.target.value)}>
