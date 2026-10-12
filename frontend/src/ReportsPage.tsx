@@ -106,7 +106,7 @@ export default function ReportsPage({ token, user }: { token: string; user: User
         </select></label>
         <label>From <input type="date" max={to || undefined} value={from} onChange={event => setFrom(event.target.value)} /></label>
         <label>To <input type="date" min={from || undefined} value={to} onChange={event => setTo(event.target.value)} /></label>
-        <label>Lead given by <input value={leadGivenBy} onChange={event => setLeadGivenBy(event.target.value)} /></label>
+        <label>Lead given by <input maxLength={150} value={leadGivenBy} onChange={event => setLeadGivenBy(event.target.value)} /></label>
         <label>Status <select aria-label="Status" value={statusId} onChange={event => setStatusId(event.target.value)}>
           <option value="">All statuses</option>
           {statuses.map(status => <option key={status.id} value={status.id}>{status.name}</option>)}
