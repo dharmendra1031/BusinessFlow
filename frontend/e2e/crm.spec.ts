@@ -294,8 +294,9 @@ test('Keyboard: Login moves with Enter and forms reject invalid values', async (
   await dialog.getByPlaceholder('Customer name').press('Enter');
   await expect(dialog.getByPlaceholder('+965 ...')).toBeFocused();
   await dialog.getByPlaceholder('+965 ...').fill('invalid');
+  await dialog.getByRole('button', { name: 'Create lead' }).click();
   expect(await dialog.getByPlaceholder('+965 ...').evaluate(
-    (input: HTMLInputElement) => input.validity.patternMismatch)).toBe(true);
+    (input: HTMLInputElement) => input.validity.customError)).toBe(true);
   await dialog.getByPlaceholder('+965 ...').fill('+96555501011');
   await dialog.getByPlaceholder('+965 ...').press('Enter');
   await expect(dialog.getByPlaceholder('customer@example.com')).toBeFocused();
