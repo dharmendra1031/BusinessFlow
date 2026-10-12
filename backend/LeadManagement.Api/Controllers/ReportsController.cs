@@ -22,6 +22,8 @@ public sealed class ReportsController(AppDbContext db) : ControllerBase
         DateTime? to = null, long? userId = null, long? statusId = null, string? leadGivenBy = null)
     {
         if (!ReportTypes.Contains(type)) return BadRequest(new { message = "Unknown report." });
+        if (leadGivenBy?.Length > 150)
+            return BadRequest(new { message = "Lead referrer filter must not exceed 150 characters." });
         if (from.HasValue && to.HasValue && from.Value.Date > to.Value.Date)
             return BadRequest(new { message = "Invalid date range." });
 
