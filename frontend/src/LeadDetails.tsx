@@ -103,7 +103,7 @@ export default function LeadDetails({ lead, sources, token, onClose, onSaved }: 
           <input autoFocus required maxLength={150} value={name} onChange={event => setName(event.target.value)} /></label>
         <label>Phone number <span className="required">*</span>
           <input required type="tel" autoComplete="tel" maxLength={30}
-          pattern="\\+?[0-9() .-]{7,30}" title="Enter a valid phone number (at least 7 digits)." value={phone} onChange={event => setPhone(event.target.value)} /></label>
+          title="Enter a valid phone number (at least 7 digits)." value={phone} onChange={event => setPhone(event.target.value)} /></label>
         <label>Email address<input type="email" maxLength={256} value={email}
           onChange={event => setEmail(event.target.value)} /></label>
         <label>Company name<input maxLength={200} value={companyName}
