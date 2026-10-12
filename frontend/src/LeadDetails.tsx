@@ -55,7 +55,7 @@ export default function LeadDetails({ lead, sources, token, onClose, onSaved }: 
 
   async function createFollowUp(event: React.FormEvent) {
     event.preventDefault();
-    if (saving) return;
+    if (!validateForm(event.currentTarget) || saving) return;
     const date = new Date(dueAt);
     if (!Number.isFinite(date.getTime()) || date <= new Date()) {
       notify('warning', 'Check the due date', 'Please select a future date and time.');
@@ -100,10 +100,10 @@ export default function LeadDetails({ lead, sources, token, onClose, onSaved }: 
       {tab === 'details' ? <form className="drawer-form" onSubmit={saveLead} onInput={clearFieldError}
         onKeyDown={handleFormKeyDown}>
         <label>Full name <span className="required">*</span>
-          <input autoFocus required maxLength={150} value={name} onChange={event => setName(event.target.value)} /></label>
+          <input autoFocus required minLength={2} maxLength={150} value={name} onChange={event => setName(event.target.value)} /></label>
         <label>Phone number <span className="required">*</span>
           <input required type="tel" autoComplete="tel" maxLength={30}
-          title="Enter a valid phone number (at least 7 digits)." value={phone} onChange={event => setPhone(event.target.value)} /></label>
+          title="Enter a phone number with 7 to 15 digits." value={phone} onChange={event => setPhone(event.target.value)} /></label>
         <label>Email address<input type="email" maxLength={256} value={email}
           onChange={event => setEmail(event.target.value)} /></label>
         <label>Company name<input maxLength={200} value={companyName}
@@ -115,7 +115,7 @@ export default function LeadDetails({ lead, sources, token, onClose, onSaved }: 
           onChange={event => setAddress(event.target.value)} /></label>
         <label>Lead given by <span className="required">*</span><input required maxLength={150} value={leadGivenBy}
           onChange={event => setLeadGivenBy(event.target.value)} /></label>
-        <label>Project amount (KWD)<input type="number" min="0" step="0.001" value={projectAmount}
+        <label>Project amount (KWD)<input type="number" min="0" max="999999999999999.999" step="0.001" value={projectAmount}
           onChange={event => setProjectAmount(event.target.value)} /></label>
         <label>Last follow-up<input readOnly value={lead.lastFollowUpDate ?? ''} /></label>
         <label>Next follow-up<input readOnly value={lead.nextFollowUpDate ?? ''} /></label>
