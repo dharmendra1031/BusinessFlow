@@ -9,18 +9,18 @@ public sealed record CreateEmployeeRequest(
     [Required, EmailAddress] string Email,
     [Required] string Password,
     [Required] string Role,
-    long? ManagerId, string? PhoneNumber = null);
+    long? ManagerId, [RegularExpression(@"^(?=(?:\\D*\\d){7,})\\+?[0-9() .-]{7,30}$", ErrorMessage = "Enter a valid phone number with at least 7 digits.")] string? PhoneNumber = null);
 
 public sealed record LeadRequest(
     [Required, MaxLength(150)] string Name,
-    [Required, MaxLength(30)] string Phone,
+    [Required, MaxLength(30), [RegularExpression(@"^(?=(?:\\D*\\d){7,})\\+?[0-9() .-]{7,30}$", ErrorMessage = "Enter a valid phone number with at least 7 digits.")]] string Phone,
     [EmailAddress] string? Email,
     [MaxLength(200)] string? CompanyName,
     [MaxLength(2000)] string? Requirement,
     long SourceId = 1,
-    string? Address = null,
-    string? LeadGivenBy = null,
-    decimal? ProjectAmount = null,
+    [MaxLength(500)] string? Address = null,
+    [MaxLength(150)] string? LeadGivenBy = null,
+    [Range(typeof(decimal), "0", "999999999999999.999")] decimal? ProjectAmount = null,
     long? StatusId = null);
 
 public sealed record AssignLeadRequest(long UserId);
@@ -29,7 +29,7 @@ public sealed record CreateFollowUpRequest(DateTime DueAtUtc, [Required, MaxLeng
 
 public sealed record UpdateEmployeeRequest(
     [Required, MaxLength(150)] string FullName,
-    [Phone] string? PhoneNumber,
+    [RegularExpression(@"^(?=(?:\\D*\\d){7,})\\+?[0-9() .-]{7,30}$", ErrorMessage = "Enter a valid phone number with at least 7 digits.")] string? PhoneNumber,
     string? Role,
     long? ManagerId);
 
