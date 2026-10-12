@@ -47,6 +47,9 @@ if (-not (Test-Path -LiteralPath (Join-Path $publish 'wwwroot/index.html'))) {
 if (-not (Test-Path -LiteralPath (Join-Path $publish 'web.config'))) {
     throw 'IIS web.config is missing from the publish output.'
 }
+if (-not (Select-String -LiteralPath (Join-Path $publish 'web.config') -Pattern 'hostingModel="outofprocess"' -Quiet)) {
+    throw 'IIS web.config must use outofprocess hosting.'
+}
 
 $zip = Join-Path $artifacts 'LeadManagement-IIS.zip'
 if (Test-Path -LiteralPath $zip) { Remove-Item -LiteralPath $zip -Force }

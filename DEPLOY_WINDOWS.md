@@ -4,6 +4,12 @@ The IIS site runs the ASP.NET Core API and serves the compiled React app from
 `wwwroot`. Browser requests to `/api/*` use the same domain. No second IIS
 site, API port, CORS origin, or `VITE_API_URL` is needed in production.
 
+The project publishes with IIS `hostingModel="outofprocess"`. Keep this value
+in the generated `web.config`: on the current Windows VPS, in-process hosting
+failed with HTTP 500.30 (`CLR worker thread exited prematurely`), while the
+same API started successfully as a separate process and passed
+`/health/ready`. The underlying in-process failure was not established.
+
 This guide covers packaging and IIS setup. The application still stores JWTs
 in browser `sessionStorage`, and a live security review has not been completed.
 Do not open the CRM to real users until the production controls listed in the
@@ -51,6 +57,11 @@ its **contents** into the IIS site folder. `web.config`,
 `appsettings.Production.json`, `efbundle.exe`, and `seed_kuwait_demo.sql` must be directly inside that
 folder. Do not copy the repository's development settings file or
 `frontend/.env.example`.
+
+Before uploading, open the ZIP's `web.config` and confirm that its
+`aspNetCore` element has `hostingModel="outofprocess"`. Confirm that
+`wwwroot/index.html` is also in the ZIP. Do not copy an older `web.config`
+from a prior release over the new one.
 
 For a first deployment, extract with an elevated PowerShell on the VPS (adjust
 the paths to your folders):
@@ -172,6 +183,14 @@ invalid JSON, SQL certificate/authentication failure, or a database that has
 not been migrated. If `/` returns **404**, verify that `web.config` and
 `wwwroot\index.html` are under the IIS physical path. If `/health/ready`
 returns **503**, check the SQL connection and database permissions.
+
+If the app starts with `dotnet .\LeadManagement.Api.dll --urls
+http://127.0.0.1:5099` and a local request to `/health/ready` succeeds, but
+IIS still shows 500.30, check that the deployed `web.config` uses
+`hostingModel="outofprocess"`. Use a free port for the manual test and stop
+that process afterward. Do not stop another app just because port 5000 is in
+use. The generated handler has `verb="*"`, so IIS forwards all HTTP verbs;
+each API verb still needs a matching endpoint in the application.
 
 ## Updates
 
