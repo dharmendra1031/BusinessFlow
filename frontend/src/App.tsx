@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { api } from './api';
+import { clearFieldError, handleFormKeyDown, validateForm } from './formUtils';
 import { FeedbackProvider, useFeedback } from './Feedback';
 import { Icon } from './Icon';
 import { DashboardPage, EmployeesPage, FollowUpsPage, LeadsPage } from './pages';
@@ -126,12 +127,12 @@ function Login({ onLogin }: { onLogin: (value: Session) => void }) {
 
   async function submit(event: React.FormEvent) {
     event.preventDefault();
-    if (working) return;
+    if (!validateForm(event.currentTarget) || working) return;
     setWorking(true);
     setError('');
     try {
       const result = await api<Session>('/api/auth/login', '', {
-        method: 'POST', body: JSON.stringify({ email, password }),
+        method: 'POST', body: JSON.stringify({ email: email.trim(), password }),
       });
       onLogin(result);
     } catch (err) {
@@ -158,11 +159,12 @@ function Login({ onLogin }: { onLogin: (value: Session) => void }) {
       <p className="intro-footer">Lead CRM · Built for focused sales teams</p>
     </section>
     <section className="login-form-side">
-      <form className="login-card" onSubmit={submit}>
+      <form className="login-card" onSubmit={submit} onInput={clearFieldError}
+        onKeyDown={handleFormKeyDown}>
         <span className="login-overline">WELCOME BACK</span>
         <h2>Sign in to your account</h2>
         <p>Enter your credentials to access your workspace.</p>
-        <label>Email address<input type="email" autoComplete="username" placeholder="you@company.com"
+        <label>Email address<input autoFocus type="email" maxLength={256} autoComplete="username" placeholder="you@company.com"
           value={email} onChange={event => setEmail(event.target.value)} required /></label>
         <label>Password<div className="password-field"><input type={showPassword ? 'text' : 'password'}
           autoComplete="current-password" placeholder="Enter password"
