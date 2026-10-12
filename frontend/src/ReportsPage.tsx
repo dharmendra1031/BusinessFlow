@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { api } from './api';
+import { handleFormKeyDown } from './formUtils';
 import { Icon } from './Icon';
 import { useFeedback } from './Feedback';
 import type { Employee, Lookup, ReportResult, User } from './types';
@@ -32,6 +33,11 @@ export default function ReportsPage({ token, user }: { token: string; user: User
   const [loading, setLoading] = useState(false);
 
   async function load() {
+    if (from && to && from > to) {
+      notify('warning', 'Invalid date range', 'From date must be before or equal to To date.');
+      return;
+    }
+    setReport(null);
     setLoading(true);
     try {
       const params = new URLSearchParams({ type });
@@ -56,6 +62,7 @@ export default function ReportsPage({ token, user }: { token: string; user: User
       String(value.getMonth() + 1).padStart(2, '0'),
       String(value.getDate()).padStart(2, '0')].join('-');
     if (period === 'all') { setFrom(''); setTo(''); return; }
+    if (period === 'custom') return;
     let start = new Date(today);
     if (period === 'yesterday') start.setDate(start.getDate() - 1);
     if (period === 'week') start.setDate(start.getDate() - ((start.getDay() + 6) % 7));
@@ -87,7 +94,8 @@ export default function ReportsPage({ token, user }: { token: string; user: User
     <header className="page-header"><div><span className="section-kicker">CRM REPORTING</span>
       <h1>Reports</h1><p>Customer and follow-up reports in KWD.</p></div></header>
     <section className="panel">
-      <div className="table-toolbar">
+      <form className="table-toolbar" onSubmit={event => { event.preventDefault(); void load(); }}
+        onKeyDown={handleFormKeyDown}>
         <label>Report <select value={type} onChange={event => { setType(event.target.value); setReport(null); }}>
           {reportOptions.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
         </select></label>
@@ -96,8 +104,8 @@ export default function ReportsPage({ token, user }: { token: string; user: User
           <option value="yesterday">Yesterday</option><option value="week">This week</option>
           <option value="month">This month</option><option value="custom">Custom</option>
         </select></label>
-        <label>From <input type="date" value={from} onChange={event => setFrom(event.target.value)} /></label>
-        <label>To <input type="date" value={to} onChange={event => setTo(event.target.value)} /></label>
+        <label>From <input type="date" max={to || undefined} value={from} onChange={event => setFrom(event.target.value)} /></label>
+        <label>To <input type="date" min={from || undefined} value={to} onChange={event => setTo(event.target.value)} /></label>
         <label>Lead given by <input value={leadGivenBy} onChange={event => setLeadGivenBy(event.target.value)} /></label>
         <label>Status <select value={statusId} onChange={event => setStatusId(event.target.value)}>
           <option value="">All statuses</option>
@@ -107,9 +115,9 @@ export default function ReportsPage({ token, user }: { token: string; user: User
           <option value="">All permitted users</option>
           {employees.map(employee => <option key={employee.id} value={employee.id}>{employee.fullName}</option>)}
         </select></label>}
-        <button className="primary" disabled={loading} onClick={() => void load()}>
+        <button type="submit" className="primary" disabled={loading}>
           <Icon name="search" size={17} /> {loading ? 'Loading…' : 'Run report'}</button>
-      </div>
+      </form>
       <p className="field-help">{user.roles.includes('Admin') ? 'Organization-wide results' : 'Only customers permitted for your account'}</p>
       {report && <>
         <div className="panel-heading">
