@@ -17,7 +17,7 @@ export type DevelopmentTask = {
 export type DevelopmentProject = {
   id: number; leadId: number; customer: string;
   title: string; description?: string | null; status: string;
-  ownerId: number; ownerName: string; startDate: string | null;
+  ownerId: number; ownerName: string; createdById: number; startDate: string | null;
   dueDate: string | null; createdAtUtc: string;
   taskCount: number; doneCount: number; tasks?: DevelopmentTask[];
 };
