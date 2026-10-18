@@ -68,7 +68,7 @@ public sealed class ProjectsController(AppDbContext db) : ControllerBase
             .Take(200)
             .Select(p => new
             {
-                p.Id, p.LeadId, p.Title, p.Status, p.StartDate, p.DueDate,
+                p.Id, p.LeadId, p.CreatedById, p.Title, p.Status, p.StartDate, p.DueDate,
                 p.OwnerId, OwnerName = p.Owner.FullName, Customer = p.Lead.Name,
                 p.CreatedAtUtc, p.UpdatedAtUtc,
                 TaskCount = p.Tasks.Count, DoneCount = p.Tasks.Count(t => t.Status == "Done")
@@ -93,7 +93,7 @@ public sealed class ProjectsController(AppDbContext db) : ControllerBase
         var project = await VisibleProjects().AsNoTracking().Where(p => p.Id == id)
             .Select(p => new
             {
-                p.Id, p.LeadId, p.Title, p.Description, p.Status, p.StartDate, p.DueDate,
+                p.Id, p.LeadId, p.CreatedById, p.Title, p.Description, p.Status, p.StartDate, p.DueDate,
                 p.OwnerId, OwnerName = p.Owner.FullName, Customer = p.Lead.Name,
                 p.CreatedAtUtc, p.UpdatedAtUtc,
                 Tasks = p.Tasks.OrderBy(t => t.Id).Select(t => new
