@@ -535,7 +535,7 @@ test('Development: convert a won lead, assign tasks and complete progress', asyn
   await signIn(page);
   await page.getByRole('navigation', { name: 'Main navigation' })
     .getByRole('button', { name: 'Development projects' }).click();
-  await expect(page.getByRole('heading', { name: 'Development projects' })).toBeVisible();
+  await expect(page.locator('main.content').getByRole('heading', { name: 'Development projects' })).toBeVisible();
   await page.getByRole('button', { name: 'New project' }).click();
   const form = page.getByRole('dialog', { name: 'New development project' });
   await form.getByLabel('Won lead').selectOption(String(leadId));
