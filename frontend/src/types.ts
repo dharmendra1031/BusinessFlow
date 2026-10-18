@@ -8,3 +8,16 @@ export type FollowUp = { id: number; leadId: number; leadName: string; notes: st
 
 export type ReportResult = { type: string; total: number; truncated: boolean; rows: Record<string, string | number | boolean | null>[] };
 export type LeadFollowUpHistory = { id: number; notes: string; dueAtUtc: string; completedAtUtc: string | null; createdAtUtc: string; assignedToId: number };
+
+export type DevelopmentTask = {
+  id: number; title: string; description: string | null; status: string;
+  assignedToId: number | null; assignedToName: string | null;
+  dueDate: string | null; createdAtUtc: string;
+};
+export type DevelopmentProject = {
+  id: number; leadId: number; leadName: string;
+  name: string; description: string | null; status: string;
+  ownerId: number; ownerName: string; startDate: string | null;
+  dueDate: string | null; createdAtUtc: string;
+  taskCount: number; completedTasks: number; tasks?: DevelopmentTask[];
+};
