@@ -19,6 +19,7 @@ export default function ProjectsPage({ token, user }: { token: string; user: Use
   const [selected, setSelected] = useState<DevelopmentProject | null>(null);
   const [showCreate, setShowCreate] = useState(false);
   const [working, setWorking] = useState(false);
+  const [taskSaving, setTaskSaving] = useState(false);
   const [error, setError] = useState('');
   const [leadId, setLeadId] = useState('');
   const [name, setName] = useState('');
@@ -54,6 +55,9 @@ export default function ProjectsPage({ token, user }: { token: string; user: Use
 
   const availableOwners = employees.filter(member => member.isActive &&
     (user.roles.includes('Admin') || member.id === user.id || member.managerId === user.id));
+  const mayManage = (project: DevelopmentProject) => canManage && (
+    user.roles.includes('Admin') || project.ownerId === user.id || project.createdById === user.id ||
+    employees.some(member => member.id === project.ownerId && member.managerId === user.id));
   const progress = (project: DevelopmentProject) => project.taskCount
     ? Math.round(project.doneCount / project.taskCount * 100) : 0;
 
@@ -79,7 +83,7 @@ export default function ProjectsPage({ token, user }: { token: string; user: Use
     setName('');
     setDescription('');
     setOwnerId(String(user.id));
-    setProjectStatus('Planned');
+    setProjectStatus('Planning');
     setStartDate('');
     setDueDate('');
     setShowCreate(true);
@@ -149,7 +153,8 @@ export default function ProjectsPage({ token, user }: { token: string; user: Use
   }
 
   async function changeTask(task: DevelopmentTask, status: string) {
-    if (!selected || task.status === status) return;
+    if (!selected || task.status === status || taskSaving) return;
+    setTaskSaving(true);
     try {
       await api('/api/projects/' + selected.id + '/tasks/' + task.id + '/status', token, {
         method: 'PATCH', body: JSON.stringify({ status }),
@@ -159,7 +164,7 @@ export default function ProjectsPage({ token, user }: { token: string; user: Use
       notify('success', 'Task updated');
     } catch (err) {
       notify('error', 'Unable to update task', err instanceof Error ? err.message : undefined);
-    }
+    } finally { setTaskSaving(false); }
   }
 
   return <section>
@@ -225,7 +230,7 @@ export default function ProjectsPage({ token, user }: { token: string; user: Use
             <Icon name="close" /></button></div>
         <p className="field-help">Owner: {selected.ownerName} ·
           {selected.tasks?.filter(task => task.status === 'Done').length || 0}/{selected.tasks?.length || 0} tasks done</p>
-        {canManage && <details className="project-section">
+        {mayManage(selected) && <details className="project-section">
           <summary onClick={() => startEdit(selected)}>Edit project details</summary>
           <form className="drawer-form" onSubmit={saveProject} onInput={clearFieldError} onKeyDown={handleFormKeyDown}>
             <ProjectFields {...{ name, setName, description, setDescription, ownerId, setOwnerId,
@@ -243,13 +248,13 @@ export default function ProjectsPage({ token, user }: { token: string; user: Use
                 <small>{task.assignedTo || 'Unassigned'} · {task.priority} · {task.dueDate?.slice(0, 10) || 'No deadline'}</small>
               </div>
               <select aria-label={'Status for ' + task.title} value={task.status}
-                disabled={!canManage && task.assignedToId !== user.id}
+                disabled={taskSaving || selected.status === 'Completed' || (!mayManage(selected) && task.assignedToId !== user.id)}
                 onChange={event => void changeTask(task, event.target.value)}>
                 {taskStatuses.map(status => <option key={status} value={status}>{label(status)}</option>)}
               </select>
             </div>)}</div> : <p className="field-help">No tasks yet.</p>}
         </div>
-        {canManage && <details className="project-section">
+        {mayManage(selected) && selected.status !== 'Completed' && <details className="project-section">
           <summary>Add development task</summary>
           <form className="drawer-form" onSubmit={createTask} onInput={clearFieldError} onKeyDown={handleFormKeyDown}>
             <label>Task title *<input required minLength={2} maxLength={150} value={taskTitle}
@@ -263,7 +268,7 @@ export default function ProjectsPage({ token, user }: { token: string; user: Use
               <option value="">Unassigned</option>
               {availableOwners.map(member => <option key={member.id} value={member.id}>{member.fullName}</option>)}
             </select></label>
-            <label>Due date<input type="date" value={taskDueDate}
+            <label>Due date<input type="date" max={selected.dueDate || undefined} value={taskDueDate}
               onChange={event => setTaskDueDate(event.target.value)} /></label>
             <button className="primary" disabled={working}>Add task</button>
           </form>
