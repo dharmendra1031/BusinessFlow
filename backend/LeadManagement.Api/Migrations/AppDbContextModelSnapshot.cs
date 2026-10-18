@@ -729,18 +729,18 @@ namespace LeadManagement.Api.Migrations
                     b.Property<long>("Id").ValueGeneratedOnAdd().HasColumnType("bigint");
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
                     b.Property<long>("LeadId").HasColumnType("bigint");
-                    b.Property<string>("Name").IsRequired().HasMaxLength(150).HasColumnType("nvarchar(150)");
+                    b.Property<string>("Title").IsRequired().HasMaxLength(150).HasColumnType("nvarchar(150)");
                     b.Property<string>("Description").HasMaxLength(2000).HasColumnType("nvarchar(2000)");
                     b.Property<string>("Status").IsRequired().HasMaxLength(20).HasColumnType("nvarchar(20)");
                     b.Property<long>("OwnerId").HasColumnType("bigint");
                     b.Property<long>("CreatedById").HasColumnType("bigint");
-                    b.Property<DateTime?>("StartDate").HasColumnType("datetime2");
-                    b.Property<DateTime?>("DueDate").HasColumnType("datetime2");
+                    b.Property<DateOnly?>("StartDate").HasColumnType("date");
+                    b.Property<DateOnly?>("DueDate").HasColumnType("date");
                     b.Property<DateTime>("CreatedAtUtc").HasColumnType("datetime2");
                     b.Property<DateTime>("UpdatedAtUtc").HasColumnType("datetime2");
                     b.HasKey("Id");
                     b.HasIndex("CreatedById");
-                    b.HasIndex("LeadId");
+                    b.HasIndex("LeadId").IsUnique();
                     b.HasIndex("OwnerId", "Status");
                     b.ToTable("DevelopmentProjects", (string)null);
                 });
@@ -753,14 +753,14 @@ namespace LeadManagement.Api.Migrations
                     b.Property<string>("Title").IsRequired().HasMaxLength(150).HasColumnType("nvarchar(150)");
                     b.Property<string>("Description").HasMaxLength(2000).HasColumnType("nvarchar(2000)");
                     b.Property<string>("Status").IsRequired().HasMaxLength(20).HasColumnType("nvarchar(20)");
+                    b.Property<string>("Priority").IsRequired().HasMaxLength(10).HasColumnType("nvarchar(10)");
                     b.Property<long?>("AssignedToId").HasColumnType("bigint");
-                    b.Property<DateTime?>("DueDate").HasColumnType("datetime2");
-                    b.Property<long>("CreatedById").HasColumnType("bigint");
+                    b.Property<DateOnly?>("DueDate").HasColumnType("date");
+                    b.Property<DateTime?>("CompletedAtUtc").HasColumnType("datetime2");
                     b.Property<DateTime>("CreatedAtUtc").HasColumnType("datetime2");
                     b.Property<DateTime>("UpdatedAtUtc").HasColumnType("datetime2");
                     b.HasKey("Id");
-                    b.HasIndex("AssignedToId");
-                    b.HasIndex("CreatedById");
+                    b.HasIndex("AssignedToId", "DueDate");
                     b.HasIndex("ProjectId", "Status");
                     b.ToTable("DevelopmentTasks", (string)null);
                 });
@@ -783,8 +783,6 @@ namespace LeadManagement.Api.Migrations
                         .WithMany("Tasks").HasForeignKey("ProjectId").OnDelete(DeleteBehavior.Cascade).IsRequired();
                     b.HasOne("LeadManagement.Api.Models.ApplicationUser", "AssignedTo")
                         .WithMany().HasForeignKey("AssignedToId").OnDelete(DeleteBehavior.NoAction);
-                    b.HasOne("LeadManagement.Api.Models.ApplicationUser", null)
-                        .WithMany().HasForeignKey("CreatedById").OnDelete(DeleteBehavior.NoAction).IsRequired();
                     b.Navigation("Project");
                     b.Navigation("AssignedTo");
                 });
