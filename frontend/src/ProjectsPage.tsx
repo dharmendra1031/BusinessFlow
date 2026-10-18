@@ -33,6 +33,7 @@ export default function ProjectsPage({ token, user }: { token: string; user: Use
   const [taskDescription, setTaskDescription] = useState('');
   const [assigneeId, setAssigneeId] = useState('');
   const [taskDueDate, setTaskDueDate] = useState('');
+  const [editingTask, setEditingTask] = useState<number | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -62,6 +63,7 @@ export default function ProjectsPage({ token, user }: { token: string; user: Use
     ? Math.round(project.doneCount / project.taskCount * 100) : 0;
 
   async function openProject(id: number) {
+    if (selected?.id !== id) setEditingTask(null);
     try {
       setSelected(await api<DevelopmentProject>('/api/projects/' + id, token));
     } catch (err) {
@@ -125,13 +127,24 @@ export default function ProjectsPage({ token, user }: { token: string; user: Use
     }
   }
 
-  async function createTask(event: FormEvent<HTMLFormElement>) {
+  function startEditTask(task: DevelopmentTask) {
+    setEditingTask(task.id);
+    setTaskTitle(task.title);
+    setTaskPriority(task.priority);
+    setTaskDescription(task.description || '');
+    setAssigneeId(task.assignedToId?.toString() || '');
+    setTaskDueDate(task.dueDate || '');
+  }
+
+  async function saveTask(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!selected || !validateForm(event.currentTarget) || working) return;
     setWorking(true);
     try {
-      await api('/api/projects/' + selected.id + '/tasks', token, {
-        method: 'POST', body: JSON.stringify({
+      await api('/api/projects/' + selected.id + '/tasks' +
+        (editingTask ? '/' + editingTask : ''), token, {
+        method: editingTask ? 'PUT' : 'POST',
+        body: JSON.stringify({
           title: taskTitle.trim(), priority: taskPriority, description: taskDescription.trim() || null,
           assignedToId: assigneeId ? Number(assigneeId) : null,
           dueDate: taskDueDate || null,
@@ -142,9 +155,10 @@ export default function ProjectsPage({ token, user }: { token: string; user: Use
       setTaskDescription('');
       setAssigneeId('');
       setTaskDueDate('');
+      setEditingTask(null);
       await openProject(selected.id);
       await load();
-      notify('success', 'Task created');
+      notify('success', editingTask ? 'Task updated' : 'Task created');
     } catch (err) {
       notify('error', 'Unable to create task', err instanceof Error ? err.message : undefined);
     } finally {
@@ -252,11 +266,13 @@ export default function ProjectsPage({ token, user }: { token: string; user: Use
                 onChange={event => void changeTask(task, event.target.value)}>
                 {taskStatuses.map(status => <option key={status} value={status}>{label(status)}</option>)}
               </select>
+              {mayManage(selected) && selected.status !== 'Completed' &&
+                <button type="button" className="text-action" onClick={() => startEditTask(task)}>Edit task</button>}
             </div>)}</div> : <p className="field-help">No tasks yet.</p>}
         </div>
-        {mayManage(selected) && selected.status !== 'Completed' && <details className="project-section">
-          <summary>Add development task</summary>
-          <form className="drawer-form" onSubmit={createTask} onInput={clearFieldError} onKeyDown={handleFormKeyDown}>
+        {mayManage(selected) && selected.status !== 'Completed' && <details className="project-section" open={editingTask !== null ? true : undefined}>
+          <summary>{editingTask ? 'Edit development task' : 'Add development task'}</summary>
+          <form className="drawer-form" onSubmit={saveTask} onInput={clearFieldError} onKeyDown={handleFormKeyDown}>
             <label>Task title *<input required minLength={2} maxLength={150} value={taskTitle}
               onChange={event => setTaskTitle(event.target.value)} /></label>
             <label>Details<textarea maxLength={2000} value={taskDescription}
@@ -270,7 +286,13 @@ export default function ProjectsPage({ token, user }: { token: string; user: Use
             </select></label>
             <label>Due date<input type="date" max={selected.dueDate || undefined} value={taskDueDate}
               onChange={event => setTaskDueDate(event.target.value)} /></label>
-            <button className="primary" disabled={working}>Add task</button>
+            <div className="drawer-actions">
+              {editingTask !== null && <button type="button" onClick={() => {
+                setEditingTask(null); setTaskTitle(''); setTaskDescription('');
+                setTaskPriority('Medium'); setAssigneeId(''); setTaskDueDate('');
+              }}>Cancel edit</button>}
+              <button className="primary" disabled={working}>{editingTask ? 'Save task' : 'Add task'}</button>
+            </div>
           </form>
         </details>}
       </aside>
