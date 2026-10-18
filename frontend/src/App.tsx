@@ -5,15 +5,17 @@ import { FeedbackProvider, useFeedback } from './Feedback';
 import { Icon } from './Icon';
 import { DashboardPage, EmployeesPage, FollowUpsPage, LeadsPage } from './pages';
 import ReportsPage from './ReportsPage';
+import ProjectsPage from './ProjectsPage';
 import PasswordSettings from './PasswordSettings';
 import type { User } from './types';
 
 type Session = { token: string; user: User };
-type Screen = 'dashboard' | 'leads' | 'followups' | 'employees' | 'reports' | 'settings';
+type Screen = 'dashboard' | 'leads' | 'projects' | 'followups' | 'employees' | 'reports' | 'settings';
 
 const navigation = [
   { id: 'dashboard', label: 'Dashboard', icon: 'grid' },
   { id: 'leads', label: 'All leads', icon: 'clipboard' },
+  { id: 'projects', label: 'Development projects', icon: 'briefcase' },
   { id: 'followups', label: 'Follow-ups', icon: 'calendar' },
   { id: 'employees', label: 'Team', icon: 'users' },
   { id: 'reports', label: 'Reports', icon: 'clipboard' },
@@ -57,7 +59,7 @@ function Workspace() {
   const user = session.user;
   const canSeeTeam = user.roles.includes('Admin') || user.roles.includes('Manager');
   const items = navigation.filter(item => item.id !== 'employees' || canSeeTeam);
-  const pageTitle = { dashboard: 'Dashboard', leads: 'All leads', followups: 'Follow-ups', employees: 'Team', reports: 'Reports', settings: 'Change password' }[screen];
+  const pageTitle = { dashboard: 'Dashboard', leads: 'All leads', projects: 'Development projects', followups: 'Follow-ups', employees: 'Team', reports: 'Reports', settings: 'Change password' }[screen];
 
   return <div className="app-shell">
     <a className="skip-link" href="#main-content">Skip to main content</a>
@@ -105,6 +107,7 @@ function Workspace() {
         {screen === 'dashboard' && <DashboardPage token={session.token} onNavigate={navigate} />}
         {screen === 'leads' && <LeadsPage token={session.token} user={user}
           newLeadRequest={newLeadRequest} onNewLeadOpened={() => setNewLeadRequest(0)} />}
+        {screen === 'projects' && <ProjectsPage token={session.token} user={user} />}
         {screen === 'followups' && <FollowUpsPage token={session.token} />}
         {screen === 'employees' && canSeeTeam && <EmployeesPage token={session.token} user={user} />}
         {screen === 'reports' && <ReportsPage token={session.token} user={user} />}
