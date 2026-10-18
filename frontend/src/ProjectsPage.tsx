@@ -249,7 +249,7 @@ export default function ProjectsPage({ token, user }: { token: string; user: Use
           <form className="drawer-form" onSubmit={saveProject} onInput={clearFieldError} onKeyDown={handleFormKeyDown}>
             <ProjectFields {...{ name, setName, description, setDescription, ownerId, setOwnerId,
               startDate, setStartDate, dueDate, setDueDate, availableOwners }} />
-            <label>Status<select value={projectStatus} onChange={event => setProjectStatus(event.target.value)}>
+            <label>Status<select aria-label="Project status" value={projectStatus} onChange={event => setProjectStatus(event.target.value)}>
               {projectStatuses.map(status => <option key={status} value={status}>{label(status)}</option>)}
             </select></label>
             <button className="primary" disabled={working}>Save project</button>
