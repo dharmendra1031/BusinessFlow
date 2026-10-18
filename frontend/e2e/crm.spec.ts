@@ -5,6 +5,7 @@ const adminEmail = process.env.CRM_ADMIN_EMAIL!;
 const adminPassword = process.env.CRM_ADMIN_PASSWORD!;
 const employeePassword = 'EmployeeUiTest123!';
 const unique = () => Date.now().toString();
+let projectTestEmployee: { id: number; token: string } | null = null;
 
 function adminSession() {
   return {
@@ -255,6 +256,10 @@ test('Employee: permissions, password change and mobile navigation', async ({ pa
   await page.getByRole('main').getByRole('button', { name: 'Change password' }).click();
   await expect(page.getByRole('heading', { name: 'Sign in to your account' })).toBeVisible();
   await signIn(page, employee.email, 'ChangedUiPassword123!');
+  projectTestEmployee = {
+    id: employee.id, token: await page.evaluate(() =>
+      JSON.parse(sessionStorage.getItem('crmSession')!).token as string),
+  };
 });
 
 test('Manager: team is read-only and employee creation is restricted', async ({ page, request }) => {
@@ -601,12 +606,8 @@ test('Development API validates winning status, project access, tasks and duplic
     '/tasks/' + taskId + '/status', { headers, data: { status: 'Done' } });
   expect(finished.status()).toBe(204);
 
-  const employee = await createEmployee(request, 'Employee');
-  const login = await request.post(apiUrl + '/api/auth/login', {
-    data: { email: employee.email, password: employeePassword },
-  });
-  expect(login.status()).toBe(200);
-  const employeeToken = (await login.json()).token;
+  if (!projectTestEmployee) throw new Error('Employee session was not created.');
+  const employeeToken = projectTestEmployee.token;
   const invisible = await request.get(apiUrl + '/api/projects/' + projectId, {
     headers: { Authorization: 'Bearer ' + employeeToken },
   });
@@ -615,12 +616,9 @@ test('Development API validates winning status, project access, tasks and duplic
 
 test('Development permissions: employee can update own task, not another task', async ({ request }) => {
   const adminHeaders = { Authorization: 'Bearer ' + adminToken() };
-  const employee = await createEmployee(request, 'Employee');
-  const login = await request.post(apiUrl + '/api/auth/login', {
-    data: { email: employee.email, password: employeePassword },
-  });
-  expect(login.status()).toBe(200);
-  const employeeHeaders = { Authorization: 'Bearer ' + (await login.json()).token };
+  if (!projectTestEmployee) throw new Error('Employee session was not created.');
+  const employee = projectTestEmployee;
+  const employeeHeaders = { Authorization: 'Bearer ' + employee.token };
 
   const leadId = await createLead(request, 'Assigned Dev Project ' + unique());
   await request.patch(apiUrl + '/api/leads/' + leadId + '/status', {
