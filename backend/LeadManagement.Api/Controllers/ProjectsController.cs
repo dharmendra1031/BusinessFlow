@@ -4,6 +4,7 @@ using LeadManagement.Api.Models;
 using LeadManagement.Api.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 
 namespace LeadManagement.Api.Controllers;
@@ -13,193 +14,252 @@ namespace LeadManagement.Api.Controllers;
 [Route("api/projects")]
 public sealed class ProjectsController(AppDbContext db) : ControllerBase
 {
-    private static readonly string[] ProjectStatuses = ["Planned", "InProgress", "OnHold", "Completed", "Cancelled"];
+    private static readonly string[] ProjectStatuses = ["Planning", "InProgress", "OnHold", "Completed"];
     private static readonly string[] TaskStatuses = ["Todo", "InProgress", "Blocked", "Done"];
+    private static readonly string[] Priorities = ["Low", "Medium", "High", "Urgent"];
 
     private IQueryable<DevelopmentProject> VisibleProjects()
     {
-        var projects = db.DevelopmentProjects.AsNoTracking();
+        var projects = db.DevelopmentProjects.AsQueryable();
         if (User.IsInRole("Admin")) return projects;
-
-        var userId = LeadAccess.UserId(User);
+        var id = LeadAccess.UserId(User);
         if (User.IsInRole("Manager"))
-            return projects.Where(p => p.OwnerId == userId || p.Lead.CreatedById == userId ||
-                p.Lead.AssignedToId == userId ||
-                (p.Lead.AssignedTo != null && p.Lead.AssignedTo.ManagerId == userId));
-
-        return projects.Where(p => p.OwnerId == userId ||
-            p.Tasks.Any(t => t.AssignedToId == userId));
+            return projects.Where(p => p.CreatedById == id || p.OwnerId == id ||
+                p.Owner.ManagerId == id || p.Tasks.Any(t => t.AssignedToId == id));
+        return projects.Where(p => p.OwnerId == id || p.Tasks.Any(t => t.AssignedToId == id));
     }
+
+    private bool CanManage(DevelopmentProject project)
+    {
+        if (User.IsInRole("Admin")) return true;
+        if (!User.IsInRole("Manager")) return false;
+        var id = LeadAccess.UserId(User);
+        return project.CreatedById == id || project.OwnerId == id || project.Owner.ManagerId == id;
+    }
+
+    private async Task<bool> ValidAssignee(long? id)
+    {
+        if (id is null) return true;
+        var user = await db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == id && u.IsActive);
+        if (user is null) return false;
+        var current = LeadAccess.UserId(User);
+        return User.IsInRole("Admin") ||
+            (User.IsInRole("Manager") && (user.Id == current || user.ManagerId == current));
+    }
+
+    private static bool InvalidDates(DateOnly? start, DateOnly? due) =>
+        start.HasValue && due.HasValue && due.Value < start.Value;
+
+    private void Audit(string action, string table, long id) =>
+        db.AuditLogs.Add(new AuditLog
+        {
+            UserId = LeadAccess.UserId(User), Action = action,
+            TableName = table, RecordId = id
+        });
 
     [HttpGet]
-    public async Task<IActionResult> List()
+    public async Task<IActionResult> List(string? status = null)
     {
-        var items = await VisibleProjects().OrderByDescending(p => p.CreatedAtUtc)
+        if (status is not null && !ProjectStatuses.Contains(status))
+            return BadRequest(new { message = "Invalid project status." });
+        var projects = VisibleProjects().AsNoTracking();
+        if (status is not null) projects = projects.Where(p => p.Status == status);
+        return Ok(await projects.OrderByDescending(p => p.UpdatedAtUtc).ThenByDescending(p => p.Id)
+            .Take(200)
             .Select(p => new
             {
-                p.Id, p.LeadId, LeadName = p.Lead.Name, p.Name, p.Description, p.Status,
-                p.OwnerId, OwnerName = p.Owner.FullName, p.StartDate, p.DueDate, p.CreatedAtUtc,
-                TaskCount = p.Tasks.Count,
-                CompletedTasks = p.Tasks.Count(t => t.Status == "Done")
-            }).Take(200).ToListAsync();
-        return Ok(items);
+                p.Id, p.LeadId, p.Title, p.Status, p.StartDate, p.DueDate,
+                p.OwnerId, OwnerName = p.Owner.FullName, Customer = p.Lead.Name,
+                p.CreatedAtUtc, p.UpdatedAtUtc,
+                TaskCount = p.Tasks.Count, DoneCount = p.Tasks.Count(t => t.Status == "Done")
+            }).ToListAsync());
     }
 
-    [HttpGet("eligible-leads")]
     [Authorize(Roles = "Admin,Manager")]
+    [HttpGet("eligible-leads")]
     public async Task<IActionResult> EligibleLeads()
     {
-        var leads = LeadAccess.VisibleTo(db.Leads.AsNoTracking(), User);
-        return Ok(await leads.Where(l => l.Status.Name == "Won")
-            .OrderBy(l => l.Name).Select(l => new { l.Id, l.Name, l.CustomerCode })
+        return Ok(await LeadAccess.VisibleTo(db.Leads.AsNoTracking(), User)
+            .Where(l => l.StatusId == 5 &&
+                !db.DevelopmentProjects.Any(p => p.LeadId == l.Id))
+            .OrderBy(l => l.Name)
+            .Select(l => new { l.Id, l.Name, l.CustomerCode, l.CompanyName })
             .Take(200).ToListAsync());
     }
 
     [HttpGet("{id:long}")]
     public async Task<IActionResult> Get(long id)
     {
-        var project = await VisibleProjects().Where(p => p.Id == id)
+        var project = await VisibleProjects().AsNoTracking().Where(p => p.Id == id)
             .Select(p => new
             {
-                p.Id, p.LeadId, LeadName = p.Lead.Name, p.Name, p.Description, p.Status,
-                p.OwnerId, OwnerName = p.Owner.FullName, p.StartDate, p.DueDate, p.CreatedAtUtc,
+                p.Id, p.LeadId, p.Title, p.Description, p.Status, p.StartDate, p.DueDate,
+                p.OwnerId, OwnerName = p.Owner.FullName, Customer = p.Lead.Name,
+                p.CreatedAtUtc, p.UpdatedAtUtc,
                 Tasks = p.Tasks.OrderBy(t => t.Id).Select(t => new
                 {
-                    t.Id, t.Title, t.Description, t.Status, t.AssignedToId,
-                    AssignedToName = t.AssignedTo != null ? t.AssignedTo.FullName : null,
-                    t.DueDate, t.CreatedAtUtc
+                    t.Id, t.Title, t.Description, t.Status, t.Priority,
+                    t.AssignedToId, AssignedTo = t.AssignedTo == null ? null : t.AssignedTo.FullName,
+                    t.DueDate, t.CompletedAtUtc
                 }).ToList()
             }).FirstOrDefaultAsync();
         return project is null ? NotFound() : Ok(project);
     }
 
-    [HttpPost]
     [Authorize(Roles = "Admin,Manager")]
+    [HttpPost]
     public async Task<IActionResult> Create(CreateProjectRequest request)
     {
-        if (string.IsNullOrWhiteSpace(request.Name) || request.Name.Trim().Length < 2)
-            return BadRequest(new { message = "Project name must contain at least two characters." });
-        if (request.StartDate.HasValue && request.DueDate.HasValue && request.StartDate > request.DueDate)
-            return BadRequest(new { message = "Due date must not be before start date." });
-        var lead = await LeadAccess.VisibleTo(db.Leads, User)
-            .FirstOrDefaultAsync(l => l.Id == request.LeadId);
+        if (string.IsNullOrWhiteSpace(request.Title) || request.Title.Trim().Length < 2)
+            return BadRequest(new { message = "Enter a project title of at least 2 characters." });
+        if (InvalidDates(request.StartDate, request.DueDate))
+            return BadRequest(new { message = "Due date must be on or after the start date." });
+        if (!await ValidAssignee(request.OwnerId))
+            return BadRequest(new { message = "Choose an active owner from your team." });
+
+        var lead = await LeadAccess.VisibleTo(db.Leads.AsNoTracking(), User)
+            .Where(l => l.Id == request.LeadId).Select(l => new { l.Id, l.StatusId })
+            .FirstOrDefaultAsync();
         if (lead is null) return NotFound();
-        if (!await db.LeadStatuses.AnyAsync(s => s.Id == lead.StatusId && s.Name == "Won"))
-            return BadRequest(new { message = "Only won leads can be converted to development projects." });
-        if (!await CanAssign(request.OwnerId))
-            return BadRequest(new { message = "Select an active project owner from your team." });
+        if (lead.StatusId != 5)
+            return BadRequest(new { message = "Only Won leads can become development projects." });
+        if (await db.DevelopmentProjects.AnyAsync(p => p.LeadId == request.LeadId))
+            return Conflict(new { message = "A project already exists for this lead." });
 
         var project = new DevelopmentProject
         {
-            LeadId = lead.Id, Name = request.Name.Trim(),
+            LeadId = request.LeadId, Title = request.Title.Trim(),
             Description = request.Description?.Trim(), OwnerId = request.OwnerId,
-            StartDate = request.StartDate?.Date, DueDate = request.DueDate?.Date,
+            StartDate = request.StartDate, DueDate = request.DueDate,
             CreatedById = LeadAccess.UserId(User)
         };
         db.DevelopmentProjects.Add(project);
-        await db.SaveChangesAsync();
-        db.AuditLogs.Add(new AuditLog
+        try { await db.SaveChangesAsync(); }
+        catch (DbUpdateException ex) when (ex.InnerException is SqlException { Number: 2601 or 2627 })
         {
-            UserId = project.CreatedById, Action = "Create",
-            TableName = "DevelopmentProjects", RecordId = project.Id
-        });
+            return Conflict(new { message = "A project already exists for this lead." });
+        }
+        Audit("Create", "DevelopmentProjects", project.Id);
         await db.SaveChangesAsync();
         return CreatedAtAction(nameof(Get), new { id = project.Id }, new { project.Id });
     }
 
-    [HttpPut("{id:long}")]
     [Authorize(Roles = "Admin,Manager")]
+    [HttpPut("{id:long}")]
     public async Task<IActionResult> Update(long id, UpdateProjectRequest request)
     {
-        if (string.IsNullOrWhiteSpace(request.Name) || request.Name.Trim().Length < 2)
-            return BadRequest(new { message = "Project name must contain at least two characters." });
-        if (!ProjectStatuses.Contains(request.Status))
-            return BadRequest(new { message = "Invalid project status." });
-        if (request.StartDate.HasValue && request.DueDate.HasValue && request.StartDate > request.DueDate)
-            return BadRequest(new { message = "Due date must not be before start date." });
-        if (!await CanAssign(request.OwnerId))
-            return BadRequest(new { message = "Select an active project owner from your team." });
-
-        var project = await EditableProject(id);
+        var project = await VisibleProjects().Include(p => p.Owner).Include(p => p.Tasks)
+            .FirstOrDefaultAsync(p => p.Id == id);
         if (project is null) return NotFound();
-        project.Name = request.Name.Trim();
+        if (!CanManage(project)) return Forbid();
+        if (string.IsNullOrWhiteSpace(request.Title) || request.Title.Trim().Length < 2 ||
+            !ProjectStatuses.Contains(request.Status))
+            return BadRequest(new { message = "Enter a valid project title and status." });
+        if (InvalidDates(request.StartDate, request.DueDate))
+            return BadRequest(new { message = "Due date must be on or after the start date." });
+        if (!await ValidAssignee(request.OwnerId))
+            return BadRequest(new { message = "Choose an active owner from your team." });
+        if (request.Status == "Completed" &&
+            (project.Tasks.Count == 0 || project.Tasks.Any(t => t.Status != "Done")))
+            return BadRequest(new { message = "Complete all tasks before completing the project." });
+
+        project.Title = request.Title.Trim();
         project.Description = request.Description?.Trim();
         project.Status = request.Status;
         project.OwnerId = request.OwnerId;
-        project.StartDate = request.StartDate?.Date;
-        project.DueDate = request.DueDate?.Date;
+        project.StartDate = request.StartDate;
+        project.DueDate = request.DueDate;
         project.UpdatedAtUtc = DateTime.UtcNow;
-        db.AuditLogs.Add(new AuditLog
-        {
-            UserId = LeadAccess.UserId(User), Action = "Update",
-            TableName = "DevelopmentProjects", RecordId = project.Id
-        });
+        Audit("Update", "DevelopmentProjects", project.Id);
         await db.SaveChangesAsync();
         return NoContent();
     }
 
-    [HttpPost("{id:long}/tasks")]
     [Authorize(Roles = "Admin,Manager")]
-    public async Task<IActionResult> CreateTask(long id, CreateDevelopmentTaskRequest request)
+    [HttpPost("{id:long}/tasks")]
+    public async Task<IActionResult> AddTask(long id, CreateDevelopmentTaskRequest request)
     {
-        var project = await EditableProject(id);
+        var project = await VisibleProjects().Include(p => p.Owner).FirstOrDefaultAsync(p => p.Id == id);
         if (project is null) return NotFound();
-        if (string.IsNullOrWhiteSpace(request.Title) || request.Title.Trim().Length < 2)
-            return BadRequest(new { message = "Task title must contain at least two characters." });
-        if (request.AssignedToId.HasValue && !await CanAssign(request.AssignedToId.Value))
-            return BadRequest(new { message = "Select an active team member." });
+        if (!CanManage(project)) return Forbid();
+        if (project.Status == "Completed")
+            return BadRequest(new { message = "Reopen the project before adding tasks." });
+        var error = await TaskError(request.Title, request.Priority, request.AssignedToId,
+            request.DueDate, project.DueDate);
+        if (error is not null) return BadRequest(new { message = error });
 
         var task = new DevelopmentTask
         {
             ProjectId = id, Title = request.Title.Trim(), Description = request.Description?.Trim(),
-            AssignedToId = request.AssignedToId, DueDate = request.DueDate?.Date,
-            CreatedById = LeadAccess.UserId(User)
+            Priority = request.Priority, AssignedToId = request.AssignedToId, DueDate = request.DueDate
         };
         db.DevelopmentTasks.Add(task);
+        project.UpdatedAtUtc = DateTime.UtcNow;
         await db.SaveChangesAsync();
-        db.AuditLogs.Add(new AuditLog
-        {
-            UserId = task.CreatedById, Action = "Create", TableName = "DevelopmentTasks", RecordId = task.Id
-        });
+        Audit("Create", "DevelopmentTasks", task.Id);
         await db.SaveChangesAsync();
         return Created("/api/projects/" + id, new { task.Id });
     }
 
-    [HttpPatch("{id:long}/tasks/{taskId:long}/status")]
-    public async Task<IActionResult> UpdateTaskStatus(long id, long taskId, UpdateDevelopmentTaskRequest request)
+    [Authorize(Roles = "Admin,Manager")]
+    [HttpPut("{id:long}/tasks/{taskId:long}")]
+    public async Task<IActionResult> UpdateTask(long id, long taskId, UpdateDevelopmentTaskRequest request)
     {
-        if (!TaskStatuses.Contains(request.Status))
-            return BadRequest(new { message = "Invalid task status." });
-        if (!await VisibleProjects().AnyAsync(p => p.Id == id)) return NotFound();
+        var project = await VisibleProjects().Include(p => p.Owner).FirstOrDefaultAsync(p => p.Id == id);
+        if (project is null) return NotFound();
+        if (!CanManage(project)) return Forbid();
+        if (project.Status == "Completed")
+            return BadRequest(new { message = "Reopen the project before editing tasks." });
         var task = await db.DevelopmentTasks.FirstOrDefaultAsync(t => t.Id == taskId && t.ProjectId == id);
         if (task is null) return NotFound();
-        if (!User.IsInRole("Admin") && !User.IsInRole("Manager") &&
-            task.AssignedToId != LeadAccess.UserId(User))
-            return Forbid();
-        task.Status = request.Status;
+        var error = await TaskError(request.Title, request.Priority, request.AssignedToId,
+            request.DueDate, project.DueDate);
+        if (error is not null) return BadRequest(new { message = error });
+
+        task.Title = request.Title.Trim();
+        task.Description = request.Description?.Trim();
+        task.Priority = request.Priority;
+        task.AssignedToId = request.AssignedToId;
+        task.DueDate = request.DueDate;
         task.UpdatedAtUtc = DateTime.UtcNow;
-        db.AuditLogs.Add(new AuditLog
-        {
-            UserId = LeadAccess.UserId(User), Action = "Update",
-            TableName = "DevelopmentTasks", RecordId = task.Id, ChangedFields = "Status"
-        });
+        project.UpdatedAtUtc = task.UpdatedAtUtc;
+        Audit("Update", "DevelopmentTasks", taskId);
         await db.SaveChangesAsync();
         return NoContent();
     }
 
-    private async Task<DevelopmentProject?> EditableProject(long id)
+    [HttpPatch("{id:long}/tasks/{taskId:long}/status")]
+    public async Task<IActionResult> ChangeTaskStatus(long id, long taskId, UpdateDevelopmentTaskStatusRequest request)
     {
-        var projectId = await VisibleProjects().Where(p => p.Id == id)
-            .Select(p => (long?)p.Id).FirstOrDefaultAsync();
-        return projectId.HasValue
-            ? await db.DevelopmentProjects.FirstOrDefaultAsync(p => p.Id == projectId.Value)
-            : null;
+        if (!TaskStatuses.Contains(request.Status))
+            return BadRequest(new { message = "Invalid task status." });
+        var project = await VisibleProjects().Include(p => p.Owner).FirstOrDefaultAsync(p => p.Id == id);
+        if (project is null) return NotFound();
+        if (project.Status == "Completed")
+            return BadRequest(new { message = "Reopen the project before updating tasks." });
+        var task = await db.DevelopmentTasks.FirstOrDefaultAsync(t => t.Id == taskId && t.ProjectId == id);
+        if (task is null) return NotFound();
+        if (!CanManage(project) && task.AssignedToId != LeadAccess.UserId(User)) return Forbid();
+        if (task.Status == request.Status) return NoContent();
+
+        task.Status = request.Status;
+        task.CompletedAtUtc = request.Status == "Done" ? DateTime.UtcNow : null;
+        task.UpdatedAtUtc = DateTime.UtcNow;
+        project.UpdatedAtUtc = task.UpdatedAtUtc;
+        Audit("Status", "DevelopmentTasks", taskId);
+        await db.SaveChangesAsync();
+        return NoContent();
     }
 
-    private async Task<bool> CanAssign(long userId)
+    private async Task<string?> TaskError(string title, string priority, long? assigneeId,
+        DateOnly? dueDate, DateOnly? projectDueDate)
     {
-        var currentId = LeadAccess.UserId(User);
-        return await db.Users.AnyAsync(u => u.Id == userId && u.IsActive &&
-            (User.IsInRole("Admin") || u.Id == currentId || u.ManagerId == currentId));
+        if (string.IsNullOrWhiteSpace(title) || title.Trim().Length < 2)
+            return "Task title must have at least two characters.";
+        if (!Priorities.Contains(priority)) return "Invalid task priority.";
+        if (!await ValidAssignee(assigneeId)) return "Select an active team member.";
+        if (projectDueDate.HasValue && dueDate > projectDueDate)
+            return "Task deadline cannot be after the project deadline.";
+        return null;
     }
 }
