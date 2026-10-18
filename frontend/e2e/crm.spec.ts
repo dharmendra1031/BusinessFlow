@@ -521,3 +521,90 @@ test('API protects edit, follow-up, password and date filter boundaries', async 
     expect(invalidDates.status()).toBe(400);
   }
 });
+
+test('Development: convert a won lead, assign tasks and complete progress', async ({ page, request }) => {
+  const title = 'Client Portal ' + unique();
+  const taskTitle = 'Build login page ' + unique();
+  const leadId = await createLead(request, title);
+  const headers = { Authorization: 'Bearer ' + adminToken() };
+  const won = await request.patch(apiUrl + '/api/leads/' + leadId + '/status', {
+    headers, data: { statusId: 5 },
+  });
+  expect(won.ok()).toBeTruthy();
+
+  await signIn(page);
+  await page.getByRole('navigation', { name: 'Main navigation' })
+    .getByRole('button', { name: 'Development projects' }).click();
+  await expect(page.getByRole('heading', { name: 'Development projects' })).toBeVisible();
+  await page.getByRole('button', { name: 'New project' }).click();
+  const form = page.getByRole('dialog', { name: 'New development project' });
+  await form.getByLabel('Won lead').selectOption(String(leadId));
+  await form.getByLabel('Project name').fill(title);
+  await form.getByRole('button', { name: 'Create project' }).click();
+
+  const details = page.getByRole('dialog', { name: 'Project ' + title });
+  await expect(details).toBeVisible();
+  await details.getByText('Add development task').click();
+  await details.getByLabel('Task title').fill(taskTitle);
+  await details.getByLabel('Priority').selectOption('High');
+  await details.getByRole('button', { name: 'Add task' }).click();
+  await expect(details.getByText(taskTitle)).toBeVisible();
+  await details.getByLabel('Status for ' + taskTitle).selectOption('Done');
+  await expect(details.getByText('1/1 tasks done')).toBeVisible();
+
+  await details.getByText('Edit project details').click();
+  await details.getByLabel('Status', { exact: true }).selectOption('Completed');
+  await details.getByRole('button', { name: 'Save project' }).click();
+  await expect(details.getByText('Completed', { exact: false })).toBeVisible();
+  await details.getByRole('button', { name: 'Close' }).click();
+  await expect(page.getByRole('row').filter({ hasText: title })).toContainText('100%');
+});
+
+test('Development API validates winning status, project access, tasks and duplicate conversion', async ({ request }) => {
+  const headers = { Authorization: 'Bearer ' + adminToken() };
+  const freshLeadId = await createLead(request, 'Unqualified Project ' + unique());
+  const projectPayload = {
+    leadId: freshLeadId, title: 'Unqualified conversion', ownerId: adminSession().user.id,
+  };
+  const invalid = await request.post(apiUrl + '/api/projects', { headers, data: projectPayload });
+  expect(invalid.status()).toBe(400);
+
+  const updated = await request.patch(apiUrl + '/api/leads/' + freshLeadId + '/status', {
+    headers, data: { statusId: 5 },
+  });
+  expect(updated.ok()).toBeTruthy();
+  const created = await request.post(apiUrl + '/api/projects', { headers, data: projectPayload });
+  expect(created.status()).toBe(201);
+  const projectId = (await created.json()).id;
+  const again = await request.post(apiUrl + '/api/projects', { headers, data: projectPayload });
+  expect(again.status()).toBe(409);
+
+  const task = await request.post(apiUrl + '/api/projects/' + projectId + '/tasks', {
+    headers, data: { title: 'Configure database', priority: 'High' },
+  });
+  expect(task.status()).toBe(201);
+  const taskId = (await task.json()).id;
+  const invalidTask = await request.post(apiUrl + '/api/projects/' + projectId + '/tasks', {
+    headers, data: { title: 'x', priority: 'Invalid' },
+  });
+  expect(invalidTask.status()).toBe(400);
+  const completedTooEarly = await request.put(apiUrl + '/api/projects/' + projectId, {
+    headers, data: { title: 'Unqualified conversion', status: 'Completed',
+      ownerId: adminSession().user.id },
+  });
+  expect(completedTooEarly.status()).toBe(400);
+  const finished = await request.patch(apiUrl + '/api/projects/' + projectId +
+    '/tasks/' + taskId + '/status', { headers, data: { status: 'Done' } });
+  expect(finished.status()).toBe(204);
+
+  const employee = await createEmployee(request, 'Employee');
+  const login = await request.post(apiUrl + '/api/auth/login', {
+    data: { email: employee.email, password: employeePassword },
+  });
+  expect(login.status()).toBe(200);
+  const employeeToken = (await login.json()).token;
+  const invisible = await request.get(apiUrl + '/api/projects/' + projectId, {
+    headers: { Authorization: 'Bearer ' + employeeToken },
+  });
+  expect(invisible.status()).toBe(404);
+});
