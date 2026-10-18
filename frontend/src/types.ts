@@ -10,14 +10,14 @@ export type ReportResult = { type: string; total: number; truncated: boolean; ro
 export type LeadFollowUpHistory = { id: number; notes: string; dueAtUtc: string; completedAtUtc: string | null; createdAtUtc: string; assignedToId: number };
 
 export type DevelopmentTask = {
-  id: number; title: string; description: string | null; status: string; priority: string;
-  assignedToId: number | null; assignedTo: string | null;
+  id: number; title: string; description: string | null; status: string;
+  priority: string; assignedToId: number | null; assignedTo: string | null;
   dueDate: string | null; completedAtUtc: string | null;
 };
 export type DevelopmentProject = {
-  id: number; leadId: number; customer: string; createdById: number;
-  title: string; description: string | null; status: string;
+  id: number; leadId: number; customer: string;
+  title: string; description?: string | null; status: string;
   ownerId: number; ownerName: string; startDate: string | null;
-  dueDate: string | null; createdAtUtc: string; updatedAtUtc: string;
+  dueDate: string | null; createdAtUtc: string;
   taskCount: number; doneCount: number; tasks?: DevelopmentTask[];
 };
