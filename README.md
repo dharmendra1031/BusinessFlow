@@ -89,3 +89,22 @@ The SQL Server integration test, API build, and frontend build pass locally
 against the new schema. Live deployment, security testing, PDF export, and
 unrestricted report pagination are not verified. See [Windows VPS deployment](DEPLOY_WINDOWS.md)
 for the single-domain IIS package and setup steps.
+
+## Development project management (Phase 1)
+
+Lead management stays intact. A **Development projects** workspace now handles delivery after a sale:
+
+- Convert a **Won** lead into one development project (duplicate conversion is blocked).
+- Record project title, description, owner, start/due dates and delivery status.
+- Organize project tasks with title, notes, priority, assignee, due date, and status.
+- Edit tasks, mark them In Progress/Blocked/Done, and view task-based completion percentage.
+- Only complete a project after all tasks are done. Development actions are audited.
+- Admin has full access; Manager access is restricted to projects they manage and their team;
+  employees can view projects assigned to them and update only their assigned task statuses.
+- Data uses BIGINT auto-increment primary keys, SQL Server foreign keys, and the additive
+  EF Core migration `20261018150000_AddDevelopmentProjects`.
+
+Back up an existing SQL Server database before applying the new migration with
+`dotnet ef database update`. Do not run migrations on a live database without a backup
+and deployment review. This release does **not** yet include file attachments, timesheets,
+sprint planning, Git integration, release/deployment tracking, or client approval workflows.
