@@ -549,6 +549,10 @@ test('Development: convert a won lead, assign tasks and complete progress', asyn
   await details.getByLabel('Priority').selectOption('High');
   await details.getByRole('button', { name: 'Add task' }).click();
   await expect(details.getByText(taskTitle)).toBeVisible();
+  await details.getByRole('button', { name: 'Edit task' }).click();
+  await details.getByLabel('Priority').selectOption('Urgent');
+  await details.getByRole('button', { name: 'Save task' }).click();
+  await expect(details.getByText('Urgent', { exact: false })).toBeVisible();
   await details.getByLabel('Status for ' + taskTitle).selectOption('Done');
   await expect(details.getByText('1/1 tasks done')).toBeVisible();
 
@@ -607,4 +611,54 @@ test('Development API validates winning status, project access, tasks and duplic
     headers: { Authorization: 'Bearer ' + employeeToken },
   });
   expect(invisible.status()).toBe(404);
+});
+
+test('Development permissions: employee can update own task, not another task', async ({ request }) => {
+  const adminHeaders = { Authorization: 'Bearer ' + adminToken() };
+  const employee = await createEmployee(request, 'Employee');
+  const login = await request.post(apiUrl + '/api/auth/login', {
+    data: { email: employee.email, password: employeePassword },
+  });
+  expect(login.status()).toBe(200);
+  const employeeHeaders = { Authorization: 'Bearer ' + (await login.json()).token };
+
+  const leadId = await createLead(request, 'Assigned Dev Project ' + unique());
+  await request.patch(apiUrl + '/api/leads/' + leadId + '/status', {
+    headers: adminHeaders, data: { statusId: 5 },
+  });
+  const created = await request.post(apiUrl + '/api/projects', {
+    headers: adminHeaders,
+    data: { leadId, title: 'Developer Access Test', ownerId: adminSession().user.id },
+  });
+  expect(created.status()).toBe(201);
+  const id = (await created.json()).id;
+  const assigned = await request.post(apiUrl + '/api/projects/' + id + '/tasks', {
+    headers: adminHeaders,
+    data: { title: 'Assigned development task', priority: 'Medium', assignedToId: employee.id },
+  });
+  expect(assigned.status()).toBe(201);
+  const assignedId = (await assigned.json()).id;
+  const privateTask = await request.post(apiUrl + '/api/projects/' + id + '/tasks', {
+    headers: adminHeaders, data: { title: 'Another developer task', priority: 'Low' },
+  });
+  expect(privateTask.status()).toBe(201);
+  const privateId = (await privateTask.json()).id;
+
+  const visible = await request.get(apiUrl + '/api/projects/' + id, { headers: employeeHeaders });
+  expect(visible.status()).toBe(200);
+
+  const allowed = await request.patch(apiUrl + '/api/projects/' + id + '/tasks/' + assignedId + '/status', {
+    headers: employeeHeaders, data: { status: 'InProgress' },
+  });
+  expect(allowed.status()).toBe(204);
+
+  const forbidden = await request.patch(apiUrl + '/api/projects/' + id + '/tasks/' + privateId + '/status', {
+    headers: employeeHeaders, data: { status: 'Done' },
+  });
+  expect(forbidden.status()).toBe(403);
+
+  const cannotCreate = await request.post(apiUrl + '/api/projects/' + id + '/tasks', {
+    headers: employeeHeaders, data: { title: 'Unapproved task', priority: 'High' },
+  });
+  expect(cannotCreate.status()).toBe(403);
 });
