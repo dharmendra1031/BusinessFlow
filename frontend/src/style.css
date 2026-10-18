@@ -331,3 +331,19 @@ td small { display: block; font-size: 11px; max-width: 210px; overflow: hidden; 
 .skip-link { position: fixed; top: -60px; left: 12px; z-index: 150;
   background: #fff; color: #1b2b45; padding: 10px 14px; border-radius: 8px; }
 .skip-link:focus { top: 12px; }
+
+/* Development projects use the existing CRM panel and form palette. */
+.project-heading { padding: 22px; }
+.project-section { border-top: 1px solid var(--border); padding: 20px 0; margin-top: 20px; }
+.project-section summary { cursor: pointer; font-weight: 700; margin-bottom: 14px; }
+.project-section h3 { font-size: 15px; margin: 0 0 14px; }
+.project-tasks { display: grid; gap: 12px; }
+.project-task { display: flex; align-items: center; justify-content: space-between; gap: 14px;
+  padding: 12px 0; border-bottom: 1px solid var(--border); }
+.project-task p { margin: 5px 0; font-size: 12px; color: var(--muted); }
+.project-task small { color: var(--muted); }
+.project-task select { min-width: 112px; max-width: 136px; }
+@media (max-width: 480px) {
+  .project-task { align-items: stretch; flex-direction: column; }
+  .project-task select { max-width: 100%; }
+}
