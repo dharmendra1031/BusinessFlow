@@ -17,8 +17,6 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
     public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
     public DbSet<DevelopmentProject> DevelopmentProjects => Set<DevelopmentProject>();
     public DbSet<DevelopmentTask> DevelopmentTasks => Set<DevelopmentTask>();
-    public DbSet<DevelopmentProject> DevelopmentProjects => Set<DevelopmentProject>();
-    public DbSet<DevelopmentTask> DevelopmentTasks => Set<DevelopmentTask>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -54,36 +52,6 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
             entity.HasOne(x => x.Source).WithMany().HasForeignKey(x => x.SourceId)
                 .OnDelete(DeleteBehavior.NoAction);
             entity.HasOne(x => x.Status).WithMany().HasForeignKey(x => x.StatusId)
-                .OnDelete(DeleteBehavior.NoAction);
-        });
-
-        modelBuilder.Entity<DevelopmentProject>(entity =>
-        {
-            entity.Property(p => p.Name).HasMaxLength(150).IsRequired();
-            entity.Property(p => p.Description).HasMaxLength(2000);
-            entity.Property(p => p.Status).HasMaxLength(20).IsRequired();
-            entity.HasIndex(p => new { p.OwnerId, p.Status });
-            entity.HasIndex(p => p.LeadId);
-            entity.HasOne(p => p.Lead).WithMany().HasForeignKey(p => p.LeadId)
-                .OnDelete(DeleteBehavior.NoAction);
-            entity.HasOne(p => p.Owner).WithMany().HasForeignKey(p => p.OwnerId)
-                .OnDelete(DeleteBehavior.NoAction);
-            entity.HasOne<ApplicationUser>().WithMany().HasForeignKey(p => p.CreatedById)
-                .OnDelete(DeleteBehavior.NoAction);
-        });
-
-        modelBuilder.Entity<DevelopmentTask>(entity =>
-        {
-            entity.Property(t => t.Title).HasMaxLength(150).IsRequired();
-            entity.Property(t => t.Description).HasMaxLength(2000);
-            entity.Property(t => t.Status).HasMaxLength(20).IsRequired();
-            entity.HasIndex(t => new { t.ProjectId, t.Status });
-            entity.HasIndex(t => t.AssignedToId);
-            entity.HasOne(t => t.Project).WithMany(p => p.Tasks).HasForeignKey(t => t.ProjectId)
-                .OnDelete(DeleteBehavior.Cascade);
-            entity.HasOne(t => t.AssignedTo).WithMany().HasForeignKey(t => t.AssignedToId)
-                .OnDelete(DeleteBehavior.NoAction);
-            entity.HasOne<ApplicationUser>().WithMany().HasForeignKey(t => t.CreatedById)
                 .OnDelete(DeleteBehavior.NoAction);
         });
 
