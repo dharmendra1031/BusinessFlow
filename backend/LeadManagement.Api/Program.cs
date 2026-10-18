@@ -18,6 +18,9 @@ if (builder.Environment.IsProduction() && secret.StartsWith("REPLACE_WITH_", Str
 
 builder.Services.AddControllers();
 builder.Services.AddProblemDetails();
+var loginLimit = builder.Configuration.GetValue<int?>("RateLimiting:LoginRequestsPerMinute") ?? 5;
+if (loginLimit is < 1 or > 50)
+    throw new InvalidOperationException("Login rate limit must be between 1 and 50 per minute.");
 builder.Services.AddRateLimiter(options =>
 {
     options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
@@ -25,7 +28,7 @@ builder.Services.AddRateLimiter(options =>
         context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
         _ => new FixedWindowRateLimiterOptions
         {
-            PermitLimit = 5,
+            PermitLimit = loginLimit,
             Window = TimeSpan.FromMinutes(1),
             QueueLimit = 0,
             AutoReplenishment = true
