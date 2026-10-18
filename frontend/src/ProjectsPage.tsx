@@ -6,7 +6,7 @@ import { clearFieldError, handleDialogKeyDown, handleFormKeyDown, validateForm }
 import type { DevelopmentProject, DevelopmentTask, Employee, User } from './types';
 
 type WonLead = { id: number; name: string; customerCode: string | null };
-const projectStatuses = ['Planned', 'InProgress', 'OnHold', 'Completed', 'Cancelled'];
+const projectStatuses = ['Planning', 'InProgress', 'OnHold', 'Completed'];
 const taskStatuses = ['Todo', 'InProgress', 'Blocked', 'Done'];
 const label = (value: string) => value.replace(/([a-z])([A-Z])/g, '$1 $2');
 
@@ -26,8 +26,9 @@ export default function ProjectsPage({ token, user }: { token: string; user: Use
   const [ownerId, setOwnerId] = useState(String(user.id));
   const [startDate, setStartDate] = useState('');
   const [dueDate, setDueDate] = useState('');
-  const [projectStatus, setProjectStatus] = useState('Planned');
+  const [projectStatus, setProjectStatus] = useState('Planning');
   const [taskTitle, setTaskTitle] = useState('');
+  const [taskPriority, setTaskPriority] = useState('Medium');
   const [taskDescription, setTaskDescription] = useState('');
   const [assigneeId, setAssigneeId] = useState('');
   const [taskDueDate, setTaskDueDate] = useState('');
@@ -54,7 +55,7 @@ export default function ProjectsPage({ token, user }: { token: string; user: Use
   const availableOwners = employees.filter(member => member.isActive &&
     (user.roles.includes('Admin') || member.id === user.id || member.managerId === user.id));
   const progress = (project: DevelopmentProject) => project.taskCount
-    ? Math.round(project.completedTasks / project.taskCount * 100) : 0;
+    ? Math.round(project.doneCount / project.taskCount * 100) : 0;
 
   async function openProject(id: number) {
     try {
@@ -65,7 +66,7 @@ export default function ProjectsPage({ token, user }: { token: string; user: Use
   }
 
   function startEdit(project: DevelopmentProject) {
-    setName(project.name);
+    setName(project.title);
     setDescription(project.description || '');
     setOwnerId(String(project.ownerId));
     setProjectStatus(project.status);
@@ -94,7 +95,7 @@ export default function ProjectsPage({ token, user }: { token: string; user: Use
     setWorking(true);
     try {
       const payload = {
-        name: name.trim(), description: description.trim() || null,
+        title: name.trim(), description: description.trim() || null,
         ownerId: Number(ownerId), startDate: startDate || null, dueDate: dueDate || null,
       };
       if (showCreate) {
@@ -127,12 +128,13 @@ export default function ProjectsPage({ token, user }: { token: string; user: Use
     try {
       await api('/api/projects/' + selected.id + '/tasks', token, {
         method: 'POST', body: JSON.stringify({
-          title: taskTitle.trim(), description: taskDescription.trim() || null,
+          title: taskTitle.trim(), priority: taskPriority, description: taskDescription.trim() || null,
           assignedToId: assigneeId ? Number(assigneeId) : null,
           dueDate: taskDueDate || null,
         }),
       });
       setTaskTitle('');
+      setTaskPriority('Medium');
       setTaskDescription('');
       setAssigneeId('');
       setTaskDueDate('');
@@ -178,10 +180,10 @@ export default function ProjectsPage({ token, user }: { token: string; user: Use
         <thead><tr><th>Project</th><th>Client</th><th>Owner</th><th>Status</th>
           <th>Progress</th><th>Due date</th><th>Action</th></tr></thead>
         <tbody>{projects.map(project => <tr key={project.id}>
-          <td><strong>{project.name}</strong></td><td>{project.leadName}</td>
+          <td><strong>{project.title}</strong></td><td>{project.customer}</td>
           <td>{project.ownerName}</td>
           <td><span className="status-badge">{label(project.status)}</span></td>
-          <td>{project.completedTasks}/{project.taskCount} tasks · {progress(project)}%</td>
+          <td>{project.doneCount}/{project.taskCount} tasks · {progress(project)}%</td>
           <td>{project.dueDate?.slice(0, 10) || '—'}</td>
           <td><button className="secondary-action" onClick={() => void openProject(project.id)}>
             View project</button></td>
@@ -215,10 +217,10 @@ export default function ProjectsPage({ token, user }: { token: string; user: Use
     </div>}
 
     {selected && <div className="drawer-backdrop">
-      <aside className="detail-drawer" role="dialog" aria-modal="true" aria-label={'Project ' + selected.name}
+      <aside className="detail-drawer" role="dialog" aria-modal="true" aria-label={'Project ' + selected.title}
         onKeyDown={event => handleDialogKeyDown(event, () => { if (!working) setSelected(null); })}>
         <div className="drawer-header"><div><span className="section-kicker">DEVELOPMENT PROJECT</span>
-          <h2>{selected.name}</h2><p>{selected.leadName} · {label(selected.status)}</p></div>
+          <h2>{selected.title}</h2><p>{selected.customer} · {label(selected.status)}</p></div>
           <button className="icon-button" aria-label="Close" onClick={() => setSelected(null)}>
             <Icon name="close" /></button></div>
         <p className="field-help">Owner: {selected.ownerName} ·
@@ -238,7 +240,7 @@ export default function ProjectsPage({ token, user }: { token: string; user: Use
           {selected.tasks?.length ? <div className="project-tasks">{selected.tasks.map(task =>
             <div className="project-task" key={task.id}>
               <div><strong>{task.title}</strong><p>{task.description || 'No description'}</p>
-                <small>{task.assignedToName || 'Unassigned'} · {task.dueDate?.slice(0, 10) || 'No deadline'}</small>
+                <small>{task.assignedTo || 'Unassigned'} · {task.priority} · {task.dueDate?.slice(0, 10) || 'No deadline'}</small>
               </div>
               <select aria-label={'Status for ' + task.title} value={task.status}
                 disabled={!canManage && task.assignedToId !== user.id}
@@ -254,6 +256,9 @@ export default function ProjectsPage({ token, user }: { token: string; user: Use
               onChange={event => setTaskTitle(event.target.value)} /></label>
             <label>Details<textarea maxLength={2000} value={taskDescription}
               onChange={event => setTaskDescription(event.target.value)} /></label>
+            <label>Priority<select value={taskPriority} onChange={event => setTaskPriority(event.target.value)}>
+              {["Low", "Medium", "High", "Urgent"].map(value => <option key={value}>{value}</option>)}
+            </select></label>
             <label>Assign to<select value={assigneeId} onChange={event => setAssigneeId(event.target.value)}>
               <option value="">Unassigned</option>
               {availableOwners.map(member => <option key={member.id} value={member.id}>{member.fullName}</option>)}
