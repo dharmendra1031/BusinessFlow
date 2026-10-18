@@ -129,7 +129,7 @@ function Login({ onLogin }: { onLogin: (value: Session) => void }) {
   const [error, setError] = useState('');
   const [working, setWorking] = useState(false);
 
-  async function submit(event: React.FormEvent) {
+  async function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!validateForm(event.currentTarget) || working) return;
     setWorking(true);

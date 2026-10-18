@@ -10,7 +10,7 @@ export default function PasswordSettings({ token, onChanged }: { token: string; 
   const [confirmPassword, setConfirmPassword] = useState('');
   const [working, setWorking] = useState(false);
 
-  async function save(event: React.FormEvent) {
+  async function save(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!validateForm(event.currentTarget) || working) return;
     if (newPassword !== confirmPassword) {

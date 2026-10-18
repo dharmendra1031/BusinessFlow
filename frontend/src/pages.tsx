@@ -245,7 +245,7 @@ export function LeadsPage({ token, user, newLeadRequest, onNewLeadOpened }: {
   const canAssign = user.roles.includes('Admin') || user.roles.includes('Manager');
   const { data: employees } = useResource<Employee[]>(canAssign ? '/api/employees' : '', token);
 
-  async function saveLead(event: React.FormEvent) {
+  async function saveLead(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!validateForm(event.currentTarget) || working) return;
     setWorking(true);
@@ -432,7 +432,7 @@ export function FollowUpsPage({ token }: { token: string }) {
     setEditNotes(item.notes);
   }
 
-  async function saveFollowUp(event: React.FormEvent) {
+  async function saveFollowUp(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!editing || !validateForm(event.currentTarget)) return;
     if (new Date(editDueAt) <= new Date()) {
@@ -532,7 +532,7 @@ export function EmployeesPage({ token, user }: { token: string; user: User }) {
     return () => document.removeEventListener('keydown', onKeyDown);
   }, [showForm, working]);
 
-  async function save(event: React.FormEvent) {
+  async function save(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!validateForm(event.currentTarget) || working) return;
     setWorking(true);

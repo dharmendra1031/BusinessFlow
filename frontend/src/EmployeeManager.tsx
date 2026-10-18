@@ -22,7 +22,7 @@ export default function EmployeeManager({ employee, team, token, onClose, onSave
   const [confirmPassword, setConfirmPassword] = useState('');
   const [working, setWorking] = useState(false);
 
-  async function save(event: React.FormEvent) {
+  async function save(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!validateForm(event.currentTarget) || working) return;
     setWorking(true);
@@ -59,7 +59,7 @@ export default function EmployeeManager({ employee, team, token, onClose, onSave
     } finally { setWorking(false); }
   }
 
-  async function resetPassword(event: React.FormEvent) {
+  async function resetPassword(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setWorking(true);
     try {

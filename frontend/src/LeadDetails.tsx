@@ -36,7 +36,7 @@ export default function LeadDetails({ lead, sources, token, onClose, onSaved }: 
       .then(setHistory).catch(() => notify('error', 'Unable to load follow-up history'));
   }, [tab, lead.id, token, notify]);
 
-  async function saveLead(event: React.FormEvent) {
+  async function saveLead(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!validateForm(event.currentTarget) || saving) return;
     setSaving(true);
@@ -53,7 +53,7 @@ export default function LeadDetails({ lead, sources, token, onClose, onSaved }: 
     } finally { setSaving(false); }
   }
 
-  async function createFollowUp(event: React.FormEvent) {
+  async function createFollowUp(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!validateForm(event.currentTarget) || saving) return;
     const date = new Date(dueAt);
