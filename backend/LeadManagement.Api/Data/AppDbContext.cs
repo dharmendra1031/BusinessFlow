@@ -15,6 +15,8 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
     public DbSet<LeadStatusChange> LeadStatusChanges => Set<LeadStatusChange>();
     public DbSet<LeadFollowUp> LeadFollowUps => Set<LeadFollowUp>();
     public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
+    public DbSet<DevelopmentProject> DevelopmentProjects => Set<DevelopmentProject>();
+    public DbSet<DevelopmentTask> DevelopmentTasks => Set<DevelopmentTask>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -83,6 +85,33 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
             entity.Property(x => x.TableName).HasMaxLength(60);
             entity.Property(x => x.ChangedFields).HasMaxLength(1000);
             entity.HasIndex(x => new { x.TableName, x.RecordId });
+        });
+        modelBuilder.Entity<DevelopmentProject>(entity =>
+        {
+            entity.Property(x => x.Title).HasMaxLength(150).IsRequired();
+            entity.Property(x => x.Description).HasMaxLength(2000);
+            entity.Property(x => x.Status).HasMaxLength(20).IsRequired();
+            entity.HasIndex(x => x.LeadId).IsUnique();
+            entity.HasIndex(x => new { x.OwnerId, x.Status });
+            entity.HasOne(x => x.Lead).WithMany().HasForeignKey(x => x.LeadId)
+                .OnDelete(DeleteBehavior.NoAction);
+            entity.HasOne(x => x.Owner).WithMany().HasForeignKey(x => x.OwnerId)
+                .OnDelete(DeleteBehavior.NoAction);
+            entity.HasOne<ApplicationUser>().WithMany().HasForeignKey(x => x.CreatedById)
+                .OnDelete(DeleteBehavior.NoAction);
+        });
+        modelBuilder.Entity<DevelopmentTask>(entity =>
+        {
+            entity.Property(x => x.Title).HasMaxLength(150).IsRequired();
+            entity.Property(x => x.Description).HasMaxLength(2000);
+            entity.Property(x => x.Status).HasMaxLength(20).IsRequired();
+            entity.Property(x => x.Priority).HasMaxLength(10).IsRequired();
+            entity.HasIndex(x => new { x.ProjectId, x.Status });
+            entity.HasIndex(x => new { x.AssignedToId, x.DueDate });
+            entity.HasOne(x => x.Project).WithMany(x => x.Tasks).HasForeignKey(x => x.ProjectId)
+                .OnDelete(DeleteBehavior.Cascade);
+            entity.HasOne(x => x.AssignedTo).WithMany().HasForeignKey(x => x.AssignedToId)
+                .OnDelete(DeleteBehavior.NoAction);
         });
         modelBuilder.Entity<LeadFollowUp>(entity =>
         {
