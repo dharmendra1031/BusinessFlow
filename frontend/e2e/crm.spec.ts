@@ -559,7 +559,7 @@ test('Development: convert a won lead, assign tasks and complete progress', asyn
   await details.getByText('Edit project details').click();
   await details.getByLabel('Status', { exact: true }).selectOption('Completed');
   await details.getByRole('button', { name: 'Save project' }).click();
-  await expect(details.getByText('Completed', { exact: false })).toBeVisible();
+  await expect(details.locator('.drawer-header')).toContainText('Completed');
   await details.getByRole('button', { name: 'Close' }).click();
   await expect(page.getByRole('row').filter({ hasText: title })).toContainText('100%');
 });
