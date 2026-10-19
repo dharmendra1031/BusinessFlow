@@ -58,7 +58,7 @@ public sealed class AuthController(UserManager<ApplicationUser> users, TokenServ
             csrfToken = antiforgery.GetAndStoreTokens(HttpContext).RequestToken });
     }
 
-    [Authorize]
+    [AllowAnonymous]
     [HttpPost("logout")]
     public IActionResult Logout()
     {
