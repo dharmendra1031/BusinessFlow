@@ -162,6 +162,9 @@ public sealed class ProjectsController(AppDbContext db) : ControllerBase
         if (request.Status == "Completed" &&
             (project.Tasks.Count == 0 || project.Tasks.Any(t => t.Status != "Done")))
             return BadRequest(new { message = "Complete all tasks before completing the project." });
+        if (request.Status == "Completed" &&
+            await db.ProjectBugs.AnyAsync(b => b.ProjectId == id && b.Status != "Closed"))
+            return BadRequest(new { message = "Close all reported bugs before completing the project." });
 
         project.Title = request.Title.Trim();
         project.Description = request.Description?.Trim();
