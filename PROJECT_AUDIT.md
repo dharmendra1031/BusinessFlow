@@ -17,6 +17,7 @@ The application is a single-company CRM with a React/TypeScript frontend, ASP.NE
 | Development projects | Convert a Won lead once, set owner and dates, assign tasks, update progress/status, enforce completion rules | `ProjectsController`, `ProjectsPage.tsx` |
 | Bugs and worklogs | Project bugs with severity/assignee/status; daily self-entered worklogs with a 24-hour daily limit and audit entries | `DevelopmentActivityController`, `ProjectActivity.tsx`, migration `20261019070000_AddDevelopmentActivity` |
 | Planning | Milestones and sprints, task links, progress, date validation and completion gates | `ProjectPlanningController`, `ProjectPlanning.tsx`, migration `20261019100000_AddProjectPlanning` |
+| Production foundation (Phase 4 source) | Secure cookie sessions, CSRF, production CSP headers, admin Audit history, per-role permission restrictions, structured error request IDs, SQL backup and HTTPS smoke scripts | `AuthController`, `Program.cs`, `AuditController`, `RolePermissionsController`, `scripts/` |
 | Delivery | Additive EF migrations, Windows IIS publish script and deployment guide, two GitHub Actions workflows | `Migrations/`, `scripts/publish-windows.ps1`, `DEPLOY_WINDOWS.md`, `.github/workflows/` |
 
 ## Gaps and risks, in priority order
@@ -24,7 +25,7 @@ The application is a single-company CRM with a React/TypeScript frontend, ASP.NE
 ### P0 — Before production use
 
 1. **Production deployment is not established as complete.** The guide describes a working IIS readiness check for an earlier build, but the current schema and features have no recorded end-to-end deployment, migration, backup/restore, HTTPS login, or rollback verification. Run a staging deployment with the exact release artifact and migration bundle, then record the checks and rollback result.
-2. **Authentication uses a JWT in browser `sessionStorage`.** `App.tsx` stores `crmSession` there. A script injection could read the token. Review the authentication design for an HTTP-only secure cookie/session approach, apply a restrictive Content Security Policy, and test sign-out/session expiry behavior before exposing real customer data.
+2. **Production cookie security implemented in source; acceptance pending.** Production sign-in issues an HttpOnly/Secure/SameSite=Strict cookie rather than returning a browser-readable token. Cookie-authenticated API writes require CSRF, and production responses set CSP/security headers. Development-only bearer compatibility remains. Verify deployed HTTPS cookies, session expiry, browser CSP, permission revocation and logout on staging before real customer data.
 3. **Dependency advisories (patched in `development`; continue monitoring).** Earlier audit reported `System.Security.Cryptography.Pkcs` 9.0.4 (`NU1902`, `NU1903`). The backend now uses patched ASP.NET Core/EF packages 10.0.13 and explicitly references PKCS 10.0.13. Development CI now checks transitive NuGet advisories; do not assume future packages are safe without the check.
 4. **Release CI migration script repaired in `development`; verify on merge.** The earlier `main` workflow expected `Data/Migrations` and generated a duplicate `InitialCreate`. The updated `verify.yml` applies committed migrations and verifies model snapshot consistency, without uploading a synthetic migration. The workflow is triggered on `main` or pull requests to `main`, so it still needs its own successful release/PR run after this branch is merged.
 
@@ -39,7 +40,7 @@ The application is a single-company CRM with a React/TypeScript frontend, ASP.NE
 ### P2 — Quality and maintainability
 
 10. **Automated coverage is uneven.** Browser tests cover major CRM and development flows, roles, forms, bugs, worklogs, and planning. The backend has one SQL Server integration test file. Add targeted tests for migration upgrades from an existing database, pagination/export, concurrent project completion/edits, and production auth controls. Run browser checks in the release pipeline, not only on `development`.
-11. **Documentation has stale phase statements.** README's Phase 1/2 paragraphs say sprint planning is absent even though Phase 3 implements it. Update the feature summary and keep one current roadmap so readers do not mistake historical phase notes for present status.
+11. **Documentation needs ongoing release upkeep.** README now distinguishes Phase 1/2 historical scope from later implementations and documents Phase 4, but release status, environment-specific verification and the feature roadmap must be kept current.
 12. **Accessibility and cross-browser validation are incomplete.** The UI has skip navigation, labels, keyboard-oriented dialogs and Chromium Playwright checks. Run a focused screen-reader/keyboard review and at least one non-Chromium browser pass for critical workflows.
 
 ## Recommended delivery sequence
@@ -60,3 +61,7 @@ The application is a single-company CRM with a React/TypeScript frontend, ASP.NE
 ## 19 October 2026 remediation notes
 
 The `development` branch now contains CI migration-path fixes, updated .NET 10.0.13 packages and an automated NuGet vulnerability gate. The development pipeline also runs the SQL Server permissions integration test and checks EF snapshot consistency. The original audit's production-readiness warnings still apply: latest Windows IIS ZIP, live HTTPS deployment, backup/rollback, auth storage and monitoring have not been accepted as complete.
+
+## Phase 4 source implementation (not production acceptance)
+
+The development branch includes production-cookie authentication, CSRF checks, an admin Audit history screen, manager/employee role permission restrictions, structured request diagnostics, a copy-only SQL backup helper and read-only HTTPS release verification script. See `PHASE4_PRODUCTION_CHECKLIST.md`. Full MFA/SSO, custom role creation, centralized monitoring, staged DB restore and live release verification remain pending.
