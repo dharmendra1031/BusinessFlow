@@ -1025,6 +1025,9 @@ test('Phase 4: browser cookie requires CSRF for writes and logout clears session
     data: lead, headers: { 'X-CSRF-TOKEN': current.csrfToken },
   });
   expect(allowed.status()).toBe(201);
+  const logoutWithoutCsrf = await request.post(apiUrl + '/api/auth/logout');
+  expect(logoutWithoutCsrf.status()).toBe(400);
+  expect((await request.get(apiUrl + '/api/auth/me')).status()).toBe(200);
   const logout = await request.post(apiUrl + '/api/auth/logout', {
     headers: { 'X-CSRF-TOKEN': current.csrfToken },
   });
