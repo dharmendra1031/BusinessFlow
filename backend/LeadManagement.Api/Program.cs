@@ -149,6 +149,7 @@ app.Use(async (context, next) =>
         !HttpMethods.IsGet(method) && !HttpMethods.IsHead(method) &&
         !HttpMethods.IsOptions(method) && !HttpMethods.IsTrace(method) &&
         !string.Equals(context.Request.Path.Value, "/api/auth/login", StringComparison.OrdinalIgnoreCase) &&
+        !string.Equals(context.Request.Path.Value, "/api/auth/logout", StringComparison.OrdinalIgnoreCase) &&
         context.Request.Cookies.ContainsKey("CRM.Session") &&
         !context.Request.Headers.Authorization.ToString().StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
     {
