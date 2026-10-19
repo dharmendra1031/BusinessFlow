@@ -6,13 +6,14 @@ import { Icon } from './Icon';
 import { DashboardPage, EmployeesPage, FollowUpsPage, LeadsPage } from './pages';
 import ReportsPage from './ReportsPage';
 import AuditPage from './AuditPage';
+import PermissionsPage from './PermissionsPage';
 import ProjectsPage from './ProjectsPage';
 import PasswordSettings from './PasswordSettings';
 import type { User } from './types';
 
 type Session = { token: string; user: User };
 type CurrentSession = User & { csrfToken: string };
-type Screen = 'dashboard' | 'leads' | 'projects' | 'followups' | 'employees' | 'reports' | 'audit' | 'settings';
+type Screen = 'dashboard' | 'leads' | 'projects' | 'followups' | 'employees' | 'reports' | 'audit' | 'permissions' | 'settings';
 
 const navigation = [
   { id: 'dashboard', label: 'Dashboard', icon: 'grid' },
@@ -22,6 +23,7 @@ const navigation = [
   { id: 'employees', label: 'Team', icon: 'users' },
   { id: 'reports', label: 'Reports', icon: 'clipboard' },
   { id: 'audit', label: 'Audit history', icon: 'clipboard' },
+  { id: 'permissions', label: 'Role permissions', icon: 'lock' },
   { id: 'settings', label: 'Change password', icon: 'lock' },
 ] as const;
 
@@ -54,6 +56,15 @@ function Workspace() {
   const [screen, setScreen] = useState<Screen>('dashboard');
   const [menuOpen, setMenuOpen] = useState(false);
   const [newLeadRequest, setNewLeadRequest] = useState(0);
+  const [allowed, setAllowed] = useState<Record<string, boolean> | null>(null);
+  useEffect(() => {
+    if (!session) { setAllowed(null); return; }
+    let active = true;
+    void api<{ permissions: Record<string, boolean> }>('/api/auth/permissions', session.token)
+      .then(result => { if (active) setAllowed(result.permissions); })
+      .catch(() => { if (active) setAllowed(null); });
+    return () => { active = false; };
+  }, [session?.user.id, session?.token]);
 
   function navigate(next: Screen) {
     setScreen(next);
@@ -90,9 +101,15 @@ function Workspace() {
 
   const user = session.user;
   const canSeeTeam = user.roles.includes('Admin') || user.roles.includes('Manager');
+  const moduleAccess: Partial<Record<Screen, string>> = {
+    dashboard: 'dashboard.view', leads: 'leads.view', projects: 'projects.view',
+    followups: 'followups.view', employees: 'employees.view', reports: 'reports.view',
+  };
   const items = navigation.filter(item =>
-    (item.id !== 'employees' || canSeeTeam) && (item.id !== 'audit' || user.roles.includes('Admin')));
-  const pageTitle = { dashboard: 'Dashboard', leads: 'All leads', projects: 'Development projects', followups: 'Follow-ups', employees: 'Team', reports: 'Reports', audit: 'Audit history', settings: 'Change password' }[screen];
+    (item.id !== 'employees' || canSeeTeam) &&
+    (item.id !== 'audit' && item.id !== 'permissions' || user.roles.includes('Admin')) &&
+    (allowed?.[moduleAccess[item.id] || ''] !== false));
+  const pageTitle = { dashboard: 'Dashboard', leads: 'All leads', projects: 'Development projects', followups: 'Follow-ups', employees: 'Team', reports: 'Reports', audit: 'Audit history', permissions: 'Role permissions', settings: 'Change password' }[screen];
 
   return <div className="app-shell">
     <a className="skip-link" href="#main-content">Skip to main content</a>
@@ -129,10 +146,10 @@ function Workspace() {
           <span className="today">{new Date().toLocaleDateString(undefined, {
             day: 'numeric', month: 'short', year: 'numeric'
           })}</span>
-          <button className="primary topbar-add" onClick={() => {
+          {allowed?.['leads.create'] !== false && <button className="primary topbar-add" onClick={() => {
             navigate('leads');
             setNewLeadRequest(value => value + 1);
-          }}><Icon name="plus" size={17} /> New lead</button>
+          }}><Icon name="plus" size={17} /> New lead</button>}
           <span className="avatar avatar-small" title={user.fullName}>{initials(user.fullName)}</span>
         </div>
       </header>
@@ -145,6 +162,7 @@ function Workspace() {
         {screen === 'employees' && canSeeTeam && <EmployeesPage token={session.token} user={user} />}
         {screen === 'reports' && <ReportsPage token={session.token} user={user} />}
         {screen === 'audit' && user.roles.includes('Admin') && <AuditPage token={session.token} />}
+        {screen === 'permissions' && user.roles.includes('Admin') && <PermissionsPage token={session.token} />}
         {screen === 'settings' && <PasswordSettings token={session.token} onChanged={passwordChanged} />}
       </main>
     </div>
