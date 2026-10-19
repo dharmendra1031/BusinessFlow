@@ -46,6 +46,14 @@ jobs:
             sleep 5
           done
           exit 1
+      - name: Verify SQL Server permission tests
+        run: |
+          export CRM_TEST_CONNECTION="${ConnectionStrings__DefaultConnection/LeadManagement_UITests/LeadManagement_CITests}"
+          dotnet test tests/LeadManagement.Tests/LeadManagement.Tests.csproj -c Release
+      - name: Audit .NET dependencies
+        run: |
+          dotnet list tests/LeadManagement.Tests/LeadManagement.Tests.csproj package --vulnerable --include-transitive --format json > /tmp/nuget-audit.json
+          python3 -m json.tool /tmp/nuget-audit.json > /dev/null
       - name: Install frontend and Chromium
         working-directory: frontend
         run: |
