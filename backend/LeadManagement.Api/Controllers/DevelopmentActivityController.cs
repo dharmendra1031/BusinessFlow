@@ -23,8 +23,10 @@ public sealed class DevelopmentActivityController(AppDbContext db) : ControllerB
         var id = LeadAccess.UserId(User);
         if (User.IsInRole("Manager"))
             return projects.Where(p => p.CreatedById == id || p.OwnerId == id ||
-                p.Owner.ManagerId == id || p.Tasks.Any(t => t.AssignedToId == id));
-        return projects.Where(p => p.OwnerId == id || p.Tasks.Any(t => t.AssignedToId == id));
+                p.Owner.ManagerId == id || p.Tasks.Any(t => t.AssignedToId == id) ||
+                db.ProjectBugs.Any(b => b.ProjectId == p.Id && b.AssignedToId == id));
+        return projects.Where(p => p.OwnerId == id || p.Tasks.Any(t => t.AssignedToId == id) ||
+            db.ProjectBugs.Any(b => b.ProjectId == p.Id && b.AssignedToId == id));
     }
 
     private bool CanManage(DevelopmentProject project)
