@@ -34,7 +34,7 @@
 - Publish using `scripts/publish-windows.ps1` on a Windows build host. Inspect `web.config` for `hostingModel="outofprocess"`, and ensure `wwwroot/index.html` is present.
 - Verify ZIP contents have no development settings, plaintext production secrets, or stale appsettings copied from a prior release.
 - Install matching .NET 10 Hosting Bundle. Use a dedicated app pool with least privilege, SQL application login with data access only, and a separate migration identity.
-- Verify TLS certificate hostname/trust, HTTPS redirect/HSTS, `/health/live`, `/health/ready`, sign-in, restricted pages, file permissions and auth cookie attributes.
+- Verify TLS certificate hostname/trust, HTTPS redirect/HSTS, `/health/live`, `/health/ready`, sign-in, restricted pages, file permissions and auth cookie attributes. Run `powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\verify-release.ps1 -BaseUrl https://YOUR_DOMAIN` from a trusted staging host after deployment.
 - Test Leads, Follow-ups, Projects, Tasks, Bugs, Worklogs, Planning, Reports and Admin Audit using real staging SQL Server.
 - Confirm request correlation via `X-Request-Id` and structured server-side error logs. Connect a centralized log sink/retention/alert service **before** operational acceptance.
 - Run production-configuration smoke tests, a load test representative of expected users, a database restore test and an emergency rollback drill.
