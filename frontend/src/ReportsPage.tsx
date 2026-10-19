@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { api } from './api';
+import { api, apiBlob } from './api';
 import { handleFormKeyDown } from './formUtils';
 import { Icon } from './Icon';
 import { useFeedback } from './Feedback';
@@ -31,23 +31,35 @@ export default function ReportsPage({ token, user }: { token: string; user: User
   }, [token, user.roles]);
   const [report, setReport] = useState<ReportResult | null>(null);
   const [loading, setLoading] = useState(false);
+  const [page, setPage] = useState(1);
+  const [previewUrl, setPreviewUrl] = useState('');
+  useEffect(() => () => { if (previewUrl) URL.revokeObjectURL(previewUrl); }, [previewUrl]);
 
-  async function load() {
+  function filters() {
+    const params = new URLSearchParams({ type });
+    if (from) params.set('from', from);
+    if (to) params.set('to', to);
+    if (leadGivenBy) params.set('leadGivenBy', leadGivenBy);
+    if (userId) params.set('userId', userId);
+    if (statusId) params.set('statusId', statusId);
+    return params;
+  }
+
+  async function load(nextPage = 1) {
     if (from && to && from > to) {
       notify('warning', 'Invalid date range', 'From date must be before or equal to To date.');
       return;
     }
     setReport(null);
+    setPreviewUrl('');
     setLoading(true);
     try {
-      const params = new URLSearchParams({ type });
-      if (from) params.set('from', from);
-      if (to) params.set('to', to);
-      if (leadGivenBy) params.set('leadGivenBy', leadGivenBy);
-      if (userId) params.set('userId', userId);
-      if (statusId) params.set('statusId', statusId);
+      const params = filters();
+      params.set('page', String(nextPage));
+      params.set('pageSize', '50');
       const result = await api<ReportResult>('/api/reports?' + params, token);
       setReport(result);
+      setPage(nextPage);
     } catch (err) {
       notify('error', 'Report failed', err instanceof Error ? err.message : undefined);
     } finally {
@@ -71,30 +83,34 @@ export default function ReportsPage({ token, user }: { token: string; user: User
     setTo(date(period === 'yesterday' ? start : today));
   }
 
-  function exportCsv() {
-    if (!report?.rows.length) return;
-    const keys = Object.keys(report.rows[0]);
-    const escape = (value: unknown) => {
-      const text = String(value ?? '');
-      const safe = /^[-=+@]/.test(text.trimStart()) ? "'" + text : text;
-      return '"' + safe.replace(/"/g, '""') + '"';
-    };
-    const lines = [keys.map(escape).join(','), ...report.rows.map(row =>
-      keys.map(key => escape(row[key])).join(','))].join('\r\n');
-    const blob = new Blob(['\uFEFF' + lines], { type: 'text/csv;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = type + '-report.csv';
-    link.click();
-    URL.revokeObjectURL(url);
+  async function exportCsv() {
+    try {
+      const blob = await apiBlob('/api/reports/export?' + filters(), token);
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = type + '-report.csv';
+      link.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      notify('error', 'Export failed', err instanceof Error ? err.message : undefined);
+    }
+  }
+
+  async function previewPdf() {
+    try {
+      const blob = await apiBlob('/api/reports/pdf?' + filters(), token);
+      setPreviewUrl(URL.createObjectURL(blob));
+    } catch (err) {
+      notify('error', 'PDF preview failed', err instanceof Error ? err.message : undefined);
+    }
   }
 
   return <section>
     <header className="page-header"><div><span className="section-kicker">CRM REPORTING</span>
       <h1>Reports</h1><p>Customer and follow-up reports in KWD.</p></div></header>
     <section className="panel">
-      <form className="table-toolbar" onSubmit={event => { event.preventDefault(); void load(); }}
+      <form className="table-toolbar" onSubmit={event => { event.preventDefault(); void load(1); }}
         onKeyDown={handleFormKeyDown}>
         <label>Report <select value={type} onChange={event => { setType(event.target.value); setReport(null); }}>
           {reportOptions.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
@@ -122,15 +138,21 @@ export default function ReportsPage({ token, user }: { token: string; user: User
       {report && <>
         <div className="panel-heading">
           <div><h2>{report.total.toLocaleString()} records</h2>
-            {report.truncated && <p>Only the first 5,000 rows are shown. Narrow the date range.</p>}
+            <p>Page {report.page} of {Math.max(1, Math.ceil(report.total / report.pageSize))}</p>
           </div>
-          <button className="secondary-action" disabled={!report.rows.length} onClick={exportCsv}>Export CSV</button>
+          <button className="secondary-action" disabled={!report.total} onClick={() => void exportCsv()}>Export CSV</button>
+          <button className="secondary-action" onClick={() => void previewPdf()}>Preview PDF</button>
         </div>
         {report.rows.length ? <div className="table-scroll"><table>
           <thead><tr>{Object.keys(report.rows[0]).map(key => <th key={key}>{key}</th>)}</tr></thead>
           <tbody>{report.rows.map((row, index) => <tr key={index}>
             {Object.keys(report.rows[0]).map(key => <td key={key}>{String(row[key] ?? '—')}</td>)}
           </tr>)}</tbody></table></div> : <p>No records for the selected filters.</p>}
+        <div className="table-toolbar">
+          <button type="button" disabled={loading || page <= 1} onClick={() => void load(page - 1)}>Previous</button>
+          <button type="button" disabled={loading || page * report.pageSize >= report.total} onClick={() => void load(page + 1)}>Next</button>
+        </div>
+        {previewUrl && <iframe title="Report PDF preview" src={previewUrl} style={{ width: '100%', height: '75vh' }} />}
       </>}
     </section>
   </section>;

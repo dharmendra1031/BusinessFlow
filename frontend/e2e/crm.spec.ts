@@ -198,6 +198,25 @@ test('Reports: all ten categories, filters and CSV export', async ({ page, reque
   expect((await download).suggestedFilename()).toBe('customers-report.csv');
 });
 
+test('Reports: pages are distinct and CSV includes all filtered rows', async ({ request }) => {
+  const firstId = await createLead(request, 'Paged First ' + unique());
+  const secondId = await createLead(request, 'Paged Second ' + unique());
+  const headers = { Authorization: 'Bearer ' + adminToken() };
+  const path = apiUrl + '/api/reports?type=customers&leadGivenBy=Playwright%20QA&pageSize=1';
+  const first = await (await request.get(path + '&page=1', { headers })).json();
+  const second = await (await request.get(path + '&page=2', { headers })).json();
+  expect(first.total).toBeGreaterThanOrEqual(2);
+  expect(first.rows).toHaveLength(1);
+  expect(second.rows).toHaveLength(1);
+  expect(first.rows[0].customerId).not.toBe(second.rows[0].customerId);
+  const exportResponse = await request.get(apiUrl + '/api/reports/export?type=customers&leadGivenBy=Playwright%20QA', { headers });
+  expect(exportResponse.status()).toBe(200);
+  const csv = await exportResponse.text();
+  expect(csv).toContain(String(firstId));
+  expect(csv).toContain(String(secondId));
+  expect(csv.trim().split(/\r?\n/)).toHaveLength(first.total + 1);
+});
+
 test('Team: create, manage, reset password and deactivate', async ({ page }) => {
   const email = 'team-' + unique() + '@example.test';
   await signIn(page);
@@ -731,7 +750,7 @@ test('Development activity API: validate hours, assign bugs and enforce project 
 
   const visible = await request.get(base + '/bugs', { headers: user });
   expect(visible.status()).toBe(200);
-  expect((await visible.json())[0].title).toBe('Dashboard count incorrect');
+  expect((await visible.json()).items[0].title).toBe('Dashboard count incorrect');
 
   const forbiddenAssign = await request.post(base + '/bugs', {
     headers: user, data: { title: 'Another bug', severity: 'High', assignedToId: developer.id },

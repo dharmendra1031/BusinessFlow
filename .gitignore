@@ -4,6 +4,7 @@
 **/dist/
 backend/LeadManagement.Api/wwwroot/
 artifacts/
+tmp/
 **/*.tsbuildinfo
 **/.vs/
 .env

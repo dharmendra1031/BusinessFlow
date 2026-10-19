@@ -3,8 +3,8 @@ name: Build staging IIS package
 on:
   push:
     branches: [development]
-    paths:
-      - .github/workflows/staging-package.yml
+  pull_request:
+    branches: [main]
   workflow_dispatch:
 
 permissions:
@@ -27,6 +27,8 @@ jobs:
         run: |
           dotnet tool install --global dotnet-ef --version 10.0.0
           .\scripts\publish-windows.ps1
+      - name: Render every RDLC template
+        run: python scripts/verify-rdlc.py
       - name: Verify package contents
         shell: pwsh
         run: |
@@ -34,7 +36,8 @@ jobs:
           $zip = [System.IO.Compression.ZipFile]::OpenRead($zipPath)
           try {
             $files = @($zip.Entries | ForEach-Object FullName)
-            foreach ($required in @('web.config', 'wwwroot/index.html', 'efbundle.exe')) {
+            foreach ($required in @('web.config', 'wwwroot/index.html', 'efbundle.exe',
+                                    'ReportRenderer/ReportRenderer.exe', 'ReportRenderer/Reports/customers.rdlc')) {
               if ($required -notin $files) { throw "IIS package missing $required" }
             }
             if ('appsettings.Development.json' -in $files) {
@@ -42,9 +45,22 @@ jobs:
             }
           }
           finally { $zip.Dispose() }
+      - name: Record release identity
+        shell: pwsh
+        run: |
+          $zipPath = (Resolve-Path 'artifacts\LeadManagement-IIS.zip').Path
+          $bundlePath = (Resolve-Path 'artifacts\efbundle.exe').Path
+          $manifest = [ordered]@{
+            commit = '${{ github.sha }}'
+            zipSha256 = (Get-FileHash -LiteralPath $zipPath -Algorithm SHA256).Hash
+            bundleSha256 = (Get-FileHash -LiteralPath $bundlePath -Algorithm SHA256).Hash
+          }
+          $manifest | ConvertTo-Json | Set-Content artifacts\release-manifest.json
       - uses: actions/upload-artifact@v4
         with:
           name: staging-iis-package
-          path: artifacts/LeadManagement-IIS.zip
+          path: |
+            artifacts/LeadManagement-IIS.zip
+            artifacts/release-manifest.json
           if-no-files-found: error
           retention-days: 14

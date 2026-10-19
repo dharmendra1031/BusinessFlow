@@ -8,6 +8,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using Xunit;
 
 namespace LeadManagement.Tests;
@@ -20,8 +21,8 @@ public sealed class LeadPermissionsTests
         var connection = Environment.GetEnvironmentVariable("CRM_TEST_CONNECTION")
             ?? throw new InvalidOperationException("CRM_TEST_CONNECTION is required.");
 
-        Assert.Equal("LeadManagement_CITests",
-            new SqlConnectionStringBuilder(connection).InitialCatalog);
+        Assert.StartsWith("LeadManagement_CITests",
+            new SqlConnectionStringBuilder(connection).InitialCatalog, StringComparison.Ordinal);
 
         var options = new DbContextOptionsBuilder<AppDbContext>()
             .UseSqlServer(connection).Options;
@@ -100,7 +101,7 @@ public sealed class LeadPermissionsTests
         Assert.Equal(15000.500m, createdLead.ProjectAmount);
         Assert.Equal(7, createdLead.StatusId);
 
-        var reports = new ReportsController(db)
+        var reports = new ReportsController(db, new ConfigurationBuilder().Build())
         {
             ControllerContext = new ControllerContext
             {

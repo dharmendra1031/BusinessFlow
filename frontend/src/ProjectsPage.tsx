@@ -5,7 +5,7 @@ import { useFeedback } from './Feedback';
 import ProjectActivity from './ProjectActivity';
 import ProjectPlanning from './ProjectPlanning';
 import { clearFieldError, handleDialogKeyDown, handleFormKeyDown, validateForm } from './formUtils';
-import type { DevelopmentProject, DevelopmentTask, Employee, ProjectPlan, User } from './types';
+import type { DevelopmentProject, DevelopmentTask, Employee, Paged, ProjectPlan, User } from './types';
 
 type WonLead = { id: number; name: string; customerCode: string | null };
 const projectStatuses = ['Planning', 'InProgress', 'OnHold', 'Completed'];
@@ -16,7 +16,12 @@ export default function ProjectsPage({ token, user }: { token: string; user: Use
   const { notify } = useFeedback();
   const canManage = user.roles.includes('Admin') || user.roles.includes('Manager');
   const [projects, setProjects] = useState<DevelopmentProject[]>([]);
+  const [projectPage, setProjectPage] = useState(1);
+  const [projectTotal, setProjectTotal] = useState(0);
   const [leads, setLeads] = useState<WonLead[]>([]);
+  const [leadPage, setLeadPage] = useState(1);
+  const [leadTotal, setLeadTotal] = useState(0);
+  const [leadSearch, setLeadSearch] = useState('');
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [selected, setSelected] = useState<DevelopmentProject | null>(null);
   const [planning, setPlanning] = useState<ProjectPlan>({ milestones: [], sprints: [] });
@@ -42,22 +47,30 @@ export default function ProjectsPage({ token, user }: { token: string; user: Use
 
   const load = useCallback(async () => {
     try {
-      const result = await api<DevelopmentProject[]>('/api/projects', token);
-      setProjects(result);
+      const result = await api<Paged<DevelopmentProject>>('/api/projects?page=' + projectPage, token);
+      setProjects(result.items);
+      setProjectTotal(result.total);
       setError('');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unable to load projects.');
     }
-  }, [token]);
+  }, [token, projectPage]);
+
+  const loadEligible = useCallback(async () => {
+    const params = new URLSearchParams({ page: String(leadPage), search: leadSearch });
+    const result = await api<Paged<WonLead>>('/api/projects/eligible-leads?' + params, token);
+    setLeads(result.items);
+    setLeadTotal(result.total);
+  }, [token, leadPage, leadSearch]);
 
   useEffect(() => {
     void load();
     if (!canManage) return;
-    void api<WonLead[]>('/api/projects/eligible-leads', token).then(setLeads)
+    void loadEligible()
       .catch(() => notify('error', 'Unable to load won leads'));
     void api<Employee[]>('/api/employees', token).then(setEmployees)
       .catch(() => notify('error', 'Unable to load team'));
-  }, [load, canManage, token, notify]);
+  }, [load, loadEligible, canManage, token, notify]);
 
   const availableOwners = employees.filter(member => member.isActive &&
     (user.roles.includes('Admin') || member.id === user.id || member.managerId === user.id));
@@ -208,7 +221,7 @@ export default function ProjectsPage({ token, user }: { token: string; user: Use
       <button onClick={() => void load()}>Retry</button></div>}
     <section className="panel">
       <div className="panel-heading project-heading">
-        <div><h2>Project overview</h2><p>{projects.length} projects visible to your account</p></div>
+        <div><h2>Project overview</h2><p>{projectTotal} projects visible to your account</p></div>
       </div>
       {projects.length ? <div className="table-scroll"><table>
         <thead><tr><th>Project</th><th>Client</th><th>Owner</th><th>Status</th>
@@ -227,6 +240,11 @@ export default function ProjectsPage({ token, user }: { token: string; user: Use
             'Projects assigned to you will appear here.'}</p></div>}
     </section>
 
+    <div className="pagination"><span>Page {projectPage} · {projectTotal} projects</span>
+      <button disabled={projectPage <= 1} onClick={() => setProjectPage(projectPage - 1)}>Previous</button>
+      <button disabled={projectPage * 50 >= projectTotal} onClick={() => setProjectPage(projectPage + 1)}>Next</button>
+    </div>
+
     {showCreate && <div className="drawer-backdrop">
       <aside className="detail-drawer" role="dialog" aria-modal="true" aria-label="New development project"
         onKeyDown={event => handleDialogKeyDown(event, () => { if (!working) setShowCreate(false); })}>
@@ -235,6 +253,7 @@ export default function ProjectsPage({ token, user }: { token: string; user: Use
           <button className="icon-button" aria-label="Close" onClick={() => setShowCreate(false)}>
             <Icon name="close" /></button></div>
         <form className="drawer-form" onSubmit={saveProject} onInput={clearFieldError} onKeyDown={handleFormKeyDown}>
+          <label>Find won lead<input value={leadSearch} onChange={event => { setLeadSearch(event.target.value); setLeadPage(1); }} /></label>
           <label>Won lead *<select required autoFocus value={leadId} onChange={event => {
             const value = event.target.value;
             setLeadId(value);
@@ -242,6 +261,10 @@ export default function ProjectsPage({ token, user }: { token: string; user: Use
           }}><option value="">Choose a won lead</option>
             {leads.map(lead => <option key={lead.id} value={lead.id}>{lead.name}</option>)}
           </select></label>
+          <div className="pagination"><span>Page {leadPage} · {leadTotal} eligible leads</span>
+            <button type="button" disabled={leadPage <= 1} onClick={() => setLeadPage(leadPage - 1)}>Previous</button>
+            <button type="button" disabled={leadPage * 50 >= leadTotal} onClick={() => setLeadPage(leadPage + 1)}>Next</button>
+          </div>
           <ProjectFields {...{ name, setName, description, setDescription, ownerId, setOwnerId,
             startDate, setStartDate, dueDate, setDueDate, availableOwners }} />
           <div className="drawer-actions"><button type="button" onClick={() => setShowCreate(false)}>Cancel</button>

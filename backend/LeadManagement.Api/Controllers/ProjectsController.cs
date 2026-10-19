@@ -60,33 +60,43 @@ public sealed class ProjectsController(AppDbContext db) : ControllerBase
         });
 
     [HttpGet]
-    public async Task<IActionResult> List(string? status = null)
+    public async Task<IActionResult> List(string? status = null, int page = 1, int pageSize = 50)
     {
+        if (page < 1 || pageSize is < 1 or > 200 || (long)(page - 1) * pageSize > int.MaxValue)
+            return BadRequest(new { message = "Invalid pagination." });
         if (status is not null && !ProjectStatuses.Contains(status))
             return BadRequest(new { message = "Invalid project status." });
         var projects = VisibleProjects().AsNoTracking();
         if (status is not null) projects = projects.Where(p => p.Status == status);
-        return Ok(await projects.OrderByDescending(p => p.UpdatedAtUtc).ThenByDescending(p => p.Id)
-            .Take(200)
+        var total = await projects.CountAsync();
+        var items = await projects.OrderByDescending(p => p.UpdatedAtUtc).ThenByDescending(p => p.Id)
+            .Skip((page - 1) * pageSize).Take(pageSize)
             .Select(p => new
             {
                 p.Id, p.LeadId, p.CreatedById, p.Title, p.Status, p.StartDate, p.DueDate,
                 p.OwnerId, OwnerName = p.Owner.FullName, Customer = p.Lead.Name,
                 p.CreatedAtUtc, p.UpdatedAtUtc,
                 TaskCount = p.Tasks.Count, DoneCount = p.Tasks.Count(t => t.Status == "Done")
-            }).ToListAsync());
+            }).ToListAsync();
+        return Ok(new { total, page, pageSize, items });
     }
 
     [Authorize(Roles = "Admin,Manager")]
     [HttpGet("eligible-leads")]
-    public async Task<IActionResult> EligibleLeads()
+    public async Task<IActionResult> EligibleLeads(string? search = null, int page = 1, int pageSize = 50)
     {
-        return Ok(await LeadAccess.VisibleTo(db.Leads.AsNoTracking(), User)
+        if (page < 1 || pageSize is < 1 or > 200 || (long)(page - 1) * pageSize > int.MaxValue || search?.Length > 150)
+            return BadRequest(new { message = "Invalid eligible lead filters or pagination." });
+        var query = LeadAccess.VisibleTo(db.Leads.AsNoTracking(), User)
             .Where(l => l.StatusId == 5 &&
-                !db.DevelopmentProjects.Any(p => p.LeadId == l.Id))
-            .OrderBy(l => l.Name)
+                !db.DevelopmentProjects.Any(p => p.LeadId == l.Id));
+        if (!string.IsNullOrWhiteSpace(search)) query = query.Where(l => l.Name.Contains(search.Trim()) || l.CustomerCode!.Contains(search.Trim()));
+        var total = await query.CountAsync();
+        var items = await query.OrderBy(l => l.Name).ThenBy(l => l.Id)
+            .Skip((page - 1) * pageSize).Take(pageSize)
             .Select(l => new { l.Id, l.Name, l.CustomerCode, l.CompanyName })
-            .Take(200).ToListAsync());
+            .ToListAsync();
+        return Ok(new { total, page, pageSize, items });
     }
 
     [HttpGet("{id:long}")]

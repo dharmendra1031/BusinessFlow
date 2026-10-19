@@ -57,13 +57,17 @@ public sealed class DevelopmentActivityController(AppDbContext db) : ControllerB
     }
 
     [HttpGet("bugs")]
-    public async Task<IActionResult> Bugs(long projectId)
+    public async Task<IActionResult> Bugs(long projectId, int page = 1, int pageSize = 50)
     {
+        if (page < 1 || pageSize is < 1 or > 200 || (long)(page - 1) * pageSize > int.MaxValue)
+            return BadRequest(new { message = "Invalid pagination." });
         if (!await VisibleProjects().AnyAsync(p => p.Id == projectId)) return NotFound();
-        var results = await db.ProjectBugs.AsNoTracking()
-            .Where(b => b.ProjectId == projectId)
-            .OrderBy(b => b.Status == "Closed").ThenByDescending(b => b.CreatedAtUtc)
-            .Take(500)
+        var query = db.ProjectBugs.AsNoTracking().Where(b => b.ProjectId == projectId);
+        var total = await query.CountAsync();
+        var openCount = await query.CountAsync(b => b.Status != "Closed");
+        var results = await query.OrderBy(b => b.Status == "Closed")
+            .ThenByDescending(b => b.CreatedAtUtc).ThenByDescending(b => b.Id)
+            .Skip((page - 1) * pageSize).Take(pageSize)
             .Select(b => new
             {
                 b.Id, b.TaskId, b.Title, b.Description, b.Severity, b.Status,
@@ -71,7 +75,7 @@ public sealed class DevelopmentActivityController(AppDbContext db) : ControllerB
                 b.ReportedById, Reporter = b.ReportedBy.FullName,
                 b.CreatedAtUtc, b.UpdatedAtUtc, b.ClosedAtUtc
             }).ToListAsync();
-        return Ok(results);
+        return Ok(new { total, openCount, page, pageSize, items = results });
     }
 
     [HttpPost("bugs")]
@@ -164,8 +168,11 @@ public sealed class DevelopmentActivityController(AppDbContext db) : ControllerB
     }
 
     [HttpGet("worklogs")]
-    public async Task<IActionResult> Worklogs(long projectId, DateOnly? from = null, DateOnly? to = null)
+    public async Task<IActionResult> Worklogs(long projectId, DateOnly? from = null, DateOnly? to = null,
+        int page = 1, int pageSize = 50)
     {
+        if (page < 1 || pageSize is < 1 or > 200 || (long)(page - 1) * pageSize > int.MaxValue)
+            return BadRequest(new { message = "Invalid pagination." });
         var project = await VisibleProjects().Include(p => p.Owner)
             .FirstOrDefaultAsync(p => p.Id == projectId);
         if (project is null) return NotFound();
@@ -174,14 +181,16 @@ public sealed class DevelopmentActivityController(AppDbContext db) : ControllerB
         if (!CanManage(project)) logs = logs.Where(w => w.UserId == LeadAccess.UserId(User));
         if (from.HasValue) logs = logs.Where(w => w.WorkDate >= from.Value);
         if (to.HasValue) logs = logs.Where(w => w.WorkDate <= to.Value);
+        var total = await logs.CountAsync();
+        var totalHours = await logs.SumAsync(w => (decimal?)w.Hours) ?? 0m;
         var items = await logs.OrderByDescending(w => w.WorkDate).ThenByDescending(w => w.Id)
-            .Take(500).Select(w => new
+            .Skip((page - 1) * pageSize).Take(pageSize).Select(w => new
             {
                 w.Id, w.TaskId, TaskTitle = w.Task == null ? null : w.Task.Title,
                 w.UserId, Developer = w.User.FullName, w.WorkDate, w.Hours,
                 w.Description, w.CreatedAtUtc
             }).ToListAsync();
-        return Ok(new { totalHours = items.Sum(w => w.Hours), items });
+        return Ok(new { total, page, pageSize, totalHours, items });
     }
 
     [HttpPost("worklogs")]

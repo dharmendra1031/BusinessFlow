@@ -5,7 +5,7 @@ import { Icon } from './Icon';
 import { useFeedback } from './Feedback';
 import LeadDetails from './LeadDetails';
 import EmployeeManager from './EmployeeManager';
-import type { Dashboard, Employee, FollowUp, Lead, Lookup, User } from './types';
+import type { Dashboard, Employee, FollowUp, Lead, Lookup, Paged, User } from './types';
 
 function useResource<T>(path: string, token: string) {
   const [data, setData] = useState<T | null>(null);
@@ -91,8 +91,8 @@ export function DashboardPage({ token, onNavigate }: {
   const path = '/api/dashboard' + (filters.size ? '?' + filters : '');
   const { data, error, loading, refresh } = useResource<Dashboard>(path, token);
   const { data: recent } = useResource<{ items: Lead[] }>('/api/leads?page=1&pageSize=5', token);
-  const { data: followups } = useResource<FollowUp[]>('/api/followups', token);
-  const due = (followups ?? []).filter(item => !item.completedAtUtc)
+  const { data: followups } = useResource<Paged<FollowUp>>('/api/followups?view=pending&pageSize=4', token);
+  const due = (followups?.items ?? []).filter(item => !item.completedAtUtc)
     .slice(0, 4);
 
   const metrics = [
@@ -411,19 +411,16 @@ export function LeadsPage({ token, user, newLeadRequest, onNewLeadOpened }: {
 
 export function FollowUpsPage({ token }: { token: string }) {
   const { notify, confirm } = useFeedback();
-  const { data, refresh, error, loading } = useResource<FollowUp[]>('/api/followups', token);
   const [tab, setTab] = useState<'pending' | 'overdue' | 'completed' | 'all'>('pending');
+  const [page, setPage] = useState(1);
+  const { data, refresh, error, loading } = useResource<Paged<FollowUp>>(
+    `/api/followups?view=${tab}&page=${page}&pageSize=50`, token);
   const [working, setWorking] = useState<number | null>(null);
   const [editing, setEditing] = useState<FollowUp | null>(null);
   const [editDueAt, setEditDueAt] = useState('');
   const [editNotes, setEditNotes] = useState('');
   const now = Date.now();
-  const tasks = (data ?? []).filter(item => {
-    if (tab === 'completed') return !!item.completedAtUtc;
-    if (tab === 'pending') return !item.completedAtUtc;
-    if (tab === 'overdue') return !item.completedAtUtc && new Date(item.dueAtUtc).getTime() < now;
-    return true;
-  });
+  const tasks = data?.items ?? [];
 
   function startEdit(item: FollowUp) {
     setEditing(item);
@@ -476,7 +473,7 @@ export function FollowUpsPage({ token }: { token: string }) {
       <div className="tab-list" role="tablist" aria-label="Filter follow-ups">
         {(['pending', 'overdue', 'completed', 'all'] as const).map(item =>
           <button key={item} role="tab" aria-selected={tab === item} className={tab === item ? 'selected' : ''}
-            onClick={() => setTab(item)}>{item[0].toUpperCase() + item.slice(1)}</button>)}
+            onClick={() => { setTab(item); setPage(1); }}>{item[0].toUpperCase() + item.slice(1)}</button>)}
       </div>
       {error && <ErrorState message={error} retry={() => void refresh()} />}
       {loading && !data ? <div className="loading-state">Loading follow-ups…</div> :
@@ -492,6 +489,10 @@ export function FollowUpsPage({ token }: { token: string }) {
               <Icon name="check" size={16} /> {working === item.id ? 'Saving…' : 'Complete'}</button></>}</div>
         </article>)}</div> : !error && <EmptyState title="All caught up"
           detail={tab === 'overdue' ? 'No overdue follow-ups in this list.' : 'No follow-ups in this view.'} />}
+      <div className="pagination"><span>Page {page} · {data?.total ?? 0} follow-ups</span>
+        <button disabled={loading || page <= 1} onClick={() => setPage(page - 1)}>Previous</button>
+        <button disabled={loading || page * 50 >= (data?.total ?? 0)} onClick={() => setPage(page + 1)}>Next</button>
+      </div>
     </section>
     {editing && <div className="drawer-backdrop"><aside className="detail-drawer" role="dialog" aria-modal="true" aria-label="Edit follow-up"
       onKeyDown={event => handleDialogKeyDown(event, () => { if (working === null) setEditing(null); })}>

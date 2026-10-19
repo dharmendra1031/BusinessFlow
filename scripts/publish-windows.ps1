@@ -3,6 +3,7 @@ $ErrorActionPreference = 'Stop'
 $repo = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 $frontend = Join-Path $repo 'frontend'
 $api = Join-Path $repo 'backend/LeadManagement.Api'
+$renderer = Join-Path $repo 'reporting/ReportRenderer'
 $wwwroot = Join-Path $api 'wwwroot'
 $artifacts = Join-Path $repo 'artifacts'
 $publish = Join-Path $artifacts 'iis'
@@ -37,6 +38,18 @@ try {
     dotnet ef migrations bundle --configuration Release --target-runtime win-x64 --output (Join-Path $artifacts 'efbundle.exe') --force
     if ($LASTEXITCODE -ne 0) { throw 'Migration bundle failed.' }
 } finally { Pop-Location }
+
+dotnet publish (Join-Path $renderer 'ReportRenderer.csproj') -c Release -o (Join-Path $publish 'ReportRenderer')
+if ($LASTEXITCODE -ne 0) { throw 'RDLC renderer publish failed.' }
+if (-not (Test-Path -LiteralPath (Join-Path $publish 'ReportRenderer/ReportRenderer.exe'))) {
+    throw 'RDLC renderer is missing from the IIS package.'
+}
+foreach ($reportType in @('customers','user-customers','active','closed','not-interested',
+                         'followups','overdue','project','user-project','created')) {
+    if (-not (Test-Path -LiteralPath (Join-Path $publish "ReportRenderer/Reports/$reportType.rdlc"))) {
+        throw "RDLC template is missing: $reportType"
+    }
+}
 
 if (Test-Path -LiteralPath (Join-Path $publish 'appsettings.Development.json')) {
     throw 'Development settings were included in the IIS package.'

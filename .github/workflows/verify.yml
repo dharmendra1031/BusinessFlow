@@ -59,6 +59,18 @@ jobs:
         run: |
           npm install --no-audit --no-fund
           npm run build
+      - name: Install Chromium
+        working-directory: frontend
+        run: npx playwright install --with-deps chromium
+      - name: Run browser regression tests
+        working-directory: frontend
+        env:
+          Jwt__Key: "CRM_UI_TestOnly_Key_2026_Secure_Runner"
+          CRM_ADMIN_EMAIL: "admin-ui@example.test"
+          CRM_ADMIN_PASSWORD: "AdminUiPassword123!"
+          ASPNETCORE_ENVIRONMENT: Development
+          RateLimiting__LoginRequestsPerMinute: "30"
+        run: npm run test:e2e
       - name: Verify committed EF model
         working-directory: backend/LeadManagement.Api
         run: dotnet ef migrations has-pending-model-changes

@@ -14,17 +14,24 @@ namespace LeadManagement.Api.Controllers;
 public sealed class FollowUpsController(AppDbContext db) : ControllerBase
 {
     [HttpGet]
-    public async Task<IActionResult> List(bool overdueOnly = false)
+    public async Task<IActionResult> List(bool overdueOnly = false, string view = "pending", int page = 1, int pageSize = 50)
     {
+        if (page < 1 || pageSize is < 1 or > 200 || (long)(page - 1) * pageSize > int.MaxValue ||
+            view is not ("pending" or "overdue" or "completed" or "all"))
+            return BadRequest(new { message = "Invalid follow-up filters or pagination." });
         var leadIds = LeadAccess.VisibleTo(db.Leads, User).Select(l => l.Id);
         var query = db.LeadFollowUps.AsNoTracking().Where(f => leadIds.Contains(f.LeadId));
-        if (overdueOnly)
+        if (overdueOnly || view == "overdue")
             query = query.Where(f => f.CompletedAtUtc == null && f.DueAtUtc < DateTime.UtcNow);
+        else if (view == "pending") query = query.Where(f => f.CompletedAtUtc == null);
+        else if (view == "completed") query = query.Where(f => f.CompletedAtUtc != null);
+        var total = await query.CountAsync();
         var results = await query.OrderBy(f => f.CompletedAtUtc != null)
-            .ThenBy(f => f.DueAtUtc).Take(200)
+            .ThenBy(f => f.DueAtUtc).ThenBy(f => f.Id)
+            .Skip((page - 1) * pageSize).Take(pageSize)
             .Select(f => new { f.Id, f.LeadId, LeadName = f.Lead.Name, f.Notes,
                 f.DueAtUtc, f.CompletedAtUtc }).ToListAsync();
-        return Ok(results);
+        return Ok(new { total, page, pageSize, items = results });
     }
 
     [HttpPost("/api/leads/{leadId:long}/followups")]

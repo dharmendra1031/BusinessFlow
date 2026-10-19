@@ -1,3 +1,6 @@
+using System.Diagnostics;
+using System.Text;
+using System.Text.Json;
 using LeadManagement.Api.Data;
 using LeadManagement.Api.Services;
 using Microsoft.AspNetCore.Authorization;
@@ -9,7 +12,7 @@ namespace LeadManagement.Api.Controllers;
 [ApiController]
 [Authorize]
 [Route("api/reports")]
-public sealed class ReportsController(AppDbContext db) : ControllerBase
+public sealed class ReportsController(AppDbContext db, IConfiguration configuration) : ControllerBase
 {
     private static readonly string[] ReportTypes =
     [
@@ -17,10 +20,128 @@ public sealed class ReportsController(AppDbContext db) : ControllerBase
         "followups", "overdue", "project", "user-project", "created"
     ];
 
-    [HttpGet]
-    public async Task<IActionResult> Get(string type = "customers", DateTime? from = null,
+    [HttpGet("pdf")]
+    public async Task<IActionResult> Pdf(string type = "customers", DateTime? from = null,
         DateTime? to = null, long? userId = null, long? statusId = null, string? leadGivenBy = null)
     {
+        var first = await Get(type, from, to, userId, statusId, leadGivenBy, 1, 200);
+        if (first is not OkObjectResult ok) return first;
+        var data = JsonSerializer.SerializeToElement(ok.Value, new JsonSerializerOptions(JsonSerializerDefaults.Web));
+        var total = data.GetProperty("total").GetInt32();
+        var maxRows = configuration.GetValue<int?>("Reports:MaxPdfRows") ?? 5000;
+        if (maxRows < 1) maxRows = 5000;
+        if (total > maxRows)
+            return StatusCode(StatusCodes.Status413PayloadTooLarge,
+                new { message = $"PDF exceeds the {maxRows:N0} row limit. Narrow the filters." });
+        var rows = new List<JsonElement>(total);
+        for (var page = 1; (page - 1) * 200 < total; page++)
+        {
+            if (page > 1)
+            {
+                var next = await Get(type, from, to, userId, statusId, leadGivenBy, page, 200);
+                data = JsonSerializer.SerializeToElement(((OkObjectResult)next).Value,
+                    new JsonSerializerOptions(JsonSerializerDefaults.Web));
+            }
+            rows.AddRange(data.GetProperty("rows").EnumerateArray());
+        }
+        var renderer = configuration["Reports:RendererPath"];
+        if (string.IsNullOrWhiteSpace(renderer))
+            renderer = Path.Combine(Directory.GetCurrentDirectory(), "ReportRenderer", "ReportRenderer.exe");
+        if (!System.IO.File.Exists(renderer))
+            return StatusCode(StatusCodes.Status503ServiceUnavailable,
+                new { message = "PDF report renderer is unavailable." });
+        var output = Path.Combine(Path.GetTempPath(), "crm-report-" + Guid.NewGuid().ToString("N") + ".pdf");
+        try
+        {
+            using var process = new Process
+            {
+                StartInfo = new ProcessStartInfo(renderer)
+                {
+                    ArgumentList = { type, output },
+                    RedirectStandardInput = true,
+                    RedirectStandardError = true,
+                    UseShellExecute = false,
+                    CreateNoWindow = true
+                }
+            };
+            process.Start();
+            await process.StandardInput.WriteAsync(JsonSerializer.Serialize(rows));
+            process.StandardInput.Close();
+            using var timeout = CancellationTokenSource.CreateLinkedTokenSource(HttpContext.RequestAborted);
+            timeout.CancelAfter(TimeSpan.FromSeconds(60));
+            try { await process.WaitForExitAsync(timeout.Token); }
+            catch (OperationCanceledException) { process.Kill(entireProcessTree: true); throw; }
+            if (process.ExitCode != 0 || !System.IO.File.Exists(output))
+            {
+                HttpContext.RequestServices.GetRequiredService<ILogger<ReportsController>>()
+                    .LogError("PDF renderer failed for {ReportType} with exit code {ExitCode}", type, process.ExitCode);
+                return StatusCode(StatusCodes.Status502BadGateway,
+                    new { message = "PDF report generation failed." });
+            }
+            return File(await System.IO.File.ReadAllBytesAsync(output), "application/pdf", enableRangeProcessing: false);
+        }
+        finally { if (System.IO.File.Exists(output)) System.IO.File.Delete(output); }
+    }
+
+    [HttpGet("export")]
+    public async Task<IActionResult> Export(string type = "customers", DateTime? from = null,
+        DateTime? to = null, long? userId = null, long? statusId = null, string? leadGivenBy = null)
+    {
+        var first = await Get(type, from, to, userId, statusId, leadGivenBy, 1, 200);
+        if (first is not OkObjectResult ok) return first;
+        var data = JsonSerializer.SerializeToElement(ok.Value, new JsonSerializerOptions(JsonSerializerDefaults.Web));
+        var total = data.GetProperty("total").GetInt32();
+        var maxRows = configuration.GetValue<int?>("Reports:MaxExportRows") ?? 100000;
+        if (maxRows < 1) maxRows = 100000;
+        if (total > maxRows)
+            return StatusCode(StatusCodes.Status413PayloadTooLarge,
+                new { message = $"Export exceeds the {maxRows:N0} row limit. Narrow the filters." });
+
+        Response.ContentType = "text/csv; charset=utf-8";
+        Response.Headers.ContentDisposition = $"attachment; filename=\"{type}-report.csv\"";
+        await using var writer = new StreamWriter(Response.Body, new UTF8Encoding(true), bufferSize: 16384, leaveOpen: true);
+        var watch = Stopwatch.StartNew();
+        string[]? columns = null;
+        for (var page = 1; (page - 1) * 200 < total; page++)
+        {
+            if (watch.Elapsed > TimeSpan.FromSeconds(60))
+                throw new TimeoutException("Report export exceeded 60 seconds.");
+            if (page > 1)
+            {
+                var next = await Get(type, from, to, userId, statusId, leadGivenBy, page, 200);
+                data = JsonSerializer.SerializeToElement(((OkObjectResult)next).Value,
+                    new JsonSerializerOptions(JsonSerializerDefaults.Web));
+            }
+            foreach (var row in data.GetProperty("rows").EnumerateArray())
+            {
+                if (columns is null)
+                {
+                    columns = row.EnumerateObject().Select(p => p.Name).ToArray();
+                    await writer.WriteLineAsync(string.Join(',', columns.Select(Csv)));
+                }
+                await writer.WriteLineAsync(string.Join(',', columns.Select(c =>
+                    Csv(row.GetProperty(c).ToString()))));
+            }
+            await writer.FlushAsync();
+            HttpContext.RequestAborted.ThrowIfCancellationRequested();
+        }
+        return new EmptyResult();
+    }
+
+    private static string Csv(string value)
+    {
+        var first = value.TrimStart().FirstOrDefault();
+        if (first is '=' or '+' or '-' or '@' or '\t' or '\r') value = "'" + value;
+        return "\"" + value.Replace("\"", "\"\"") + "\"";
+    }
+
+    [HttpGet]
+    public async Task<IActionResult> Get(string type = "customers", DateTime? from = null,
+        DateTime? to = null, long? userId = null, long? statusId = null, string? leadGivenBy = null,
+        int page = 1, int pageSize = 50)
+    {
+        if (page < 1 || pageSize is < 1 or > 200 || (long)(page - 1) * pageSize > int.MaxValue)
+            return BadRequest(new { message = "Invalid pagination." });
         if (!ReportTypes.Contains(type)) return BadRequest(new { message = "Unknown report." });
         if (leadGivenBy?.Length > 150)
             return BadRequest(new { message = "Lead referrer filter must not exceed 150 characters." });
@@ -42,7 +163,8 @@ public sealed class ReportsController(AppDbContext db) : ControllerBase
             if (from.HasValue) followUps = followUps.Where(f => f.DueAtUtc >= from.Value.Date);
             if (to.HasValue) followUps = followUps.Where(f => f.DueAtUtc < to.Value.Date.AddDays(1));
             var total = await followUps.CountAsync();
-            var rows = await followUps.OrderByDescending(f => f.DueAtUtc).Take(5000)
+            var rows = await followUps.OrderByDescending(f => f.DueAtUtc).ThenByDescending(f => f.Id)
+                .Skip((page - 1) * pageSize).Take(pageSize)
                 .Select(f => new
                 {
                     followUpId = f.Id, customerId = f.Lead.Id,
@@ -50,7 +172,7 @@ public sealed class ReportsController(AppDbContext db) : ControllerBase
                     followUpDate = f.CompletedAtUtc, nextFollowUpDate = f.DueAtUtc,
                     remarks = f.Notes, userId = f.AssignedToId
                 }).ToListAsync();
-            return Ok(new { type, total, rows, truncated = total > rows.Count });
+            return Ok(new { type, total, page, pageSize, rows });
         }
 
         if (from.HasValue) leads = leads.Where(l => l.CreatedAtUtc >= from.Value.Date);
@@ -72,12 +194,14 @@ public sealed class ReportsController(AppDbContext db) : ControllerBase
                 {
                     userId = g.Key.AssignedToId, userName = g.Key.Name,
                     customerCount = g.Count(), projectAmount = g.Sum(l => l.ProjectAmount ?? 0m)
-                }).OrderByDescending(g => g.customerCount).Take(5000).ToListAsync();
-            return Ok(new { type, total, rows, truncated = total > rows.Count });
+                }).OrderByDescending(g => g.customerCount).ThenBy(g => g.userId)
+                .Skip((page - 1) * pageSize).Take(pageSize).ToListAsync();
+            return Ok(new { type, total, page, pageSize, rows });
         }
 
         var count = await leads.CountAsync();
-        var customers = await leads.OrderByDescending(l => l.CreatedAtUtc).Take(5000)
+        var customers = await leads.OrderByDescending(l => l.CreatedAtUtc).ThenByDescending(l => l.Id)
+            .Skip((page - 1) * pageSize).Take(pageSize)
             .Select(l => new
             {
                 customerId = l.Id, l.CustomerCode, customerName = l.Name, mobileNumber = l.Phone,
@@ -86,6 +210,6 @@ public sealed class ReportsController(AppDbContext db) : ControllerBase
                 createdByUserId = l.CreatedById, assignedToUserId = l.AssignedToId,
                 l.CreatedAtUtc
             }).ToListAsync();
-        return Ok(new { type, total = count, rows = customers, truncated = count > customers.Count });
+        return Ok(new { type, total = count, page, pageSize, rows = customers });
     }
 }

@@ -1,5 +1,6 @@
 param(
-    [Parameter(Mandatory = $true)][uri]$BaseUrl
+    [Parameter(Mandatory = $true)][uri]$BaseUrl,
+    [pscredential]$Credential
 )
 
 $ErrorActionPreference = 'Stop'
@@ -40,4 +41,39 @@ foreach ($header in @('Strict-Transport-Security', 'Content-Security-Policy',
 }
 
 Write-Host 'Staging HTTP/TLS checks passed.'
-Write-Host 'Still required: authorized login, role permissions, database restore, backup and rollback drills.'
+if ($Credential) {
+    $session = New-Object Microsoft.PowerShell.Commands.WebRequestSession
+    $password = $Credential.GetNetworkCredential().Password
+    $body = @{ email = $Credential.UserName; password = $password } | ConvertTo-Json -Compress
+    $password = $null
+    $login = Invoke-WebRequest -Uri "$root/api/auth/login" -Method Post -Body $body `
+        -ContentType 'application/json' -WebSession $session -UseBasicParsing -TimeoutSec 20
+    $cookies = [string]::Join(';', @($login.Headers['Set-Cookie']))
+    foreach ($attribute in @('CRM.Session=', 'HttpOnly', 'Secure', 'SameSite=Strict')) {
+        if ($cookies -notmatch [regex]::Escape($attribute)) {
+            throw "Production session cookie is missing $attribute"
+        }
+    }
+    $me = Invoke-WebRequest -Uri "$root/api/auth/me" -WebSession $session -UseBasicParsing -TimeoutSec 20
+    $csrf = ($me.Content | ConvertFrom-Json).csrfToken
+    if ([string]::IsNullOrWhiteSpace($csrf)) { throw 'Session did not issue a CSRF token.' }
+    try {
+        Invoke-WebRequest -Uri "$root/api/auth/logout" -Method Post -WebSession $session `
+            -UseBasicParsing -TimeoutSec 20 | Out-Null
+        throw 'Logout without CSRF token was accepted.'
+    }
+    catch [System.Net.WebException] {
+        if ([int]$_.Exception.Response.StatusCode -ne 400) { throw }
+    }
+    Invoke-WebRequest -Uri "$root/api/auth/logout" -Method Post -WebSession $session `
+        -Headers @{ 'X-CSRF-TOKEN' = $csrf } -UseBasicParsing -TimeoutSec 20 | Out-Null
+    try {
+        Invoke-WebRequest -Uri "$root/api/auth/me" -WebSession $session -UseBasicParsing -TimeoutSec 20 | Out-Null
+        throw 'Session stayed active after logout.'
+    }
+    catch [System.Net.WebException] {
+        if ([int]$_.Exception.Response.StatusCode -ne 401) { throw }
+    }
+    Write-Host 'PASS: production cookie login, CSRF logout protection and sign-out'
+}
+Write-Host 'Still required: role workflows, database restore, backup and rollback drills.'

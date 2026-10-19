@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { api } from './api';
 import { useFeedback } from './Feedback';
 import { clearFieldError, handleFormKeyDown, validateForm } from './formUtils';
-import type { DevelopmentProject, Employee, User } from './types';
+import type { DevelopmentProject, Employee, Paged, User } from './types';
 
 type Bug = {
   id: number; taskId: number | null; title: string; description: string | null;
@@ -13,7 +13,8 @@ type Worklog = {
   id: number; taskId: number | null; taskTitle: string | null; developer: string;
   userId: number; workDate: string; hours: number; description: string;
 };
-type WorklogsResult = { totalHours: number; items: Worklog[] };
+type BugsResult = Paged<Bug> & { openCount: number };
+type WorklogsResult = Paged<Worklog> & { totalHours: number };
 
 const severities = ['Low', 'Medium', 'High', 'Critical'];
 const statuses = ['Open', 'InProgress', 'Resolved', 'Closed'];
@@ -26,7 +27,11 @@ export default function ProjectActivity({ project, user, token, canManage, emplo
   const { notify } = useFeedback();
   const base = '/api/projects/' + project.id;
   const [bugs, setBugs] = useState<Bug[]>([]);
-  const [worklogs, setWorklogs] = useState<WorklogsResult>({ totalHours: 0, items: [] });
+  const [bugPage, setBugPage] = useState(1);
+  const [bugTotal, setBugTotal] = useState(0);
+  const [openCount, setOpenCount] = useState(0);
+  const [worklogPage, setWorklogPage] = useState(1);
+  const [worklogs, setWorklogs] = useState<WorklogsResult>({ totalHours: 0, total: 0, page: 1, pageSize: 50, items: [] });
   const [loading, setLoading] = useState(true);
   const [working, setWorking] = useState(false);
   const [editingBugId, setEditingBugId] = useState<number | null>(null);
@@ -46,10 +51,12 @@ export default function ProjectActivity({ project, user, token, canManage, emplo
   const refresh = useCallback(async () => {
     try {
       const [foundBugs, foundLogs] = await Promise.all([
-        api<Bug[]>(base + '/bugs', token),
-        api<WorklogsResult>(base + '/worklogs', token)
+        api<BugsResult>(base + '/bugs?page=' + bugPage, token),
+        api<WorklogsResult>(base + '/worklogs?page=' + worklogPage, token)
       ]);
-      setBugs(foundBugs);
+      setBugs(foundBugs.items);
+      setBugTotal(foundBugs.total);
+      setOpenCount(foundBugs.openCount);
       setWorklogs(foundLogs);
       setError('');
     } catch (err) {
@@ -57,7 +64,7 @@ export default function ProjectActivity({ project, user, token, canManage, emplo
     } finally {
       setLoading(false);
     }
-  }, [base, token]);
+  }, [base, token, bugPage, worklogPage]);
 
   useEffect(() => { void refresh(); }, [refresh]);
 
@@ -65,7 +72,6 @@ export default function ProjectActivity({ project, user, token, canManage, emplo
     (user.roles.includes('Admin') || member.id === user.id || member.managerId === user.id));
   const tasks = project.tasks || [];
   const myTasks = tasks.filter(task => task.assignedToId === user.id || project.ownerId === user.id);
-  const openCount = bugs.filter(bug => bug.status !== 'Closed').length;
 
   function resetBug() {
     setEditingBugId(null); setBugTitle(''); setBugDescription('');
@@ -159,6 +165,10 @@ export default function ProjectActivity({ project, user, token, canManage, emplo
                 Edit bug</button>}
             </div>
           </article>)}</div> : <p className="field-help">No bugs reported for this project.</p>}
+      <div className="pagination"><span>Page {bugPage} · {bugTotal} bugs</span>
+        <button type="button" disabled={bugPage <= 1} onClick={() => setBugPage(bugPage - 1)}>Previous</button>
+        <button type="button" disabled={bugPage * 50 >= bugTotal} onClick={() => setBugPage(bugPage + 1)}>Next</button>
+      </div>
     </section>
 
     <details className="project-section" open={editingBugId !== null ? true : undefined}>
@@ -202,6 +212,10 @@ export default function ProjectActivity({ project, user, token, canManage, emplo
           </div>
           <strong>{log.hours.toFixed(2)} h</strong>
         </article>)}</div> : <p className="field-help">No worklogs submitted yet.</p>}
+      <div className="pagination"><span>Page {worklogPage} · {worklogs.total} worklogs</span>
+        <button type="button" disabled={worklogPage <= 1} onClick={() => setWorklogPage(worklogPage - 1)}>Previous</button>
+        <button type="button" disabled={worklogPage * 50 >= worklogs.total} onClick={() => setWorklogPage(worklogPage + 1)}>Next</button>
+      </div>
     </section>
     {project.status !== 'Completed' && <details className="project-section">
       <summary>Log today's work</summary>

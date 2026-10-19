@@ -156,6 +156,18 @@ Back up live SQL Server databases and review migration history before applying `
 
 See `PROJECT_AUDIT.md` for remaining production security, operational and deployment gaps.
 
+## Report delivery update
+
+All ten report categories now have server-side pagination (50 rows by default,
+200 maximum), filtered full CSV export, and generated RDLC templates with typed
+datasets. PDF preview uses a packaged Windows .NET Framework 4.8 renderer.
+The RDLC definitions are generated from `reporting/ReportRenderer/Reports/definitions.json`
+using `scripts/generate-rdlc.py`; run `scripts/verify-rdlc.py` on Windows after
+changes. Reports, projects, eligible won leads, follow-ups, bugs and worklogs
+now return paged results. Clients using the earlier array response must update
+to read `items`, `total`, `page` and `pageSize` together. Full deployment and
+staging acceptance are still pending.
+
 ## Phase 4 — production foundation (development branch)
 
 The following safeguards are now implemented in source:

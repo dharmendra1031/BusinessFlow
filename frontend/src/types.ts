@@ -5,8 +5,9 @@ export type Employee = { id: number; phoneNumber: string | null; isActive: boole
 export type Lookup = { id: number; name: string };
 export type Dashboard = { totalUsers: number; activeLeads: number; closedLeads: number; notInterestedLeads: number; totalProjectAmount: number; todayFollowUps: number; upcomingFollowUps: number; userWise: { userId: number | null; userName: string; customers: number; amount: number }[] | null; totalLeads: number; newLeads: number; wonLeads: number; lostLeads: number; overdueFollowUps: number };
 export type FollowUp = { id: number; leadId: number; leadName: string; notes: string; dueAtUtc: string; completedAtUtc: string | null };
+export type Paged<T> = { total: number; page: number; pageSize: number; items: T[] };
 
-export type ReportResult = { type: string; total: number; truncated: boolean; rows: Record<string, string | number | boolean | null>[] };
+export type ReportResult = { type: string; total: number; page: number; pageSize: number; rows: Record<string, string | number | boolean | null>[] };
 export type LeadFollowUpHistory = { id: number; notes: string; dueAtUtc: string; completedAtUtc: string | null; createdAtUtc: string; assignedToId: number };
 
 export type DevelopmentTask = {

@@ -45,3 +45,15 @@ export async function api<T>(path: string, token: string, options: RequestInit =
   }
   return response.status === 204 ? undefined as T : response.json() as Promise<T>;
 }
+
+export async function apiBlob(path: string, token: string): Promise<Blob> {
+  const response = await fetch(apiUrl + path, {
+    credentials: 'same-origin',
+    headers: token ? { Authorization: 'Bearer ' + token } : {}
+  });
+  if (!response.ok) {
+    const data: unknown = await response.json().catch(() => null);
+    throw new Error(errorText(data, response.status));
+  }
+  return response.blob();
+}

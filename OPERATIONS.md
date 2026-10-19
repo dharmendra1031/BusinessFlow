@@ -21,6 +21,23 @@ or restored**. Apply these steps first to a staging copy, not production.
 7. Record the release SHA, operators, migration result, test evidence, recovery
    point and rollback decision before a production deployment.
 
+Use `RELEASE_RECORD.md` for each release candidate. A separate Windows staging
+IIS site and SQL Server database are required before production use. Give its
+app pool read/execute access only to its site, use a data-only SQL login for the
+API and a separate migration identity, and bind a trusted HTTPS certificate.
+Use approved sanitized data for upgrade rehearsals. Do not point staging at
+the production database.
+
+`release-manifest.json` contains the candidate commit and SHA-256 values for
+the immutable IIS ZIP and EF bundle. The ZIP includes the .NET Framework 4.8
+RDLC renderer and ten templates. Install .NET Framework 4.8 on the Windows
+host. Run `scripts/verify-rdlc.py` on the Windows build machine and verify PDF
+preview for all report categories on staging. The UI table and CSV use the
+same server-side filters and role scope. Report PDF rendering has a 5,000-row
+limit; CSV has a 100,000-row limit by default. Narrow filters when a limit is
+reached. `Reports:MaxPdfRows`, `Reports:MaxExportRows` and
+`Reports:RendererPath` can be set in protected production configuration.
+
 ## SQL backup (run on the SQL Server host)
 
 On a Windows SQL Server with `sqlcmd` installed, run under a Windows account
@@ -62,6 +79,10 @@ Do not log passwords, bearer tokens, cookies, SQL passwords or request bodies.
 Use a Windows Event Log or central log collector to retain structured API
 logs, with access control, retention and alert rules for repeated 5xx
 responses, failed readiness checks and backup failures.
+
+Assign a named alert owner and set retention in the infrastructure log
+collector. Record a test alert receipt in `RELEASE_RECORD.md`. Stop deployment
+if request errors or SQL readiness cannot be observed by that owner.
 
 These are foundations only: centralized log collection, monitored backups,
 actual staging restore, production secure sessions, and HTTPS release
