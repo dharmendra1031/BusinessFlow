@@ -30,6 +30,10 @@ public sealed class DevelopmentTask
     public long? AssignedToId { get; set; }
     public ApplicationUser? AssignedTo { get; set; }
     public DateOnly? DueDate { get; set; }
+    public long? MilestoneId { get; set; }
+    public ProjectMilestone? Milestone { get; set; }
+    public long? SprintId { get; set; }
+    public ProjectSprint? Sprint { get; set; }
     public DateTime? CompletedAtUtc { get; set; }
     public DateTime CreatedAtUtc { get; set; } = DateTime.UtcNow;
     public DateTime UpdatedAtUtc { get; set; } = DateTime.UtcNow;
