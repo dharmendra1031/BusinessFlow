@@ -810,6 +810,18 @@ namespace LeadManagement.Api.Migrations
                     b.ToTable("DeveloperWorklogs", (string)null);
                 });
 
+            modelBuilder.Entity("LeadManagement.Api.Models.RolePermissionOverride", b =>
+                {
+                    b.Property<long>("Id").ValueGeneratedOnAdd().HasColumnType("bigint");
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
+                    b.Property<string>("RoleName").IsRequired().HasMaxLength(20).HasColumnType("nvarchar(20)");
+                    b.Property<string>("Permission").IsRequired().HasMaxLength(60).HasColumnType("nvarchar(60)");
+                    b.Property<bool>("Enabled").HasColumnType("bit");
+                    b.HasKey("Id");
+                    b.HasIndex("RoleName", "Permission").IsUnique();
+                    b.ToTable("RolePermissionOverrides", (string)null);
+                });
+
             modelBuilder.Entity("LeadManagement.Api.Models.ProjectMilestone", b =>
                 {
                     b.Property<long>("Id").ValueGeneratedOnAdd().HasColumnType("bigint");
