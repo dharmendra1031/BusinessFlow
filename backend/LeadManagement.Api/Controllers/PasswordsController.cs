@@ -11,7 +11,7 @@ namespace LeadManagement.Api.Controllers;
 [ApiController]
 [Authorize]
 [Route("api/password")]
-public sealed class PasswordsController(UserManager<ApplicationUser> users, AppDbContext db) : ControllerBase
+public sealed class PasswordsController(UserManager<ApplicationUser> users, AppDbContext db, IWebHostEnvironment environment) : ControllerBase
 {
     [HttpPost("change")]
     public async Task<IActionResult> Change(ChangePasswordRequest request)
@@ -20,6 +20,17 @@ public sealed class PasswordsController(UserManager<ApplicationUser> users, AppD
         if (user is null) return Unauthorized();
         var result = await users.ChangePasswordAsync(user, request.CurrentPassword, request.NewPassword);
         if (!result.Succeeded) return BadRequest(new { errors = result.Errors.Select(x => x.Description) });
+        Response.Cookies.Delete("CRM.Session", new CookieOptions
+        {
+            Path = "/", Secure = !environment.IsDevelopment(),
+            HttpOnly = true, SameSite = SameSiteMode.Strict
+        });
+        db.AuditLogs.Add(new AuditLog
+        {
+            UserId = user.Id, Action = "ChangePassword",
+            TableName = "Users", RecordId = user.Id
+        });
+        await db.SaveChangesAsync();
         return NoContent();
     }
 
