@@ -42,26 +42,36 @@ public sealed class RolePermissionsController(AppDbContext db) : ControllerBase
 
         var entry = await db.RolePermissionOverrides
             .FirstOrDefaultAsync(x => x.RoleName == role && x.Permission == permission);
+        if (entry is null && request.Enabled || entry is { Enabled: false } && !request.Enabled)
+            return NoContent();
+
+        await using var transaction = await db.Database.BeginTransactionAsync();
         if (request.Enabled)
         {
-            if (entry is not null) db.RolePermissionOverrides.Remove(entry);
+            db.RolePermissionOverrides.Remove(entry!);
         }
         else if (entry is null)
         {
-            db.RolePermissionOverrides.Add(new RolePermissionOverride
+            entry = new RolePermissionOverride
             {
                 RoleName = role, Permission = permission, Enabled = false
-            });
+            };
+            db.RolePermissionOverrides.Add(entry);
+        }
+        else
+        {
+            entry.Enabled = false;
         }
         await db.SaveChangesAsync();
 
         db.AuditLogs.Add(new AuditLog
         {
             UserId = LeadAccess.UserId(User), Action = request.Enabled ? "Allow" : "Deny",
-            TableName = "RolePermissions", RecordId = entry?.Id ?? 0,
+            TableName = "RolePermissions", RecordId = entry!.Id,
             ChangedFields = role + ":" + permission
         });
         await db.SaveChangesAsync();
+        await transaction.CommitAsync();
         return NoContent();
     }
 }
