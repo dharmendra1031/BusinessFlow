@@ -203,6 +203,8 @@ public sealed class DevelopmentActivityController(AppDbContext db) : ControllerB
             t.Id == request.TaskId && t.ProjectId == projectId &&
             (t.AssignedToId == id || project.OwnerId == id)))
             return BadRequest(new { message = "Select a task assigned to you or log general project work." });
+        await using var transaction =
+            await db.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable);
         var existingHours = await db.DeveloperWorklogs
             .Where(w => w.UserId == id && w.WorkDate == request.WorkDate)
             .SumAsync(w => (decimal?)w.Hours) ?? 0m;
@@ -219,6 +221,7 @@ public sealed class DevelopmentActivityController(AppDbContext db) : ControllerB
         await db.SaveChangesAsync();
         Audit("Create", "DeveloperWorklogs", log.Id);
         await db.SaveChangesAsync();
+        await transaction.CommitAsync();
         return Created("/api/projects/" + projectId + "/worklogs", new { log.Id });
     }
 }
