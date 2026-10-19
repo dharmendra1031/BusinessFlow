@@ -343,6 +343,8 @@ td small { display: block; font-size: 11px; max-width: 210px; overflow: hidden; 
 .project-task p { margin: 5px 0; font-size: 12px; color: var(--muted); }
 .project-task small { color: var(--muted); }
 .project-task select { min-width: 112px; max-width: 136px; }
+.project-activity-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.project-activity-actions .text-action { padding: 6px 4px; }
 @media (max-width: 480px) {
   .project-task { align-items: stretch; flex-direction: column; }
   .project-task select { max-width: 100%; }
