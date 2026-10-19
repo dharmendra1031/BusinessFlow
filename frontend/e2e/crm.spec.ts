@@ -557,7 +557,7 @@ test('Development: convert a won lead, assign tasks and complete progress', asyn
   await expect(page.locator('main.content').getByRole('heading', { name: 'Development projects', exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'New project' }).click();
   const form = page.getByRole('dialog', { name: 'New development project' });
-  await form.getByLabel('Won lead').selectOption(String(leadId));
+  await form.getByRole('combobox', { name: /^Won lead/ }).selectOption(String(leadId));
   await form.getByLabel('Project name').fill(title);
   await form.getByRole('button', { name: 'Create project' }).click();
 
