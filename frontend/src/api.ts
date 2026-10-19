@@ -1,4 +1,7 @@
 const apiUrl = import.meta.env.VITE_API_URL || '';
+let csrfToken = '';
+
+export function setCsrfToken(value: string) { csrfToken = value; }
 
 function errorText(data: unknown, status: number): string {
   if (!data || typeof data !== 'object') return 'Request failed (' + status + ')';
@@ -22,10 +25,13 @@ export async function api<T>(path: string, token: string, options: RequestInit =
   let response: Response;
   try {
     response = await fetch(apiUrl + path, {
+      credentials: 'same-origin',
       ...options,
       headers: {
         'Content-Type': 'application/json',
         ...(token ? { Authorization: 'Bearer ' + token } : {}),
+        ...(csrfToken && options.method && !['GET', 'HEAD'].includes(options.method.toUpperCase())
+          ? { 'X-CSRF-TOKEN': csrfToken } : {}),
         ...options.headers,
       },
     });
