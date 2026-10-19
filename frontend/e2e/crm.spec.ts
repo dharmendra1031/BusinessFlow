@@ -662,3 +662,143 @@ test('Development permissions: employee can update own task, not another task', 
   });
   expect(cannotCreate.status()).toBe(403);
 });
+
+test('Development activity: bug tracking and daily worklog are usable from keyboard-friendly UI', async ({ page, request }) => {
+  const title = 'QA Activity Project ' + unique();
+  const leadId = await createLead(request, title);
+  const headers = { Authorization: 'Bearer ' + adminToken() };
+  await request.patch(apiUrl + '/api/leads/' + leadId + '/status', { headers, data: { statusId: 5 } });
+  const project = await request.post(apiUrl + '/api/projects', {
+    headers, data: { leadId, title, ownerId: adminSession().user.id },
+  });
+  expect(project.status()).toBe(201);
+
+  await signIn(page);
+  await page.getByRole('button', { name: 'Development projects' }).click();
+  await page.getByRole('row').filter({ hasText: title }).getByRole('button', { name: 'View project' }).click();
+  const details = page.getByRole('dialog', { name: 'Project ' + title });
+  await expect(details.getByRole('heading', { name: 'Bug tracking (0 open)' })).toBeVisible();
+
+  await details.getByText('Report a bug', { exact: true }).click();
+  await details.getByLabel('Bug title').fill('Login form breaks on mobile');
+  await details.getByLabel('What went wrong?').fill('Submit button overlaps the fields.');
+  await details.getByLabel('Severity').selectOption('High');
+  await details.getByRole('button', { name: 'Report bug' }).click();
+  await expect(details.getByText('Login form breaks on mobile')).toBeVisible();
+  await expect(details.getByRole('heading', { name: 'Bug tracking (1 open)' })).toBeVisible();
+
+  await details.getByText("Log today's work").click();
+  await details.getByLabel('Hours worked').fill('1.25');
+  await details.getByLabel('Work summary').fill('Reproduced the login bug and investigated CSS.');
+  await details.getByRole('button', { name: 'Save worklog' }).click();
+  await expect(details.getByText('Reproduced the login bug and investigated CSS.')).toBeVisible();
+  await expect(details.getByRole('heading', { name: /Daily worklogs.*1.25 hours/ })).toBeVisible();
+
+  await details.getByLabel('Bug status for Login form breaks on mobile').selectOption('Closed');
+  await expect(details.getByRole('heading', { name: 'Bug tracking (0 open)' })).toBeVisible();
+});
+
+test('Development activity API: validate hours, assign bugs and enforce project security', async ({ request }) => {
+  const admin = { Authorization: 'Bearer ' + adminToken() };
+  const developer = await createEmployee(request, 'Employee');
+  const login = await request.post(apiUrl + '/api/auth/login', {
+    data: { email: developer.email, password: employeePassword },
+  });
+  expect(login.status()).toBe(200);
+  const user = { Authorization: 'Bearer ' + (await login.json()).token };
+  const leadId = await createLead(request, 'Worklog API ' + unique());
+  await request.patch(apiUrl + '/api/leads/' + leadId + '/status', { headers: admin, data: { statusId: 5 } });
+  const p = await request.post(apiUrl + '/api/projects', {
+    headers: admin, data: { leadId, title: 'Development Activity API', ownerId: adminSession().user.id },
+  });
+  expect(p.status()).toBe(201);
+  const id = (await p.json()).id as number;
+  const task = await request.post(apiUrl + '/api/projects/' + id + '/tasks', {
+    headers: admin, data: { title: 'Fix dashboard', priority: 'High', assignedToId: developer.id },
+  });
+  expect(task.status()).toBe(201);
+  const taskId = (await task.json()).id as number;
+  const issue = await request.post(apiUrl + '/api/projects/' + id + '/bugs', {
+    headers: admin, data: {
+      title: 'Dashboard count incorrect', severity: 'Critical',
+      assignedToId: developer.id, taskId,
+    },
+  });
+  expect(issue.status()).toBe(201);
+  const bugId = (await issue.json()).id as number;
+  const base = apiUrl + '/api/projects/' + id;
+  const today = new Date().toISOString().slice(0, 10);
+
+  const visible = await request.get(base + '/bugs', { headers: user });
+  expect(visible.status()).toBe(200);
+  expect((await visible.json())[0].title).toBe('Dashboard count incorrect');
+
+  const forbiddenAssign = await request.post(base + '/bugs', {
+    headers: user, data: { title: 'Another bug', severity: 'High', assignedToId: developer.id },
+  });
+  expect(forbiddenAssign.status()).toBe(403);
+  const ownReport = await request.post(base + '/bugs', {
+    headers: user, data: { title: 'Unexpected empty page', severity: 'Low' },
+  });
+  expect(ownReport.status()).toBe(201);
+
+  const ownUpdate = await request.patch(base + '/bugs/' + bugId + '/status', {
+    headers: user, data: { status: 'Resolved' },
+  });
+  expect(ownUpdate.status()).toBe(204);
+  const cannotClose = await request.patch(base + '/bugs/' + bugId + '/status', {
+    headers: user, data: { status: 'Closed' },
+  });
+  expect(cannotClose.status()).toBe(403);
+
+  const logPayload = { workDate: today, hours: 1.25, taskId, description: 'Investigated and fixed count query.' };
+  const logged = await request.post(base + '/worklogs', { headers: user, data: logPayload });
+  expect(logged.status()).toBe(201);
+  const logs = await request.get(base + '/worklogs', { headers: admin });
+  expect(logs.status()).toBe(200);
+  const data = await logs.json();
+  expect(data.totalHours).toBe(1.25);
+  expect(data.items[0].developer).toBe('UI Employee');
+
+  for (const data of [
+    { ...logPayload, hours: 0.1 },
+    { ...logPayload, hours: 25 },
+    { ...logPayload, hours: 1.234 },
+    { ...logPayload, workDate: '2099-01-01' },
+    { ...logPayload, description: ' ' },
+    { ...logPayload, taskId: 987654321 },
+  ]) {
+    const invalid = await request.post(base + '/worklogs', { headers: user, data });
+    expect(invalid.status(), JSON.stringify(data)).toBe(400);
+  }
+  const tooMuch = await request.post(base + '/worklogs', {
+    headers: user, data: { ...logPayload, hours: 23 },
+  });
+  expect(tooMuch.status()).toBe(400);
+
+  await request.patch(base + '/tasks/' + taskId + '/status', {
+    headers: admin, data: { status: 'Done' },
+  });
+  const cannotFinish = await request.put(base, {
+    headers: admin,
+    data: { title: 'Development Activity API', status: 'Completed', ownerId: adminSession().user.id },
+  });
+  expect(cannotFinish.status()).toBe(400);
+
+  const closed = await request.patch(base + '/bugs/' + bugId + '/status', {
+    headers: admin, data: { status: 'Closed' },
+  });
+  expect(closed.status()).toBe(204);
+  const newBugId = (await ownReport.json()).id as number;
+  const closedOther = await request.patch(base + '/bugs/' + newBugId + '/status', {
+    headers: admin, data: { status: 'Closed' },
+  });
+  expect(closedOther.status()).toBe(204);
+  const completed = await request.put(base, {
+    headers: admin,
+    data: { title: 'Development Activity API', status: 'Completed', ownerId: adminSession().user.id },
+  });
+  expect(completed.status()).toBe(204);
+  const afterComplete = await request.post(base + '/worklogs', { headers: user, data: logPayload });
+  expect(afterComplete.status()).toBe(400);
+});
