@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { api } from './api';
 import { Icon } from './Icon';
 import { useFeedback } from './Feedback';
+import ProjectActivity from './ProjectActivity';
 import { clearFieldError, handleDialogKeyDown, handleFormKeyDown, validateForm } from './formUtils';
 import type { DevelopmentProject, DevelopmentTask, Employee, User } from './types';
 
@@ -270,6 +271,8 @@ export default function ProjectsPage({ token, user }: { token: string; user: Use
                 <button type="button" className="text-action" onClick={() => startEditTask(task)}>Edit task</button>}
             </div>)}</div> : <p className="field-help">No tasks yet.</p>}
         </div>
+        <ProjectActivity project={selected} token={token} user={user}
+          canManage={mayManage(selected)} employees={employees} />
         {mayManage(selected) && selected.status !== 'Completed' && <details className="project-section" open={editingTask !== null ? true : undefined}>
           <summary>{editingTask ? 'Edit development task' : 'Add development task'}</summary>
           <form className="drawer-form" onSubmit={saveTask} onInput={clearFieldError} onKeyDown={handleFormKeyDown}>
