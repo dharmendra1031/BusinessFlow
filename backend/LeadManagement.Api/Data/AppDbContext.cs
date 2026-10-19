@@ -17,6 +17,8 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
     public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
     public DbSet<DevelopmentProject> DevelopmentProjects => Set<DevelopmentProject>();
     public DbSet<DevelopmentTask> DevelopmentTasks => Set<DevelopmentTask>();
+    public DbSet<ProjectMilestone> ProjectMilestones => Set<ProjectMilestone>();
+    public DbSet<ProjectSprint> ProjectSprints => Set<ProjectSprint>();
     public DbSet<ProjectBug> ProjectBugs => Set<ProjectBug>();
     public DbSet<DeveloperWorklog> DeveloperWorklogs => Set<DeveloperWorklog>();
 
@@ -110,10 +112,32 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
             entity.Property(x => x.Priority).HasMaxLength(10).IsRequired();
             entity.HasIndex(x => new { x.ProjectId, x.Status });
             entity.HasIndex(x => new { x.AssignedToId, x.DueDate });
+            entity.HasOne(x => x.Milestone).WithMany().HasForeignKey(x => x.MilestoneId)
+                .OnDelete(DeleteBehavior.NoAction);
+            entity.HasOne(x => x.Sprint).WithMany().HasForeignKey(x => x.SprintId)
+                .OnDelete(DeleteBehavior.NoAction);
             entity.HasOne(x => x.Project).WithMany(x => x.Tasks).HasForeignKey(x => x.ProjectId)
                 .OnDelete(DeleteBehavior.Cascade);
             entity.HasOne(x => x.AssignedTo).WithMany().HasForeignKey(x => x.AssignedToId)
                 .OnDelete(DeleteBehavior.NoAction);
+        });
+        modelBuilder.Entity<ProjectMilestone>(entity =>
+        {
+            entity.Property(x => x.Title).HasMaxLength(150).IsRequired();
+            entity.Property(x => x.Description).HasMaxLength(1000);
+            entity.Property(x => x.Status).HasMaxLength(20).IsRequired();
+            entity.HasIndex(x => new { x.ProjectId, x.DueDate });
+            entity.HasOne(x => x.Project).WithMany().HasForeignKey(x => x.ProjectId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+        modelBuilder.Entity<ProjectSprint>(entity =>
+        {
+            entity.Property(x => x.Title).HasMaxLength(150).IsRequired();
+            entity.Property(x => x.Goal).HasMaxLength(1000);
+            entity.Property(x => x.Status).HasMaxLength(20).IsRequired();
+            entity.HasIndex(x => new { x.ProjectId, x.StartDate });
+            entity.HasOne(x => x.Project).WithMany().HasForeignKey(x => x.ProjectId)
+                .OnDelete(DeleteBehavior.Cascade);
         });
         modelBuilder.Entity<ProjectBug>(entity =>
         {
