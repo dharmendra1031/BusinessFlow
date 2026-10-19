@@ -128,7 +128,7 @@ app.Use(async (context, next) =>
     context.Response.Headers["Referrer-Policy"] = "no-referrer";
     context.Response.Headers["Cache-Control"] = "no-store";
     if (!app.Environment.IsDevelopment())
-        context.Response.Headers.ContentSecurityPolicy =
+        context.Response.Headers["Content-Security-Policy"] =
             "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; " +
             "form-action 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; " +
             "connect-src 'self'; upgrade-insecure-requests";
@@ -148,7 +148,7 @@ app.Use(async (context, next) =>
     if (context.Request.Path.StartsWithSegments("/api") &&
         !HttpMethods.IsGet(method) && !HttpMethods.IsHead(method) &&
         !HttpMethods.IsOptions(method) && !HttpMethods.IsTrace(method) &&
-        !context.Request.Path.Equals("/api/auth/login", StringComparison.OrdinalIgnoreCase) &&
+        !string.Equals(context.Request.Path.Value, "/api/auth/login", StringComparison.OrdinalIgnoreCase) &&
         context.Request.Cookies.ContainsKey("CRM.Session") &&
         !context.Request.Headers.Authorization.ToString().StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
     {
