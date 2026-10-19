@@ -106,8 +106,9 @@ Lead management stays intact. A **Development projects** workspace now handles d
 
 Back up an existing SQL Server database before applying the new migration with
 `dotnet ef database update`. Do not run migrations on a live database without a backup
-and deployment review. This release does **not** yet include file attachments, timesheets,
-sprint planning, Git integration, release/deployment tracking, or client approval workflows.
+and deployment review. Phase 1 originally excluded daily worklogs and sprint planning; both are implemented in
+Phases 2 and 3 below. File attachments, Git integration, release/deployment tracking,
+and client approval workflows remain pending.
 
 ## Developer worklogs and bug tracking (Phase 2)
 
@@ -120,7 +121,9 @@ Each development project now includes a **Bug tracking** list and **Daily worklo
 - New SQL Server tables: `ProjectBugs` and `DeveloperWorklogs` with BIGINT identity IDs and foreign keys, introduced in additive EF migration `20261019070000_AddDevelopmentActivity`.
 - Run `dotnet ef database update` **only after backing up a live database**. Confirm migration state and SQL schema before deployment.
 
-Project planning, GitHub sync, file uploads, sprint boards and automated time capture remain out of scope. Production deployment and cross-browser testing are not yet verified.
+Phase 3 below adds sprint and milestone planning. GitHub sync, attachments,
+dedicated sprint boards and automated time capture remain pending. Production deployment
+and cross-browser testing are not yet verified.
 
 ## Sprint and milestone planning (Phase 3)
 
@@ -135,3 +138,20 @@ The **Development projects** drawer now includes two types of delivery planning:
 - Adds SQL Server tables `ProjectMilestones`, `ProjectSprints` and nullable `MilestoneId`/`SprintId` fields on `DevelopmentTasks`, using BIGINT identity IDs and an additive EF Core migration `20261019100000_AddProjectPlanning`. Existing tasks remain unassigned to a sprint/milestone until a manager links them.
 
 Back up live SQL Server databases and review migration history before applying `dotnet ef database update`. Production deployment and a full security/performance audit remain pending.
+
+## CI and dependency security updates (19 October 2026)
+
+- Development CI runs migrations against SQL Server, a backend permission integration test,
+  NuGet transitive dependency audit, React build, and Chromium Playwright regression tests.
+- The release verification workflow now applies **committed** EF migrations from
+  `backend/LeadManagement.Api/Migrations`. It no longer creates an extra `InitialCreate`
+  or uploads generated migrations. It checks EF model snapshot consistency.
+- ASP.NET Core/EF Core packages use patched 10.0.13 versions. The API explicitly
+  references `System.Security.Cryptography.Pkcs` 10.0.13 to override the previously
+  reported vulnerable transitive dependency. Both CI pipelines contain a script-based
+  vulnerability check.
+- Publishing and actual IIS deployment are separate activities: a successful Linux CI
+  run does not prove that a Windows publish ZIP has been built, installed or restored
+  successfully on a VPS.
+
+See `PROJECT_AUDIT.md` for remaining production security, operational and deployment gaps.
