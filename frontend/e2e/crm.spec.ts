@@ -952,14 +952,14 @@ test('Planning UI: create milestones and sprints and assign a development task',
   await details.getByLabel('Milestone title').fill('MVP release');
   await details.getByLabel('Milestone deadline').fill('2026-11-15');
   await details.getByRole('button', { name: 'Create milestone' }).click();
-  await expect(details.getByText('MVP release', { exact: true })).toBeVisible();
+  await expect(details.locator('.project-task').getByText('MVP release', { exact: true })).toBeVisible();
 
   await details.getByText('Plan sprint', { exact: true }).click();
   await details.getByLabel('Sprint title').fill('Sprint Alpha');
   await details.getByLabel('Sprint start').fill('2026-10-20');
   await details.getByLabel('Sprint end').fill('2026-10-27');
   await details.getByRole('button', { name: 'Create sprint' }).click();
-  await expect(details.getByText('Sprint Alpha', { exact: true })).toBeVisible();
+  await expect(details.locator('.project-task').getByText('Sprint Alpha', { exact: true })).toBeVisible();
 
   await details.getByText('Add development task').click();
   await details.getByLabel('Task title').fill('Deliver sprint tasks');
