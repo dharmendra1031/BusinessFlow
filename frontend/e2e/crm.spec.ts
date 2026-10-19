@@ -1010,6 +1010,10 @@ test('Phase 4: browser cookie requires CSRF for writes and logout clears session
     data: { email: adminEmail, password: adminPassword },
   });
   expect(login.status()).toBe(200);
+  const setCookie = login.headers()['set-cookie'] || '';
+  expect(setCookie).toContain('CRM.Session=');
+  expect(setCookie).toMatch(/httponly/i);
+  expect(setCookie.toLowerCase()).toContain('samesite=strict');
   const me = await request.get(apiUrl + '/api/auth/me');
   expect(me.status()).toBe(200);
   const current = await me.json();
