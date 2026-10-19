@@ -53,7 +53,7 @@ jobs:
       - name: Audit .NET dependencies
         run: |
           dotnet list tests/LeadManagement.Tests/LeadManagement.Tests.csproj package --vulnerable --include-transitive --format json > /tmp/nuget-audit.json
-          python3 -m json.tool /tmp/nuget-audit.json > /dev/null
+          python3 scripts/verify-nuget-audit.py /tmp/nuget-audit.json
       - name: Install frontend and Chromium
         working-directory: frontend
         run: |
