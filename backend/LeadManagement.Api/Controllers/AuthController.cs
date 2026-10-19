@@ -1,6 +1,7 @@
 using LeadManagement.Api.Contracts;
 using LeadManagement.Api.Models;
 using LeadManagement.Api.Services;
+using Microsoft.AspNetCore.Antiforgery;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
@@ -10,7 +11,8 @@ namespace LeadManagement.Api.Controllers;
 
 [ApiController]
 [Route("api/auth")]
-public sealed class AuthController(UserManager<ApplicationUser> users, TokenService tokens) : ControllerBase
+public sealed class AuthController(UserManager<ApplicationUser> users, TokenService tokens,
+    IAntiforgery antiforgery, IWebHostEnvironment environment) : ControllerBase
 {
     [AllowAnonymous]
     [EnableRateLimiting("login")]
@@ -30,7 +32,20 @@ public sealed class AuthController(UserManager<ApplicationUser> users, TokenServ
         await users.ResetAccessFailedCountAsync(user);
         var roles = await users.GetRolesAsync(user);
         var (token, expiresAtUtc) = tokens.Create(user, roles);
-        return Ok(new { token, expiresAtUtc, user = new { user.Id, user.FullName, user.Email, roles } });
+        Response.Cookies.Append("CRM.Session", token, new CookieOptions
+        {
+            HttpOnly = true,
+            Secure = !environment.IsDevelopment(),
+            SameSite = SameSiteMode.Strict,
+            Path = "/",
+            Expires = new DateTimeOffset(expiresAtUtc, TimeSpan.Zero)
+        });
+        return Ok(new
+        {
+            token = environment.IsDevelopment() ? token : null,
+            expiresAtUtc,
+            user = new { user.Id, user.FullName, user.Email, roles }
+        });
     }
 
     [Authorize]
@@ -39,6 +54,19 @@ public sealed class AuthController(UserManager<ApplicationUser> users, TokenServ
     {
         var user = await users.FindByIdAsync(LeadAccess.UserId(User).ToString());
         if (user is null || !user.IsActive) return Unauthorized();
-        return Ok(new { user.Id, user.FullName, user.Email, roles = await users.GetRolesAsync(user) });
+        return Ok(new { user.Id, user.FullName, user.Email, roles = await users.GetRolesAsync(user),
+            csrfToken = antiforgery.GetAndStoreTokens(HttpContext).RequestToken });
+    }
+
+    [Authorize]
+    [HttpPost("logout")]
+    public IActionResult Logout()
+    {
+        Response.Cookies.Delete("CRM.Session", new CookieOptions
+        {
+            Path = "/", Secure = !environment.IsDevelopment(),
+            HttpOnly = true, SameSite = SameSiteMode.Strict
+        });
+        return NoContent();
     }
 }
