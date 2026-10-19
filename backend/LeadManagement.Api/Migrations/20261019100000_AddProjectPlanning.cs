@@ -62,11 +62,19 @@ public sealed class AddProjectPlanning : Migration
             new[] { "ProjectId", "StartDate" });
         migrationBuilder.CreateIndex("IX_DevelopmentTasks_MilestoneId", "DevelopmentTasks", "MilestoneId");
         migrationBuilder.CreateIndex("IX_DevelopmentTasks_SprintId", "DevelopmentTasks", "SprintId");
-        migrationBuilder.AddForeignKey("FK_DevelopmentTasks_ProjectMilestones_MilestoneId",
-            "DevelopmentTasks", "MilestoneId", "ProjectMilestones", "Id",
+        migrationBuilder.AddForeignKey(
+            name: "FK_DevelopmentTasks_ProjectMilestones_MilestoneId",
+            table: "DevelopmentTasks",
+            column: "MilestoneId",
+            principalTable: "ProjectMilestones",
+            principalColumn: "Id",
             onDelete: ReferentialAction.NoAction);
-        migrationBuilder.AddForeignKey("FK_DevelopmentTasks_ProjectSprints_SprintId",
-            "DevelopmentTasks", "SprintId", "ProjectSprints", "Id",
+        migrationBuilder.AddForeignKey(
+            name: "FK_DevelopmentTasks_ProjectSprints_SprintId",
+            table: "DevelopmentTasks",
+            column: "SprintId",
+            principalTable: "ProjectSprints",
+            principalColumn: "Id",
             onDelete: ReferentialAction.NoAction);
     }
 
