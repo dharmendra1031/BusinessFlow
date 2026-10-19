@@ -39,9 +39,8 @@ jobs:
         working-directory: backend/LeadManagement.Api
         run: |
           dotnet tool install --global dotnet-ef --version 10.0.0
-          if [ ! -d Data/Migrations ]; then
-            dotnet ef migrations add InitialCreate --output-dir Data/Migrations
-          fi
+          test -f Migrations/20261012050343_InitialCreate.cs
+          test -f Migrations/20261019100000_AddProjectPlanning.cs
           for attempt in $(seq 1 24); do
             if dotnet ef database update; then
               exit 0
@@ -56,9 +55,6 @@ jobs:
         run: |
           npm install --no-audit --no-fund
           npm run build
-      - name: Upload generated migration
-        uses: actions/upload-artifact@v4
-        with:
-          name: sql-server-migrations
-          path: backend/LeadManagement.Api/Data/Migrations/
-          if-no-files-found: error
+      - name: Verify committed EF model
+        working-directory: backend/LeadManagement.Api
+        run: dotnet ef migrations has-pending-model-changes
