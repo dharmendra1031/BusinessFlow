@@ -5,12 +5,13 @@ import { FeedbackProvider, useFeedback } from './Feedback';
 import { Icon } from './Icon';
 import { DashboardPage, EmployeesPage, FollowUpsPage, LeadsPage } from './pages';
 import ReportsPage from './ReportsPage';
+import AuditPage from './AuditPage';
 import ProjectsPage from './ProjectsPage';
 import PasswordSettings from './PasswordSettings';
 import type { User } from './types';
 
 type Session = { token: string; user: User };
-type Screen = 'dashboard' | 'leads' | 'projects' | 'followups' | 'employees' | 'reports' | 'settings';
+type Screen = 'dashboard' | 'leads' | 'projects' | 'followups' | 'employees' | 'reports' | 'audit' | 'settings';
 
 const navigation = [
   { id: 'dashboard', label: 'Dashboard', icon: 'grid' },
@@ -19,6 +20,7 @@ const navigation = [
   { id: 'followups', label: 'Follow-ups', icon: 'calendar' },
   { id: 'employees', label: 'Team', icon: 'users' },
   { id: 'reports', label: 'Reports', icon: 'clipboard' },
+  { id: 'audit', label: 'Audit history', icon: 'clipboard' },
   { id: 'settings', label: 'Change password', icon: 'lock' },
 ] as const;
 
@@ -58,8 +60,9 @@ function Workspace() {
 
   const user = session.user;
   const canSeeTeam = user.roles.includes('Admin') || user.roles.includes('Manager');
-  const items = navigation.filter(item => item.id !== 'employees' || canSeeTeam);
-  const pageTitle = { dashboard: 'Dashboard', leads: 'All leads', projects: 'Development projects', followups: 'Follow-ups', employees: 'Team', reports: 'Reports', settings: 'Change password' }[screen];
+  const items = navigation.filter(item =>
+    (item.id !== 'employees' || canSeeTeam) && (item.id !== 'audit' || user.roles.includes('Admin')));
+  const pageTitle = { dashboard: 'Dashboard', leads: 'All leads', projects: 'Development projects', followups: 'Follow-ups', employees: 'Team', reports: 'Reports', audit: 'Audit history', settings: 'Change password' }[screen];
 
   return <div className="app-shell">
     <a className="skip-link" href="#main-content">Skip to main content</a>
@@ -111,6 +114,7 @@ function Workspace() {
         {screen === 'followups' && <FollowUpsPage token={session.token} />}
         {screen === 'employees' && canSeeTeam && <EmployeesPage token={session.token} user={user} />}
         {screen === 'reports' && <ReportsPage token={session.token} user={user} />}
+        {screen === 'audit' && user.roles.includes('Admin') && <AuditPage token={session.token} />}
         {screen === 'settings' && <PasswordSettings token={session.token} onChanged={logout} />}
       </main>
     </div>
