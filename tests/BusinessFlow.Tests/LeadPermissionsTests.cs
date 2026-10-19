@@ -21,7 +21,7 @@ public sealed class LeadPermissionsTests
         var connection = Environment.GetEnvironmentVariable("CRM_TEST_CONNECTION")
             ?? throw new InvalidOperationException("CRM_TEST_CONNECTION is required.");
 
-        Assert.StartsWith("BusinessFlow_CITests",
+        Assert.StartsWith("LeadManagement_CITests",
             new SqlConnectionStringBuilder(connection).InitialCatalog, StringComparison.Ordinal);
 
         var options = new DbContextOptionsBuilder<AppDbContext>()
