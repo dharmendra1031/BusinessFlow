@@ -155,3 +155,32 @@ Back up live SQL Server databases and review migration history before applying `
   successfully on a VPS.
 
 See `PROJECT_AUDIT.md` for remaining production security, operational and deployment gaps.
+
+## Phase 4 — production foundation (development branch)
+
+The following safeguards are now implemented in source:
+
+- **Browser authentication:** Production uses a signed JWT stored in a
+  `HttpOnly`, `Secure`, `SameSite=Strict` cookie. The frontend restores
+  sessions through `/api/auth/me` and does not persist production bearer tokens
+  in `sessionStorage`. Cookie-authenticated writes require ASP.NET Core
+  antiforgery tokens. The separate development/API bearer-token path remains
+  supported for existing tooling and browser tests.
+- **Role permissions:** Admins can block supported Manager/Employee module
+  permissions and restore their original access. Permissions cannot grant
+  privileges beyond the existing server-side role, team and ownership rules.
+  API routes enforce the overrides. A new `RolePermissionOverrides` SQL table
+  (BIGINT identity, unique role/permission index) is introduced through
+  migration `20261019133000_AddRolePermissionOverrides`.
+- **Audit history:** A dedicated Admin-only screen reads existing audit
+  entries with date/user/module/action filters and server-side pagination.
+- **Diagnostics:** Failed API requests and exceptions produce structured
+  server log entries and an `X-Request-Id` correlation header.
+- **Operational guides:** `OPERATIONS.md` and `scripts/backup-sqlserver.ps1`
+  document a checksum-verified copy-only SQL backup; the separate release
+  verification script checks a deployed IIS instance without writing data.
+
+**Not complete:** Production IIS deployment and HTTPS acceptance, a real
+SQL backup/restore drill, centralized log collection/alerts, advanced MFA/SSO
+and a full security/load review still need real environment verification.
+Keep `main` unchanged until release gates and staging checks are accepted.
