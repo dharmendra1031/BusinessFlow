@@ -1031,3 +1031,39 @@ test('Phase 4: browser cookie requires CSRF for writes and logout clears session
   expect(logout.status()).toBe(204);
   expect((await request.get(apiUrl + '/api/auth/me')).status()).toBe(401);
 });
+
+test('Phase 4: role permission override is enforced by API and cannot escalate existing roles', async ({ page, request }) => {
+  const admin = { Authorization: 'Bearer ' + adminToken() };
+  const staff = await createEmployee(request, 'Manager');
+  const login = await request.post(apiUrl + '/api/auth/login', {
+    data: { email: staff.email, password: employeePassword },
+  });
+  expect(login.status()).toBe(200);
+  const manager = { Authorization: 'Bearer ' + (await login.json()).token };
+  const route = apiUrl + '/api/admin/permissions/Manager/reports.view';
+
+  expect((await request.get(apiUrl + '/api/admin/permissions', { headers: manager })).status()).toBe(403);
+  expect((await request.get(apiUrl + '/api/reports', { headers: manager })).status()).toBe(200);
+  try {
+    const blocked = await request.put(route, { headers: admin, data: { enabled: false } });
+    expect(blocked.status()).toBe(204);
+    expect((await request.get(apiUrl + '/api/reports', { headers: manager })).status()).toBe(403);
+    const others = await request.get(apiUrl + '/api/leads', { headers: manager });
+    expect(others.status()).toBe(200);
+  } finally {
+    const restored = await request.put(route, { headers: admin, data: { enabled: true } });
+    expect(restored.status()).toBe(204);
+  }
+  expect((await request.get(apiUrl + '/api/reports', { headers: manager })).status()).toBe(200);
+  const cannotElevate = await request.put(
+    apiUrl + '/api/admin/permissions/Employee/leads.assign',
+    { headers: admin, data: { enabled: true } },
+  );
+  expect(cannotElevate.status()).toBe(400);
+
+  await signIn(page);
+  await page.getByRole('button', { name: 'Role permissions' }).click();
+  await expect(page.getByRole('heading', { name: 'Role permissions' })).toBeVisible();
+  await expect(page.getByRole('checkbox', { name: 'Manager reports.view' })).toBeChecked();
+  await expect(page.getByRole('checkbox', { name: 'Employee leads.assign' })).toBeDisabled();
+});
