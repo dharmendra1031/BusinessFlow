@@ -73,6 +73,13 @@ function Workspace() {
     }
   }
 
+  function passwordChanged() {
+    sessionStorage.removeItem('crmSession');
+    setCsrfToken('');
+    setSession(null);
+    setMenuOpen(false);
+  }
+
   if (restoring) return <main className="login-layout"><p role="status">Restoring session...</p></main>;
   if (!session) return <Login onLogin={value => {
     if (import.meta.env.DEV && value.token)
@@ -138,7 +145,7 @@ function Workspace() {
         {screen === 'employees' && canSeeTeam && <EmployeesPage token={session.token} user={user} />}
         {screen === 'reports' && <ReportsPage token={session.token} user={user} />}
         {screen === 'audit' && user.roles.includes('Admin') && <AuditPage token={session.token} />}
-        {screen === 'settings' && <PasswordSettings token={session.token} onChanged={logout} />}
+        {screen === 'settings' && <PasswordSettings token={session.token} onChanged={passwordChanged} />}
       </main>
     </div>
   </div>;
