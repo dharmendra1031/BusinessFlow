@@ -855,3 +855,120 @@ test('Development permissions: a bug-only assignee can access their project, not
   expect(personal.status()).toBe(200);
   expect((await personal.json()).totalHours).toBe(0.5);
 });
+
+test('Planning API: milestones, sprints, task links and completion gates', async ({ request }) => {
+  const headers = { Authorization: 'Bearer ' + adminToken() };
+  const leadId = await createLead(request, 'Milestone QA ' + unique());
+  await request.patch(apiUrl + '/api/leads/' + leadId + '/status', { headers, data: { statusId: 5 } });
+  const created = await request.post(apiUrl + '/api/projects', {
+    headers,
+    data: { leadId, title: 'Planning Integration', ownerId: adminSession().user.id,
+      startDate: '2026-10-20', dueDate: '2026-11-15' },
+  });
+  expect(created.status()).toBe(201);
+  const id = (await created.json()).id as number;
+  const base = apiUrl + '/api/projects/' + id;
+  const plan = base + '/planning';
+
+  const invalid = await request.post(plan + '/sprints', {
+    headers, data: { title: 'Invalid dates', status: 'Planned',
+      startDate: '2026-11-10', dueDate: '2026-10-20' },
+  });
+  expect(invalid.status()).toBe(400);
+  const badDeadline = await request.post(plan + '/milestones', {
+    headers, data: { title: 'Too late', status: 'Planned', dueDate: '2026-12-01' },
+  });
+  expect(badDeadline.status()).toBe(400);
+
+  const m = await request.post(plan + '/milestones', {
+    headers, data: { title: 'Core module', status: 'Planned', dueDate: '2026-11-10' },
+  });
+  expect(m.status()).toBe(201);
+  const milestoneId = (await m.json()).id as number;
+  const sp = await request.post(plan + '/sprints', {
+    headers, data: { title: 'Sprint One', goal: 'Authentication ready', status: 'Planned',
+      startDate: '2026-10-20', dueDate: '2026-10-30' },
+  });
+  expect(sp.status()).toBe(201);
+  const sprintId = (await sp.json()).id as number;
+  const task = await request.post(base + '/tasks', {
+    headers, data: { title: 'Implement authorization', priority: 'High',
+      dueDate: '2026-10-29', milestoneId, sprintId },
+  });
+  expect(task.status()).toBe(201);
+  const taskId = (await task.json()).id as number;
+  const info = await request.get(plan, { headers });
+  expect(info.status()).toBe(200);
+  const planning = await info.json();
+  expect(planning.milestones[0].taskCount).toBe(1);
+  expect(planning.sprints[0].taskCount).toBe(1);
+
+  const unfinishedSprint = await request.put(plan + '/sprints/' + sprintId, {
+    headers, data: { title: 'Sprint One', status: 'Completed',
+      startDate: '2026-10-20', dueDate: '2026-10-30' },
+  });
+  expect(unfinishedSprint.status()).toBe(400);
+  const cannotFinish = await request.put(base, {
+    headers,
+    data: { title: 'Planning Integration', ownerId: adminSession().user.id, status: 'Completed',
+      startDate: '2026-10-20', dueDate: '2026-11-15' },
+  });
+  expect(cannotFinish.status()).toBe(400);
+  await request.patch(base + '/tasks/' + taskId + '/status', {
+    headers, data: { status: 'Done' },
+  });
+
+  const finishSprint = await request.put(plan + '/sprints/' + sprintId, {
+    headers, data: { title: 'Sprint One', status: 'Completed',
+      startDate: '2026-10-20', dueDate: '2026-10-30' },
+  });
+  expect(finishSprint.status()).toBe(204);
+  const finishMilestone = await request.put(plan + '/milestones/' + milestoneId, {
+    headers, data: { title: 'Core module', status: 'Completed', dueDate: '2026-11-10' },
+  });
+  expect(finishMilestone.status()).toBe(204);
+  const nowDone = await request.put(base, {
+    headers, data: { title: 'Planning Integration', ownerId: adminSession().user.id,
+      status: 'Completed', startDate: '2026-10-20', dueDate: '2026-11-15' },
+  });
+  expect(nowDone.status()).toBe(204);
+});
+
+test('Planning UI: create milestones and sprints and assign a development task', async ({ page, request }) => {
+  const title = 'Planning UI ' + unique();
+  const leadId = await createLead(request, title);
+  const headers = { Authorization: 'Bearer ' + adminToken() };
+  await request.patch(apiUrl + '/api/leads/' + leadId + '/status', { headers, data: { statusId: 5 } });
+  const project = await request.post(apiUrl + '/api/projects', {
+    headers, data: { leadId, title, ownerId: adminSession().user.id },
+  });
+  expect(project.status()).toBe(201);
+
+  await signIn(page);
+  await page.getByRole('button', { name: 'Development projects' }).click();
+  await page.getByRole('row').filter({ hasText: title }).getByRole('button', { name: 'View project' }).click();
+  const details = page.getByRole('dialog', { name: 'Project ' + title });
+  await details.getByText('Add milestone', { exact: true }).click();
+  await details.getByLabel('Milestone title').fill('MVP release');
+  await details.getByLabel('Milestone deadline').fill('2026-11-15');
+  await details.getByRole('button', { name: 'Create milestone' }).click();
+  await expect(details.getByText('MVP release', { exact: true })).toBeVisible();
+
+  await details.getByText('Plan sprint', { exact: true }).click();
+  await details.getByLabel('Sprint title').fill('Sprint Alpha');
+  await details.getByLabel('Sprint start').fill('2026-10-20');
+  await details.getByLabel('Sprint end').fill('2026-10-27');
+  await details.getByRole('button', { name: 'Create sprint' }).click();
+  await expect(details.getByText('Sprint Alpha', { exact: true })).toBeVisible();
+
+  await details.getByText('Add development task').click();
+  await details.getByLabel('Task title').fill('Deliver sprint tasks');
+  await details.getByLabel('Priority').selectOption('High');
+  await details.getByLabel('Milestone', { exact: true }).selectOption({ label: 'MVP release' });
+  await details.getByLabel('Sprint', { exact: true }).selectOption({ label: 'Sprint Alpha' });
+  await details.getByRole('button', { name: 'Add task' }).click();
+  await expect(details.locator('.project-task').getByText('Deliver sprint tasks', { exact: true })).toBeVisible();
+  await expect(details.getByText('0/1 tasks (0%)').first()).toBeVisible();
+  await details.getByLabel('Status for Deliver sprint tasks').selectOption('Done');
+  await expect(details.getByText('1/1 tasks (100%)').first()).toBeVisible();
+});
