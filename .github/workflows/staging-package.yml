@@ -1,0 +1,50 @@
+name: Build staging IIS package
+
+on:
+  push:
+    branches: [development]
+    paths:
+      - .github/workflows/staging-package.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Build Windows IIS package
+        shell: pwsh
+        run: |
+          dotnet tool install --global dotnet-ef --version 10.0.0
+          .\scripts\publish-windows.ps1
+      - name: Verify package contents
+        shell: pwsh
+        run: |
+          $zipPath = (Resolve-Path 'artifacts\LeadManagement-IIS.zip').Path
+          $zip = [System.IO.Compression.ZipFile]::OpenRead($zipPath)
+          try {
+            $files = @($zip.Entries | ForEach-Object FullName)
+            foreach ($required in @('web.config', 'wwwroot/index.html', 'efbundle.exe')) {
+              if ($required -notin $files) { throw "IIS package missing $required" }
+            }
+            if ('appsettings.Development.json' -in $files) {
+              throw 'Development settings must not be published.'
+            }
+          }
+          finally { $zip.Dispose() }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: staging-iis-package
+          path: artifacts/LeadManagement-IIS.zip
+          if-no-files-found: error
+          retention-days: 14
