@@ -25,8 +25,8 @@ The application is a single-company CRM with a React/TypeScript frontend, ASP.NE
 
 1. **Production deployment is not established as complete.** The guide describes a working IIS readiness check for an earlier build, but the current schema and features have no recorded end-to-end deployment, migration, backup/restore, HTTPS login, or rollback verification. Run a staging deployment with the exact release artifact and migration bundle, then record the checks and rollback result.
 2. **Authentication uses a JWT in browser `sessionStorage`.** `App.tsx` stores `crmSession` there. A script injection could read the token. Review the authentication design for an HTTP-only secure cookie/session approach, apply a restrictive Content Security Policy, and test sign-out/session expiry behavior before exposing real customer data.
-3. **Dependency advisories are present.** Local `dotnet test --no-restore` reported moderate and high severity advisories for transitive `System.Security.Cryptography.Pkcs` 9.0.4 (`NU1902`, `NU1903`). Identify the parent package, update to a non-vulnerable compatible version, and add dependency scanning to CI.
-4. **The `main` verification workflow has stale migration logic.** `.github/workflows/verify.yml` checks for `Data/Migrations`, while committed migrations live in `Migrations`. It then tries to create another `InitialCreate` and uploads the generated folder. Replace that step with applying the committed migrations and testing that exact schema. This is a source-confirmed CI configuration gap; the current remote run status was not checked.
+3. **Dependency advisories (patched in `development`; continue monitoring).** Earlier audit reported `System.Security.Cryptography.Pkcs` 9.0.4 (`NU1902`, `NU1903`). The backend now uses patched ASP.NET Core/EF packages 10.0.13 and explicitly references PKCS 10.0.13. Development CI now checks transitive NuGet advisories; do not assume future packages are safe without the check.
+4. **Release CI migration script repaired in `development`; verify on merge.** The earlier `main` workflow expected `Data/Migrations` and generated a duplicate `InitialCreate`. The updated `verify.yml` applies committed migrations and verifies model snapshot consistency, without uploading a synthetic migration. The workflow is triggered on `main` or pull requests to `main`, so it still needs its own successful release/PR run after this branch is merged.
 
 ### P1 — Data completeness and daily operations
 
@@ -44,7 +44,7 @@ The application is a single-company CRM with a React/TypeScript frontend, ASP.NE
 
 ## Recommended delivery sequence
 
-1. Repair `main` CI migration setup, resolve dependency advisories, and create a repeatable staging release check (migration, backup/restore, HTTPS, sign-in, rollback).
+1. Verify the updated `main` CI workflow on a pull request, then create a repeatable staging release check (migration, backup/restore, HTTPS, sign-in, rollback). Continue dependency scans on every commit.
 2. Decide and implement the production session/security model; verify it with real deployment settings and a security review.
 3. Add pagination and complete exports, then correct worklog totals/corrections.
 4. Select the highest-value intake integration and delivery handoff features with stakeholders; specify permissions and data retention before implementation.
@@ -56,3 +56,7 @@ The application is a single-company CRM with a React/TypeScript frontend, ASP.NE
 - `npm run build` in `frontend` passed (TypeScript and Vite production build).
 - `dotnet test tests/LeadManagement.Tests/LeadManagement.Tests.csproj --no-restore` compiled, then failed because `CRM_TEST_CONNECTION` was not configured locally. No local SQL Server integration test result is claimed.
 - Browser tests and live deployment were not run in this audit. Their presence in source is recorded above; current CI run results were not inspected.
+
+## 19 October 2026 remediation notes
+
+The `development` branch now contains CI migration-path fixes, updated .NET 10.0.13 packages and an automated NuGet vulnerability gate. The development pipeline also runs the SQL Server permissions integration test and checks EF snapshot consistency. The original audit's production-readiness warnings still apply: latest Windows IIS ZIP, live HTTPS deployment, backup/rollback, auth storage and monitoring have not been accepted as complete.
