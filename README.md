@@ -184,3 +184,34 @@ The following safeguards are now implemented in source:
 SQL backup/restore drill, centralized log collection/alerts, advanced MFA/SSO
 and a full security/load review still need real environment verification.
 Keep `main` unchanged until release gates and staging checks are accepted.
+
+
+## Production foundation (Phase 4 — development implementation)
+
+- Production login now returns **no browser-readable JWT**. The API issues an 8-hour
+  `CRM.Session` cookie (`HttpOnly`, `Secure`, `SameSite=Strict`). The React app
+  restores the session using `GET /api/auth/me`, receives a CSRF token and sends
+  `X-CSRF-TOKEN` on cookie-authenticated writes. Sign-out removes the cookie.
+  For existing API and Playwright development compatibility only, development login
+  still returns a bearer token. The browser session is not saved to
+  `sessionStorage` in a production frontend build.
+- Production HTTP responses include CSP, HSTS, no-sniff, frame-denial and referrer
+  restrictions. Existing React inline styles are allowed under `style-src`;
+  production CSP/browser testing remains required.
+- Administrators can search `Audit history` by module, action, user and date,
+  with server pagination and read-only access.
+- Administrators can **restrict** Manager/Employee permissions via `Role permissions`.
+  Baseline role authorization and resource ownership restrictions remain in force;
+  permission overrides cannot grant powers a role did not already possess.
+  The additive migration `20261019133000_AddRolePermissionOverrides` stores overrides
+  using numeric `BIGINT IDENTITY` records. Permission changes are audited.
+- Requests expose an `X-Request-Id` correlation header and structured server
+  diagnostics for failures. A centralized production log/alert sink is **not yet configured**.
+- `scripts/backup-sqlserver.ps1` supports copy-only backup with checksum and media
+  verification; `scripts/verify-release.ps1` checks staging HTTPS health and security
+  headers without modifying live data. A tested **database restore**, migration upgrade
+  rehearsal and rollback drill are still required.
+
+Refer to `PHASE4_PRODUCTION_CHECKLIST.md` and `DEPLOY_WINDOWS.md`. Staging and
+production deployment have **not** been certified. Enterprise MFA/SSO, custom role
+creation, complete observability/alerting and live recovery acceptance remain pending.
