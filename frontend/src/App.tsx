@@ -117,7 +117,7 @@ function Workspace() {
       onClick={() => setMenuOpen(false)} />}
     <aside className={'sidebar ' + (menuOpen ? 'sidebar-open' : '')}>
       <div className="brand"><span className="brand-mark"><Icon name="target" size={23} /></span>
-        <div><strong>Lead CRM</strong><small>Sales CRM</small></div>
+        <div><strong>BusinessFlow</strong><small>CRM &amp; Projects</small></div>
         <button className="icon-button mobile-close" aria-label="Close menu"
           onClick={() => setMenuOpen(false)}><Icon name="close" /></button>
       </div>
@@ -204,7 +204,7 @@ function Login({ onLogin }: { onLogin: (value: Session) => void }) {
   return <main className="login-layout">
     <section className="login-intro">
       <div className="brand"><span className="brand-mark"><Icon name="target" size={25} /></span>
-        <div><strong>Lead CRM</strong><small>Sales CRM</small></div></div>
+        <div><strong>BusinessFlow</strong><small>CRM &amp; Projects</small></div></div>
       <div className="login-intro-content">
         <span className="intro-label">YOUR SALES WORKSPACE</span>
         <h1>Every lead matters.<br /><em>Every follow-up counts.</em></h1>
@@ -215,7 +215,7 @@ function Login({ onLogin }: { onLogin: (value: Session) => void }) {
           <span><Icon name="check" size={17} /> See your team's progress</span>
         </div>
       </div>
-      <p className="intro-footer">Lead CRM · Built for focused sales teams</p>
+      <p className="intro-footer">BusinessFlow · From Lead to Delivery</p>
     </section>
     <section className="login-form-side">
       <form className="login-card" onSubmit={submit} onInput={clearFieldError}

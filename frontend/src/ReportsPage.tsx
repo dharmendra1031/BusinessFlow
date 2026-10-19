@@ -107,7 +107,7 @@ export default function ReportsPage({ token, user }: { token: string; user: User
   }
 
   return <section>
-    <header className="page-header"><div><span className="section-kicker">CRM REPORTING</span>
+    <header className="page-header"><div><span className="section-kicker">BUSINESSFLOW REPORTING</span>
       <h1>Reports</h1><p>Customer and follow-up reports in KWD.</p></div></header>
     <section className="panel">
       <form className="table-toolbar" onSubmit={event => { event.preventDefault(); void load(1); }}

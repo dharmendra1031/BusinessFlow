@@ -7,7 +7,7 @@ or restored**. Apply these steps first to a staging copy, not production.
 
 1. Confirm the exact `development` commit and a successful SQL Server + browser CI run.
 2. Build a Windows release using `scripts/publish-windows.ps1`. Verify that
-   `LeadManagement-IIS.zip` contains `web.config`, React `wwwroot/index.html`,
+   `BusinessFlow-IIS.zip` contains `web.config`, React `wwwroot/index.html`,
    production placeholders and the matching `efbundle.exe`. Never ship real secrets.
 3. Verify IIS out-of-process hosting, HTTPS bindings, host certificate, no public
    SQL Server port, and app pool access to only its site directory.

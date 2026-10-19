@@ -55,7 +55,7 @@ The application is a single-company CRM with a React/TypeScript frontend, ASP.NE
 
 - `git fetch origin --prune` succeeded. Local `development` was 36 commits behind and one local commit ahead; the local commit rebased cleanly onto latest `origin/development`.
 - `npm run build` in `frontend` passed (TypeScript and Vite production build).
-- `dotnet test tests/LeadManagement.Tests/LeadManagement.Tests.csproj --no-restore` compiled, then failed because `CRM_TEST_CONNECTION` was not configured locally. No local SQL Server integration test result is claimed.
+- `dotnet test tests/BusinessFlow.Tests/BusinessFlow.Tests.csproj --no-restore` compiled, then failed because `CRM_TEST_CONNECTION` was not configured locally. No local SQL Server integration test result is claimed.
 - Browser tests and live deployment were not run in this audit. Their presence in source is recorded above; current CI run results were not inspected.
 
 ## 19 October 2026 remediation notes

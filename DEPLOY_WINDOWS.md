@@ -52,7 +52,7 @@ dotnet tool install --global dotnet-ef --version 10.0.0
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\publish-windows.ps1
 ```
 
-The script creates `artifacts\iis`, `artifacts\LeadManagement-IIS.zip`, and
+The script creates `artifacts\iis`, `artifacts\BusinessFlow-IIS.zip`, and
 `artifacts\efbundle.exe`. It checks that the development settings file is
 absent from the IIS package. Transfer the **ZIP only** to the VPS and extract
 its **contents** into the IIS site folder. `web.config`,
@@ -69,9 +69,9 @@ For a first deployment, extract with an elevated PowerShell on the VPS (adjust
 the paths to your folders):
 
 ```powershell
-$sitePath = 'C:\Sites\LeadManagement'
+$sitePath = 'C:\Sites\BusinessFlow'
 New-Item -ItemType Directory -Path $sitePath -Force | Out-Null
-Expand-Archive -LiteralPath 'C:\Transfer\LeadManagement-IIS.zip' -DestinationPath $sitePath
+Expand-Archive -LiteralPath 'C:\Transfer\BusinessFlow-IIS.zip' -DestinationPath $sitePath
 ```
 
 Set the IIS site's **Physical Path** to `$sitePath`. On updates, preserve the
@@ -186,7 +186,7 @@ not been migrated. If `/` returns **404**, verify that `web.config` and
 `wwwroot\index.html` are under the IIS physical path. If `/health/ready`
 returns **503**, check the SQL connection and database permissions.
 
-If the app starts with `dotnet .\LeadManagement.Api.dll --urls
+If the app starts with `dotnet .\BusinessFlow.Api.dll --urls
 http://127.0.0.1:5099` and a local request to `/health/ready` succeeds, but
 IIS still shows 500.30, check that the deployed `web.config` uses
 `hostingModel="outofprocess"`. Use a free port for the manual test and stop

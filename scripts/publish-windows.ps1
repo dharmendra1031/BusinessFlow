@@ -2,7 +2,7 @@ $ErrorActionPreference = 'Stop'
 
 $repo = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 $frontend = Join-Path $repo 'frontend'
-$api = Join-Path $repo 'backend/LeadManagement.Api'
+$api = Join-Path $repo 'backend/BusinessFlow.Api'
 $renderer = Join-Path $repo 'reporting/ReportRenderer'
 $wwwroot = Join-Path $api 'wwwroot'
 $artifacts = Join-Path $repo 'artifacts'
@@ -64,7 +64,7 @@ if (-not (Select-String -LiteralPath (Join-Path $publish 'web.config') -Pattern 
     throw 'IIS web.config must use outofprocess hosting.'
 }
 
-$zip = Join-Path $artifacts 'LeadManagement-IIS.zip'
+$zip = Join-Path $artifacts 'BusinessFlow-IIS.zip'
 if (Test-Path -LiteralPath $zip) { Remove-Item -LiteralPath $zip -Force }
 $bundleInPublish = Join-Path $publish 'efbundle.exe'
 $demoInPublish = Join-Path $publish 'seed_kuwait_demo.sql'

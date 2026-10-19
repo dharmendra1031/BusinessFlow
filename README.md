@@ -1,4 +1,8 @@
-# Lead Management CRM
+# BusinessFlow
+
+**CRM & Project Management System** — From Lead to Delivery.
+
+> Existing SQL Server database names and JWT issuer values remain unchanged for compatibility; only application and repository branding is renamed.
 
 Single-company lead management system for admins, managers and employees.
 
@@ -24,9 +28,9 @@ Single-company lead management system for admins, managers and employees.
 
 Requirements: .NET 10 SDK, Node.js 22+, SQL Server, and EF Core CLI (`dotnet tool install --global dotnet-ef --version 10.0.0`).
 
-1. Development settings are in `backend/LeadManagement.Api/appsettings.Development.json`. It contains the LocalDB connection, JWT key, and bootstrap admin credentials. Change the credentials before sharing this repository.
-2. Production settings are in `backend/LeadManagement.Api/appsettings.Production.json`. Replace its SQL Server and JWT placeholders with real deployment values before running in Production. `appsettings.json` contains settings common to both environments.
-3. In `backend/LeadManagement.Api`, run (design-time factory reads the configured connection string):
+1. Development settings are in `backend/BusinessFlow.Api/appsettings.Development.json`. It contains the LocalDB connection, JWT key, and bootstrap admin credentials. Change the credentials before sharing this repository.
+2. Production settings are in `backend/BusinessFlow.Api/appsettings.Production.json`. Replace its SQL Server and JWT placeholders with real deployment values before running in Production. `appsettings.json` contains settings common to both environments.
+3. In `backend/BusinessFlow.Api`, run (design-time factory reads the configured connection string):
 
    ```powershell
    dotnet restore
@@ -144,7 +148,7 @@ Back up live SQL Server databases and review migration history before applying `
 - Development CI runs migrations against SQL Server, a backend permission integration test,
   NuGet transitive dependency audit, React build, and Chromium Playwright regression tests.
 - The release verification workflow now applies **committed** EF migrations from
-  `backend/LeadManagement.Api/Migrations`. It no longer creates an extra `InitialCreate`
+  `backend/BusinessFlow.Api/Migrations`. It no longer creates an extra `InitialCreate`
   or uploads generated migrations. It checks EF model snapshot consistency.
 - ASP.NET Core/EF Core packages use patched 10.0.13 versions. The API explicitly
   references `System.Security.Cryptography.Pkcs` 10.0.13 to override the previously

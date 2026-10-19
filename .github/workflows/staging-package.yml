@@ -32,7 +32,7 @@ jobs:
       - name: Verify package contents
         shell: pwsh
         run: |
-          $zipPath = (Resolve-Path 'artifacts\LeadManagement-IIS.zip').Path
+          $zipPath = (Resolve-Path 'artifacts\BusinessFlow-IIS.zip').Path
           $zip = [System.IO.Compression.ZipFile]::OpenRead($zipPath)
           try {
             $files = @($zip.Entries | ForEach-Object FullName)
@@ -48,7 +48,7 @@ jobs:
       - name: Record release identity
         shell: pwsh
         run: |
-          $zipPath = (Resolve-Path 'artifacts\LeadManagement-IIS.zip').Path
+          $zipPath = (Resolve-Path 'artifacts\BusinessFlow-IIS.zip').Path
           $bundlePath = (Resolve-Path 'artifacts\efbundle.exe').Path
           $manifest = [ordered]@{
             commit = '${{ github.sha }}'
@@ -60,7 +60,7 @@ jobs:
         with:
           name: staging-iis-package
           path: |
-            artifacts/LeadManagement-IIS.zip
+            artifacts/BusinessFlow-IIS.zip
             artifacts/release-manifest.json
           if-no-files-found: error
           retention-days: 14
