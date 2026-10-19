@@ -13,6 +13,7 @@ export type DevelopmentTask = {
   id: number; title: string; description: string | null; status: string;
   priority: string; assignedToId: number | null; assignedTo: string | null;
   dueDate: string | null; completedAtUtc: string | null;
+  milestoneId: number | null; sprintId: number | null;
 };
 export type DevelopmentProject = {
   id: number; leadId: number; customer: string;
@@ -21,3 +22,13 @@ export type DevelopmentProject = {
   dueDate: string | null; createdAtUtc: string;
   taskCount: number; doneCount: number; tasks?: DevelopmentTask[];
 };
+
+export type ProjectMilestone = {
+  id: number; title: string; description: string | null; status: string;
+  dueDate: string | null; taskCount: number; doneCount: number;
+};
+export type ProjectSprint = {
+  id: number; title: string; goal: string | null; status: string;
+  startDate: string; dueDate: string; taskCount: number; doneCount: number;
+};
+export type ProjectPlan = { milestones: ProjectMilestone[]; sprints: ProjectSprint[] };
