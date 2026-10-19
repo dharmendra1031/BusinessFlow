@@ -4,6 +4,7 @@ using LeadManagement.Api.Data;
 using LeadManagement.Api.Models;
 using LeadManagement.Api.Services;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Antiforgery;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
@@ -17,6 +18,13 @@ if (builder.Environment.IsProduction() && secret.StartsWith("REPLACE_WITH_", Str
     throw new InvalidOperationException("Replace the production Jwt:Key placeholder before starting the API.");
 
 builder.Services.AddControllers();
+builder.Services.AddAntiforgery(options =>
+{
+    options.HeaderName = "X-CSRF-TOKEN";
+    options.Cookie.Name = "CRM.Antiforgery";
+    options.Cookie.SameSite = SameSiteMode.Strict;
+    options.Cookie.SecurePolicy = CookieSecurePolicy.SameAsRequest;
+});
 builder.Services.AddProblemDetails();
 var loginLimit = builder.Configuration.GetValue<int?>("RateLimiting:LoginRequestsPerMinute") ?? 5;
 if (loginLimit is < 1 or > 50)
@@ -58,6 +66,12 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
         options.MapInboundClaims = false;
         options.Events = new JwtBearerEvents
         {
+            OnMessageReceived = context =>
+            {
+                if (string.IsNullOrEmpty(context.Request.Headers.Authorization))
+                    context.Token = context.Request.Cookies["CRM.Session"];
+                return Task.CompletedTask;
+            },
             OnTokenValidated = async context =>
             {
                 var userId = context.Principal?.FindFirst("sub")?.Value;
@@ -110,7 +124,14 @@ if (!app.Environment.IsDevelopment())
 app.Use(async (context, next) =>
 {
     context.Response.Headers["X-Content-Type-Options"] = "nosniff";
+    context.Response.Headers["X-Frame-Options"] = "DENY";
+    context.Response.Headers["Referrer-Policy"] = "no-referrer";
     context.Response.Headers["Cache-Control"] = "no-store";
+    if (!app.Environment.IsDevelopment())
+        context.Response.Headers.ContentSecurityPolicy =
+            "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; " +
+            "form-action 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; " +
+            "connect-src 'self'; upgrade-insecure-requests";
     await next();
 });
 
@@ -121,6 +142,26 @@ app.UseRouting();
 app.UseCors("Frontend");
 app.UseRateLimiter();
 app.UseAuthentication();
+app.Use(async (context, next) =>
+{
+    var method = context.Request.Method;
+    if (context.Request.Path.StartsWithSegments("/api") &&
+        !HttpMethods.IsGet(method) && !HttpMethods.IsHead(method) &&
+        !HttpMethods.IsOptions(method) && !HttpMethods.IsTrace(method) &&
+        !context.Request.Path.Equals("/api/auth/login", StringComparison.OrdinalIgnoreCase) &&
+        context.Request.Cookies.ContainsKey("CRM.Session") &&
+        !context.Request.Headers.Authorization.ToString().StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
+    {
+        var antiforgery = context.RequestServices.GetRequiredService<IAntiforgery>();
+        if (!await antiforgery.IsRequestValidAsync(context))
+        {
+            context.Response.StatusCode = StatusCodes.Status400BadRequest;
+            await context.Response.WriteAsJsonAsync(new { message = "Invalid security token. Refresh the page and sign in again." });
+            return;
+        }
+    }
+    await next();
+});
 app.UseAuthorization();
 app.MapControllers();
 app.MapGet("/health/live", () => Results.Ok(new { status = "ok" })).AllowAnonymous();
