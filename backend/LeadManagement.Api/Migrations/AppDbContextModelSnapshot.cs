@@ -765,6 +765,47 @@ namespace LeadManagement.Api.Migrations
                     b.ToTable("DevelopmentTasks", (string)null);
                 });
 
+            modelBuilder.Entity("LeadManagement.Api.Models.ProjectBug", b =>
+                {
+                    b.Property<long>("Id").ValueGeneratedOnAdd().HasColumnType("bigint");
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
+                    b.Property<long>("ProjectId").HasColumnType("bigint");
+                    b.Property<long?>("TaskId").HasColumnType("bigint");
+                    b.Property<string>("Title").IsRequired().HasMaxLength(150).HasColumnType("nvarchar(150)");
+                    b.Property<string>("Description").HasMaxLength(2000).HasColumnType("nvarchar(2000)");
+                    b.Property<string>("Severity").IsRequired().HasMaxLength(10).HasColumnType("nvarchar(10)");
+                    b.Property<string>("Status").IsRequired().HasMaxLength(20).HasColumnType("nvarchar(20)");
+                    b.Property<long?>("AssignedToId").HasColumnType("bigint");
+                    b.Property<long>("ReportedById").HasColumnType("bigint");
+                    b.Property<DateTime>("CreatedAtUtc").HasColumnType("datetime2");
+                    b.Property<DateTime>("UpdatedAtUtc").HasColumnType("datetime2");
+                    b.Property<DateTime?>("ClosedAtUtc").HasColumnType("datetime2");
+                    b.HasKey("Id");
+                    b.HasIndex("ProjectId", "Status");
+                    b.HasIndex("TaskId");
+                    b.HasIndex("AssignedToId");
+                    b.HasIndex("ReportedById");
+                    b.ToTable("ProjectBugs", (string)null);
+                });
+
+            modelBuilder.Entity("LeadManagement.Api.Models.DeveloperWorklog", b =>
+                {
+                    b.Property<long>("Id").ValueGeneratedOnAdd().HasColumnType("bigint");
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
+                    b.Property<long>("ProjectId").HasColumnType("bigint");
+                    b.Property<long?>("TaskId").HasColumnType("bigint");
+                    b.Property<long>("UserId").HasColumnType("bigint");
+                    b.Property<DateOnly>("WorkDate").HasColumnType("date");
+                    b.Property<decimal>("Hours").HasPrecision(5, 2).HasColumnType("decimal(5,2)");
+                    b.Property<string>("Description").IsRequired().HasMaxLength(1000).HasColumnType("nvarchar(1000)");
+                    b.Property<DateTime>("CreatedAtUtc").HasColumnType("datetime2");
+                    b.HasKey("Id");
+                    b.HasIndex("ProjectId", "WorkDate");
+                    b.HasIndex("TaskId");
+                    b.HasIndex("UserId", "WorkDate");
+                    b.ToTable("DeveloperWorklogs", (string)null);
+                });
+
             modelBuilder.Entity("LeadManagement.Api.Models.DevelopmentProject", b =>
                 {
                     b.HasOne("LeadManagement.Api.Models.Lead", "Lead")
@@ -785,6 +826,35 @@ namespace LeadManagement.Api.Migrations
                         .WithMany().HasForeignKey("AssignedToId").OnDelete(DeleteBehavior.NoAction);
                     b.Navigation("Project");
                     b.Navigation("AssignedTo");
+                });
+
+            modelBuilder.Entity("LeadManagement.Api.Models.ProjectBug", b =>
+                {
+                    b.HasOne("LeadManagement.Api.Models.DevelopmentProject", "Project")
+                        .WithMany().HasForeignKey("ProjectId").OnDelete(DeleteBehavior.Cascade).IsRequired();
+                    b.HasOne("LeadManagement.Api.Models.DevelopmentTask", "Task")
+                        .WithMany().HasForeignKey("TaskId").OnDelete(DeleteBehavior.NoAction);
+                    b.HasOne("LeadManagement.Api.Models.ApplicationUser", "AssignedTo")
+                        .WithMany().HasForeignKey("AssignedToId").OnDelete(DeleteBehavior.NoAction);
+                    b.HasOne("LeadManagement.Api.Models.ApplicationUser", "ReportedBy")
+                        .WithMany().HasForeignKey("ReportedById").OnDelete(DeleteBehavior.NoAction).IsRequired();
+                    b.Navigation("Project");
+                    b.Navigation("Task");
+                    b.Navigation("AssignedTo");
+                    b.Navigation("ReportedBy");
+                });
+
+            modelBuilder.Entity("LeadManagement.Api.Models.DeveloperWorklog", b =>
+                {
+                    b.HasOne("LeadManagement.Api.Models.DevelopmentProject", "Project")
+                        .WithMany().HasForeignKey("ProjectId").OnDelete(DeleteBehavior.Cascade).IsRequired();
+                    b.HasOne("LeadManagement.Api.Models.DevelopmentTask", "Task")
+                        .WithMany().HasForeignKey("TaskId").OnDelete(DeleteBehavior.NoAction);
+                    b.HasOne("LeadManagement.Api.Models.ApplicationUser", "User")
+                        .WithMany().HasForeignKey("UserId").OnDelete(DeleteBehavior.NoAction).IsRequired();
+                    b.Navigation("Project");
+                    b.Navigation("Task");
+                    b.Navigation("User");
                 });
 
             modelBuilder.Entity("LeadManagement.Api.Models.DevelopmentProject", b =>
