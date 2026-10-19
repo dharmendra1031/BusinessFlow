@@ -21,6 +21,7 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
     public DbSet<ProjectSprint> ProjectSprints => Set<ProjectSprint>();
     public DbSet<ProjectBug> ProjectBugs => Set<ProjectBug>();
     public DbSet<DeveloperWorklog> DeveloperWorklogs => Set<DeveloperWorklog>();
+    public DbSet<RolePermissionOverride> RolePermissionOverrides => Set<RolePermissionOverride>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -168,6 +169,12 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
                 .OnDelete(DeleteBehavior.NoAction);
             entity.HasOne(x => x.User).WithMany().HasForeignKey(x => x.UserId)
                 .OnDelete(DeleteBehavior.NoAction);
+        });
+        modelBuilder.Entity<RolePermissionOverride>(entity =>
+        {
+            entity.Property(x => x.RoleName).HasMaxLength(20).IsRequired();
+            entity.Property(x => x.Permission).HasMaxLength(60).IsRequired();
+            entity.HasIndex(x => new { x.RoleName, x.Permission }).IsUnique();
         });
         modelBuilder.Entity<LeadFollowUp>(entity =>
         {
