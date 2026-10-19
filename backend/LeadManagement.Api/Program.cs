@@ -23,7 +23,8 @@ builder.Services.AddAntiforgery(options =>
     options.HeaderName = "X-CSRF-TOKEN";
     options.Cookie.Name = "CRM.Antiforgery";
     options.Cookie.SameSite = SameSiteMode.Strict;
-    options.Cookie.SecurePolicy = CookieSecurePolicy.SameAsRequest;
+    options.Cookie.SecurePolicy = builder.Environment.IsDevelopment()
+        ? CookieSecurePolicy.SameAsRequest : CookieSecurePolicy.Always;
 });
 builder.Services.AddProblemDetails();
 var loginLimit = builder.Configuration.GetValue<int?>("RateLimiting:LoginRequestsPerMinute") ?? 5;
