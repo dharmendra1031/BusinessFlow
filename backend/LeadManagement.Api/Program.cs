@@ -130,7 +130,7 @@ app.Use(async (context, next) =>
     if (!app.Environment.IsDevelopment())
         context.Response.Headers["Content-Security-Policy"] =
             "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; " +
-            "form-action 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; " +
+            "form-action 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; " +
             "connect-src 'self'; upgrade-insecure-requests";
     await next();
 });
