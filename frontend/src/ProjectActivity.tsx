@@ -148,7 +148,7 @@ export default function ProjectActivity({ project, user, token, canManage, emplo
             </div>
             <div className="project-activity-actions">
               <select aria-label={'Bug status for ' + bug.title} value={bug.status}
-                disabled={updatingBug !== null || (!canManage && bug.assignedToId !== user.id)}
+                disabled={updatingBug !== null || (!canManage && (bug.assignedToId !== user.id || bug.status === "Closed" || project.status === "Completed"))}
                 onChange={event => void changeStatus(bug, event.target.value)}>
                 {(canManage ? statuses : ['InProgress', 'Resolved']).map(status =>
                   <option key={status} value={status}>{label(status)}</option>)}
@@ -206,9 +206,9 @@ export default function ProjectActivity({ project, user, token, canManage, emplo
     {project.status !== 'Completed' && <details className="project-section">
       <summary>Log today's work</summary>
       <form className="drawer-form" onInput={clearFieldError} onKeyDown={handleFormKeyDown} onSubmit={addWorklog}>
-        <label>Work date *<input type="date" required max={new Date().toISOString().slice(0, 10)}
+        <label>Work date *<input type="date" required min={new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10)} max={new Date().toISOString().slice(0, 10)}
           value={date} onChange={event => setDate(event.target.value)} /></label>
-        <label>Hours worked *<input type="number" required min="0.25" max="24" step="0.25"
+        <label>Hours worked *<input type="number" required min="0.25" max="24" step="0.01"
           value={hours} onChange={event => setHours(event.target.value)} /></label>
         <label>Development task<select value={workTask} onChange={event => setWorkTask(event.target.value)}>
           <option value="">General project work</option>
