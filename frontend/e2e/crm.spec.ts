@@ -802,3 +802,56 @@ test('Development activity API: validate hours, assign bugs and enforce project 
   const afterComplete = await request.post(base + '/worklogs', { headers: user, data: logPayload });
   expect(afterComplete.status()).toBe(400);
 });
+
+test('Development permissions: a bug-only assignee can access their project, not close the issue', async ({ request }) => {
+  const admin = { Authorization: 'Bearer ' + adminToken() };
+  const employee = await createEmployee(request, 'Employee');
+  const session = await request.post(apiUrl + '/api/auth/login', {
+    data: { email: employee.email, password: employeePassword },
+  });
+  expect(session.status()).toBe(200);
+  const developer = { Authorization: 'Bearer ' + (await session.json()).token };
+  const leadId = await createLead(request, 'Bug Only Project ' + unique());
+  await request.patch(apiUrl + '/api/leads/' + leadId + '/status', {
+    headers: admin, data: { statusId: 5 },
+  });
+  const result = await request.post(apiUrl + '/api/projects', {
+    headers: admin,
+    data: { leadId, title: 'Issue Ownership Test', ownerId: adminSession().user.id },
+  });
+  expect(result.status()).toBe(201);
+  const projectId = (await result.json()).id as number;
+  const base = apiUrl + '/api/projects/' + projectId;
+  expect((await request.get(base, { headers: developer })).status()).toBe(404);
+
+  const reported = await request.post(base + '/bugs', {
+    headers: admin,
+    data: { title: 'Bug assigned without task', severity: 'High', assignedToId: employee.id },
+  });
+  expect(reported.status()).toBe(201);
+  const bugId = (await reported.json()).id as number;
+  expect((await request.get(base, { headers: developer })).status()).toBe(200);
+  const started = await request.patch(base + '/bugs/' + bugId + '/status', {
+    headers: developer, data: { status: 'InProgress' },
+  });
+  expect(started.status()).toBe(204);
+  const forbidden = await request.patch(base + '/bugs/' + bugId + '/status', {
+    headers: developer, data: { status: 'Closed' },
+  });
+  expect(forbidden.status()).toBe(403);
+  const directEdit = await request.put(base + '/bugs/' + bugId, {
+    headers: developer,
+    data: { title: 'Change severity illegally', severity: 'Critical', status: 'Closed' },
+  });
+  expect(directEdit.status()).toBe(403);
+
+  const time = await request.post(base + '/worklogs', {
+    headers: developer,
+    data: { workDate: new Date().toISOString().slice(0, 10), hours: 0.5,
+      description: 'Investigated bug assignment and reproduced it.' },
+  });
+  expect(time.status()).toBe(201);
+  const personal = await request.get(base + '/worklogs', { headers: developer });
+  expect(personal.status()).toBe(200);
+  expect((await personal.json()).totalHours).toBe(0.5);
+});
