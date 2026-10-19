@@ -121,3 +121,17 @@ Each development project now includes a **Bug tracking** list and **Daily worklo
 - Run `dotnet ef database update` **only after backing up a live database**. Confirm migration state and SQL schema before deployment.
 
 Project planning, GitHub sync, file uploads, sprint boards and automated time capture remain out of scope. Production deployment and cross-browser testing are not yet verified.
+
+## Sprint and milestone planning (Phase 3)
+
+The **Development projects** drawer now includes two types of delivery planning:
+
+- **Milestones** represent delivery goals, with title, optional description, deadline and Planned/In Progress/Completed status.
+- **Sprints** represent timeboxed work, with name, optional goal, start/end dates, status and progress.
+- Managers/Admins can create and edit project planning items. Developers can see planning for the projects they are allowed to access.
+- Development tasks can be linked to **one milestone and one sprint**. The API rejects cross-project IDs, completed planning items and task deadlines later than linked sprint/milestone deadlines.
+- Planning progress displays completed task count and percentage. An empty or unfinished sprint/milestone cannot be marked Completed. Completing a whole project also requires every planned sprint/milestone to be Completed, on top of the existing finished-tasks and closed-bugs rules.
+- Project date edits cannot invalidate existing sprint/milestone boundaries.
+- Adds SQL Server tables `ProjectMilestones`, `ProjectSprints` and nullable `MilestoneId`/`SprintId` fields on `DevelopmentTasks`, using BIGINT identity IDs and an additive EF Core migration `20261019100000_AddProjectPlanning`. Existing tasks remain unassigned to a sprint/milestone until a manager links them.
+
+Back up live SQL Server databases and review migration history before applying `dotnet ef database update`. Production deployment and a full security/performance audit remain pending.
