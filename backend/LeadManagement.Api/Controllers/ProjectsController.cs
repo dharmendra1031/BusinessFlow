@@ -102,7 +102,7 @@ public sealed class ProjectsController(AppDbContext db) : ControllerBase
                 {
                     t.Id, t.Title, t.Description, t.Status, t.Priority,
                     t.AssignedToId, AssignedTo = t.AssignedTo == null ? null : t.AssignedTo.FullName,
-                    t.DueDate, t.CompletedAtUtc
+                    t.MilestoneId, t.SprintId, t.DueDate, t.CompletedAtUtc
                 }).ToList()
             }).FirstOrDefaultAsync();
         return project is null ? NotFound() : Ok(project);
@@ -167,6 +167,17 @@ public sealed class ProjectsController(AppDbContext db) : ControllerBase
         if (request.Status == "Completed" &&
             await db.ProjectBugs.AnyAsync(b => b.ProjectId == id && b.Status != "Closed"))
             return BadRequest(new { message = "Close all reported bugs before completing the project." });
+        if (request.Status == "Completed" &&
+            (await db.ProjectMilestones.AnyAsync(m => m.ProjectId == id && m.Status != "Completed") ||
+             await db.ProjectSprints.AnyAsync(sp => sp.ProjectId == id && sp.Status != "Completed")))
+            return BadRequest(new { message = "Complete project milestones and sprints first." });
+        if (request.DueDate.HasValue &&
+            (await db.ProjectMilestones.AnyAsync(m => m.ProjectId == id && m.DueDate > request.DueDate) ||
+             await db.ProjectSprints.AnyAsync(sp => sp.ProjectId == id && sp.DueDate > request.DueDate)))
+            return BadRequest(new { message = "Project deadline cannot precede existing planning deadlines." });
+        if (request.StartDate.HasValue &&
+            await db.ProjectSprints.AnyAsync(sp => sp.ProjectId == id && sp.StartDate < request.StartDate))
+            return BadRequest(new { message = "Project start date cannot follow a sprint start." });
 
         project.Title = request.Title.Trim();
         project.Description = request.Description?.Trim();
@@ -190,13 +201,14 @@ public sealed class ProjectsController(AppDbContext db) : ControllerBase
         if (project.Status == "Completed")
             return BadRequest(new { message = "Reopen the project before adding tasks." });
         var error = await TaskError(request.Title, request.Priority, request.AssignedToId,
-            request.DueDate, project.DueDate);
+            request.DueDate, project.DueDate, id, request.MilestoneId, request.SprintId);
         if (error is not null) return BadRequest(new { message = error });
 
         var task = new DevelopmentTask
         {
             ProjectId = id, Title = request.Title.Trim(), Description = request.Description?.Trim(),
-            Priority = request.Priority, AssignedToId = request.AssignedToId, DueDate = request.DueDate
+            Priority = request.Priority, AssignedToId = request.AssignedToId, DueDate = request.DueDate,
+            MilestoneId = request.MilestoneId, SprintId = request.SprintId
         };
         db.DevelopmentTasks.Add(task);
         project.UpdatedAtUtc = DateTime.UtcNow;
@@ -218,7 +230,7 @@ public sealed class ProjectsController(AppDbContext db) : ControllerBase
         var task = await db.DevelopmentTasks.FirstOrDefaultAsync(t => t.Id == taskId && t.ProjectId == id);
         if (task is null) return NotFound();
         var error = await TaskError(request.Title, request.Priority, request.AssignedToId,
-            request.DueDate, project.DueDate);
+            request.DueDate, project.DueDate, id, request.MilestoneId, request.SprintId);
         if (error is not null) return BadRequest(new { message = error });
 
         task.Title = request.Title.Trim();
@@ -226,6 +238,8 @@ public sealed class ProjectsController(AppDbContext db) : ControllerBase
         task.Priority = request.Priority;
         task.AssignedToId = request.AssignedToId;
         task.DueDate = request.DueDate;
+        task.MilestoneId = request.MilestoneId;
+        task.SprintId = request.SprintId;
         task.UpdatedAtUtc = DateTime.UtcNow;
         project.UpdatedAtUtc = task.UpdatedAtUtc;
         Audit("Update", "DevelopmentTasks", taskId);
@@ -257,7 +271,7 @@ public sealed class ProjectsController(AppDbContext db) : ControllerBase
     }
 
     private async Task<string?> TaskError(string title, string priority, long? assigneeId,
-        DateOnly? dueDate, DateOnly? projectDueDate)
+        DateOnly? dueDate, DateOnly? projectDueDate, long projectId, long? milestoneId, long? sprintId)
     {
         if (string.IsNullOrWhiteSpace(title) || title.Trim().Length < 2)
             return "Task title must have at least two characters.";
@@ -265,6 +279,24 @@ public sealed class ProjectsController(AppDbContext db) : ControllerBase
         if (!await ValidAssignee(assigneeId)) return "Select an active team member.";
         if (projectDueDate.HasValue && dueDate > projectDueDate)
             return "Task deadline cannot be after the project deadline.";
+        if (milestoneId.HasValue)
+        {
+            var milestone = await db.ProjectMilestones.AsNoTracking()
+                .FirstOrDefaultAsync(m => m.Id == milestoneId && m.ProjectId == projectId);
+            if (milestone is null || milestone.Status == "Completed")
+                return "Choose an open milestone in this project.";
+            if (dueDate.HasValue && milestone.DueDate.HasValue && dueDate > milestone.DueDate)
+                return "Task deadline cannot exceed its milestone deadline.";
+        }
+        if (sprintId.HasValue)
+        {
+            var sprint = await db.ProjectSprints.AsNoTracking()
+                .FirstOrDefaultAsync(sp => sp.Id == sprintId && sp.ProjectId == projectId);
+            if (sprint is null || sprint.Status == "Completed")
+                return "Choose an open sprint in this project.";
+            if (dueDate.HasValue && dueDate > sprint.DueDate)
+                return "Task deadline cannot exceed its sprint deadline.";
+        }
         return null;
     }
 }
