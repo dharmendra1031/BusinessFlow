@@ -148,6 +148,7 @@ public sealed class DevelopmentActivityController(AppDbContext db) : ControllerB
         if (!CanManage(project))
         {
             if (bug.AssignedToId != LeadAccess.UserId(User)) return Forbid();
+            if (bug.Status == "Closed" || project.Status == "Completed") return Forbid();
             if (request.Status is not ("InProgress" or "Resolved")) return Forbid();
         }
         if (bug.Status == request.Status) return NoContent();
