@@ -60,6 +60,7 @@ builder.Services.AddIdentityCore<ApplicationUser>(options =>
 }).AddRoles<IdentityRole<long>>().AddEntityFrameworkStores<AppDbContext>().AddDefaultTokenProviders();
 
 builder.Services.AddScoped<TokenService>();
+builder.Services.AddScoped<RolePermissionService>();
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
     {
@@ -159,6 +160,20 @@ app.Use(async (context, next) =>
         {
             context.Response.StatusCode = StatusCodes.Status400BadRequest;
             await context.Response.WriteAsJsonAsync(new { message = "Invalid security token. Refresh the page and sign in again." });
+            return;
+        }
+    }
+    await next();
+});
+app.Use(async (context, next) =>
+{
+    var permission = RolePermissionService.ForRequest(context.Request);
+    if (permission is not null && context.User.Identity?.IsAuthenticated == true)
+    {
+        var rules = context.RequestServices.GetRequiredService<RolePermissionService>();
+        if (!await rules.AllowedAsync(context.User, permission))
+        {
+            context.Response.StatusCode = StatusCodes.Status403Forbidden;
             return;
         }
     }
