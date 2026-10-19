@@ -108,3 +108,16 @@ Back up an existing SQL Server database before applying the new migration with
 `dotnet ef database update`. Do not run migrations on a live database without a backup
 and deployment review. This release does **not** yet include file attachments, timesheets,
 sprint planning, Git integration, release/deployment tracking, or client approval workflows.
+
+## Developer worklogs and bug tracking (Phase 2)
+
+Each development project now includes a **Bug tracking** list and **Daily worklogs** in its existing project drawer.
+
+- Bugs: title, description, severity (Low/Medium/High/Critical), linked task, developer assignment, and Open/In Progress/Resolved/Closed status. Managers/Admins triage, edit, assign and close; developers can report bugs and update only their assigned issues to In Progress/Resolved.
+- Daily worklogs: developers and project owners can record their **own** work date (UTC, last 30 days), 0.25–24 hours per entry (up to 2 decimals), task association and 2–1,000 character summary. Total across a developer's projects cannot exceed 24 hours per UTC date.
+- Project managers and admins see the project's team worklogs; other developers see only their own worklogs. Entries are append-only and creation is audited. Up to 500 recent bugs/worklog entries appear in each list; displayed hours summarize the returned rows, not necessarily all historical time.
+- Projects cannot be marked Completed while open bugs remain or any task is incomplete. Developers cannot reopen Closed bugs. A user assigned a bug can access its project even without another assigned task.
+- New SQL Server tables: `ProjectBugs` and `DeveloperWorklogs` with BIGINT identity IDs and foreign keys, introduced in additive EF migration `20261019070000_AddDevelopmentActivity`.
+- Run `dotnet ef database update` **only after backing up a live database**. Confirm migration state and SQL schema before deployment.
+
+Project planning, GitHub sync, file uploads, sprint boards and automated time capture remain out of scope. Production deployment and cross-browser testing are not yet verified.
