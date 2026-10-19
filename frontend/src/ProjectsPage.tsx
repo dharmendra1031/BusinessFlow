@@ -303,13 +303,13 @@ export default function ProjectsPage({ token, user }: { token: string; user: Use
               <option value="">Unassigned</option>
               {availableOwners.map(member => <option key={member.id} value={member.id}>{member.fullName}</option>)}
             </select></label>
-            <label>Milestone<select value={taskMilestone} onChange={event => setTaskMilestone(event.target.value)}>
+            <label>Milestone<select aria-label="Milestone" value={taskMilestone} onChange={event => setTaskMilestone(event.target.value)}>
               <option value="">No milestone</option>
               {planning.milestones.filter(item => item.status !== 'Completed' ||
                 String(item.id) === taskMilestone).map(item =>
                 <option key={item.id} value={item.id}>{item.title}</option>)}
             </select></label>
-            <label>Sprint<select value={taskSprint} onChange={event => setTaskSprint(event.target.value)}>
+            <label>Sprint<select aria-label="Sprint" value={taskSprint} onChange={event => setTaskSprint(event.target.value)}>
               <option value="">No sprint</option>
               {planning.sprints.filter(item => item.status !== 'Completed' ||
                 String(item.id) === taskSprint).map(item =>
