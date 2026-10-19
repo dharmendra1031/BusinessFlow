@@ -972,3 +972,58 @@ test('Planning UI: create milestones and sprints and assign a development task',
   await details.getByLabel('Status for Deliver sprint tasks').selectOption('Done');
   await expect(details.getByText('1/1 tasks (100%)').first()).toBeVisible();
 });
+
+test('Phase 4: audit history is paginated and restricted to administrators', async ({ page, request }) => {
+  const name = 'Audit QA ' + unique();
+  await createLead(request, name);
+  const admin = { Authorization: 'Bearer ' + adminToken() };
+  const entries = await request.get(apiUrl + '/api/admin/audit?page=1&pageSize=5&table=Leads', { headers: admin });
+  expect(entries.status()).toBe(200);
+  const result = await entries.json();
+  expect(result.pageSize).toBe(5);
+  expect(result.items.length).toBeLessThanOrEqual(5);
+  expect(result.items.some((entry: { tableName: string }) => entry.tableName === 'Leads')).toBe(true);
+
+  const invalid = await request.get(apiUrl + '/api/admin/audit?pageSize=501', { headers: admin });
+  expect(invalid.status()).toBe(400);
+  const employee = await createEmployee(request, 'Employee');
+  const signedIn = await request.post(apiUrl + '/api/auth/login', {
+    data: { email: employee.email, password: employeePassword },
+  });
+  expect(signedIn.status()).toBe(200);
+  const staffToken = (await signedIn.json()).token;
+  const denied = await request.get(apiUrl + '/api/admin/audit', {
+    headers: { Authorization: 'Bearer ' + staffToken },
+  });
+  expect(denied.status()).toBe(403);
+
+  await signIn(page);
+  await page.getByRole('button', { name: 'Audit history' }).click();
+  await expect(page.getByRole('heading', { name: 'Audit history' })).toBeVisible();
+  await page.getByLabel('Module').fill('Leads');
+  await page.getByRole('button', { name: 'Search audit' }).click();
+  await expect(page.getByRole('heading', { name: /audit entries/ })).toBeVisible();
+});
+
+test('Phase 4: browser cookie requires CSRF for writes and logout clears session', async ({ request }) => {
+  const login = await request.post(apiUrl + '/api/auth/login', {
+    data: { email: adminEmail, password: adminPassword },
+  });
+  expect(login.status()).toBe(200);
+  const me = await request.get(apiUrl + '/api/auth/me');
+  expect(me.status()).toBe(200);
+  const current = await me.json();
+  expect(typeof current.csrfToken).toBe('string');
+  const lead = { name: 'Cookie CSRF Test ' + unique(), phone: '+96555501111', sourceId: 1 };
+  const missingToken = await request.post(apiUrl + '/api/leads', { data: lead });
+  expect(missingToken.status()).toBe(400);
+  const allowed = await request.post(apiUrl + '/api/leads', {
+    data: lead, headers: { 'X-CSRF-TOKEN': current.csrfToken },
+  });
+  expect(allowed.status()).toBe(201);
+  const logout = await request.post(apiUrl + '/api/auth/logout', {
+    headers: { 'X-CSRF-TOKEN': current.csrfToken },
+  });
+  expect(logout.status()).toBe(204);
+  expect((await request.get(apiUrl + '/api/auth/me')).status()).toBe(401);
+});
