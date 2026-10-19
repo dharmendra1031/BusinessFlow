@@ -548,7 +548,7 @@ test('Development: convert a won lead, assign tasks and complete progress', asyn
   await details.getByLabel('Task title').fill(taskTitle);
   await details.getByLabel('Priority').selectOption('High');
   await details.getByRole('button', { name: 'Add task' }).click();
-  await expect(details.getByText(taskTitle)).toBeVisible();
+  await expect(details.locator('.project-task').getByText(taskTitle, { exact: true })).toBeVisible();
   await details.getByRole('button', { name: 'Edit task' }).click();
   await details.getByLabel('Priority').selectOption('Urgent');
   await details.getByRole('button', { name: 'Save task' }).click();
