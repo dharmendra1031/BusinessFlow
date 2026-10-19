@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { api } from './api';
+import { useEffect, useState } from 'react';
+import { api, setCsrfToken } from './api';
 import { clearFieldError, handleFormKeyDown, validateForm } from './formUtils';
 import { FeedbackProvider, useFeedback } from './Feedback';
 import { Icon } from './Icon';
@@ -11,6 +11,7 @@ import PasswordSettings from './PasswordSettings';
 import type { User } from './types';
 
 type Session = { token: string; user: User };
+type CurrentSession = User & { csrfToken: string };
 type Screen = 'dashboard' | 'leads' | 'projects' | 'followups' | 'employees' | 'reports' | 'audit' | 'settings';
 
 const navigation = [
@@ -33,9 +34,23 @@ function Workspace() {
   const [session, setSession] = useState<Session | null>(() => {
     try {
       const saved = sessionStorage.getItem('crmSession');
-      return saved ? JSON.parse(saved) as Session : null;
+      return saved && import.meta.env.DEV ? JSON.parse(saved) as Session : null;
     } catch { return null; }
   });
+  const [restoring, setRestoring] = useState(true);
+  useEffect(() => {
+    if (session?.token) {
+      setRestoring(false);
+      return;
+    }
+    void api<CurrentSession>('/api/auth/me', '')
+      .then(current => {
+        setCsrfToken(current.csrfToken);
+        setSession({ token: '', user: current });
+      })
+      .catch(() => {})
+      .finally(() => setRestoring(false));
+  }, []);
   const [screen, setScreen] = useState<Screen>('dashboard');
   const [menuOpen, setMenuOpen] = useState(false);
   const [newLeadRequest, setNewLeadRequest] = useState(0);
@@ -45,15 +60,23 @@ function Workspace() {
     setMenuOpen(false);
   }
 
-  function logout() {
-    sessionStorage.removeItem('crmSession');
-    setSession(null);
-    setMenuOpen(false);
-    notify('info', 'Signed out', 'Your session has ended.');
+  async function logout() {
+    try {
+      await api('/api/auth/logout', session?.token || '', { method: 'POST' });
+      setCsrfToken('');
+      sessionStorage.removeItem('crmSession');
+      setSession(null);
+      setMenuOpen(false);
+      notify('info', 'Signed out', 'Your session has ended.');
+    } catch (err) {
+      notify('error', 'Unable to sign out', err instanceof Error ? err.message : undefined);
+    }
   }
 
+  if (restoring) return <main className="login-layout"><p role="status">Restoring session...</p></main>;
   if (!session) return <Login onLogin={value => {
-    sessionStorage.setItem('crmSession', JSON.stringify(value));
+    if (import.meta.env.DEV && value.token)
+      sessionStorage.setItem('crmSession', JSON.stringify(value));
     setSession(value);
     notify('success', 'Welcome back', 'You are signed in.');
   }} />;
@@ -139,10 +162,13 @@ function Login({ onLogin }: { onLogin: (value: Session) => void }) {
     setWorking(true);
     setError('');
     try {
-      const result = await api<Session>('/api/auth/login', '', {
+      const result = await api<{ token: string | null; user: User }>('/api/auth/login', '', {
         method: 'POST', body: JSON.stringify({ email: email.trim(), password }),
       });
-      onLogin(result);
+      const token = result.token || '';
+      const current = await api<CurrentSession>('/api/auth/me', token);
+      setCsrfToken(current.csrfToken);
+      onLogin({ token: import.meta.env.DEV ? token : '', user: current });
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Login failed';
       setError(message);
