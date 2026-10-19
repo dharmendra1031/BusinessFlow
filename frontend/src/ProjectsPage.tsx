@@ -3,8 +3,9 @@ import { api } from './api';
 import { Icon } from './Icon';
 import { useFeedback } from './Feedback';
 import ProjectActivity from './ProjectActivity';
+import ProjectPlanning from './ProjectPlanning';
 import { clearFieldError, handleDialogKeyDown, handleFormKeyDown, validateForm } from './formUtils';
-import type { DevelopmentProject, DevelopmentTask, Employee, User } from './types';
+import type { DevelopmentProject, DevelopmentTask, Employee, ProjectPlan, User } from './types';
 
 type WonLead = { id: number; name: string; customerCode: string | null };
 const projectStatuses = ['Planning', 'InProgress', 'OnHold', 'Completed'];
@@ -18,6 +19,7 @@ export default function ProjectsPage({ token, user }: { token: string; user: Use
   const [leads, setLeads] = useState<WonLead[]>([]);
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [selected, setSelected] = useState<DevelopmentProject | null>(null);
+  const [planning, setPlanning] = useState<ProjectPlan>({ milestones: [], sprints: [] });
   const [showCreate, setShowCreate] = useState(false);
   const [working, setWorking] = useState(false);
   const [taskSaving, setTaskSaving] = useState(false);
@@ -35,6 +37,8 @@ export default function ProjectsPage({ token, user }: { token: string; user: Use
   const [assigneeId, setAssigneeId] = useState('');
   const [taskDueDate, setTaskDueDate] = useState('');
   const [editingTask, setEditingTask] = useState<number | null>(null);
+  const [taskMilestone, setTaskMilestone] = useState('');
+  const [taskSprint, setTaskSprint] = useState('');
 
   const load = useCallback(async () => {
     try {
@@ -66,7 +70,12 @@ export default function ProjectsPage({ token, user }: { token: string; user: Use
   async function openProject(id: number) {
     if (selected?.id !== id) setEditingTask(null);
     try {
-      setSelected(await api<DevelopmentProject>('/api/projects/' + id, token));
+      const [project, plan] = await Promise.all([
+        api<DevelopmentProject>('/api/projects/' + id, token),
+        api<ProjectPlan>('/api/projects/' + id + '/planning', token),
+      ]);
+      setSelected(project);
+      setPlanning(plan);
     } catch (err) {
       notify('error', 'Unable to open project', err instanceof Error ? err.message : undefined);
     }
@@ -135,6 +144,8 @@ export default function ProjectsPage({ token, user }: { token: string; user: Use
     setTaskDescription(task.description || '');
     setAssigneeId(task.assignedToId?.toString() || '');
     setTaskDueDate(task.dueDate || '');
+    setTaskMilestone(task.milestoneId?.toString() || '');
+    setTaskSprint(task.sprintId?.toString() || '');
   }
 
   async function saveTask(event: FormEvent<HTMLFormElement>) {
@@ -149,6 +160,8 @@ export default function ProjectsPage({ token, user }: { token: string; user: Use
           title: taskTitle.trim(), priority: taskPriority, description: taskDescription.trim() || null,
           assignedToId: assigneeId ? Number(assigneeId) : null,
           dueDate: taskDueDate || null,
+          milestoneId: taskMilestone ? Number(taskMilestone) : null,
+          sprintId: taskSprint ? Number(taskSprint) : null,
         }),
       });
       setTaskTitle('');
@@ -156,6 +169,7 @@ export default function ProjectsPage({ token, user }: { token: string; user: Use
       setTaskDescription('');
       setAssigneeId('');
       setTaskDueDate('');
+      setTaskMilestone(''); setTaskSprint('');
       setEditingTask(null);
       await openProject(selected.id);
       await load();
@@ -256,6 +270,8 @@ export default function ProjectsPage({ token, user }: { token: string; user: Use
             <button className="primary" disabled={working}>Save project</button>
           </form>
         </details>}
+        <ProjectPlanning project={selected} token={token} planning={planning}
+          canManage={mayManage(selected)} onSaved={() => openProject(selected.id)} />
         <div className="project-section"><h3>Development tasks</h3>
           {selected.tasks?.length ? <div className="project-tasks">{selected.tasks.map(task =>
             <div className="project-task" key={task.id}>
@@ -287,12 +303,25 @@ export default function ProjectsPage({ token, user }: { token: string; user: Use
               <option value="">Unassigned</option>
               {availableOwners.map(member => <option key={member.id} value={member.id}>{member.fullName}</option>)}
             </select></label>
+            <label>Milestone<select value={taskMilestone} onChange={event => setTaskMilestone(event.target.value)}>
+              <option value="">No milestone</option>
+              {planning.milestones.filter(item => item.status !== 'Completed' ||
+                String(item.id) === taskMilestone).map(item =>
+                <option key={item.id} value={item.id}>{item.title}</option>)}
+            </select></label>
+            <label>Sprint<select value={taskSprint} onChange={event => setTaskSprint(event.target.value)}>
+              <option value="">No sprint</option>
+              {planning.sprints.filter(item => item.status !== 'Completed' ||
+                String(item.id) === taskSprint).map(item =>
+                <option key={item.id} value={item.id}>{item.title}</option>)}
+            </select></label>
             <label>Due date<input type="date" max={selected.dueDate || undefined} value={taskDueDate}
               onChange={event => setTaskDueDate(event.target.value)} /></label>
             <div className="drawer-actions">
               {editingTask !== null && <button type="button" onClick={() => {
                 setEditingTask(null); setTaskTitle(''); setTaskDescription('');
                 setTaskPriority('Medium'); setAssigneeId(''); setTaskDueDate('');
+                setTaskMilestone(''); setTaskSprint('');
               }}>Cancel edit</button>}
               <button className="primary" disabled={working}>{editingTask ? 'Save task' : 'Add task'}</button>
             </div>
