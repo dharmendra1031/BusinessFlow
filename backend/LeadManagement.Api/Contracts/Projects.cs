@@ -23,13 +23,17 @@ public sealed record CreateDevelopmentTaskRequest(
     [MaxLength(2000)] string? Description,
     [Required] string Priority,
     long? AssignedToId,
-    DateOnly? DueDate);
+    DateOnly? DueDate,
+    long? MilestoneId = null,
+    long? SprintId = null);
 
 public sealed record UpdateDevelopmentTaskRequest(
     [Required, MinLength(2), MaxLength(150)] string Title,
     [MaxLength(2000)] string? Description,
     [Required] string Priority,
     long? AssignedToId,
-    DateOnly? DueDate);
+    DateOnly? DueDate,
+    long? MilestoneId = null,
+    long? SprintId = null);
 
 public sealed record UpdateDevelopmentTaskStatusRequest([Required] string Status);
