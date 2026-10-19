@@ -10,10 +10,12 @@ failed with HTTP 500.30 (`CLR worker thread exited prematurely`), while the
 same API started successfully as a separate process and passed
 `/health/ready`. The underlying in-process failure was not established.
 
-This guide covers packaging and IIS setup. The application still stores JWTs
-in browser `sessionStorage`, and a live security review has not been completed.
+This guide covers packaging and IIS setup. Production browser authentication
+now uses an HttpOnly, Secure, SameSite=Strict session cookie and CSRF protection;
+development and API clients still support bearer JWTs. The new web session
+design and response security headers require live HTTPS acceptance testing.
 Do not open the CRM to real users until the production controls listed in the
-[README](README.md) have been reviewed.
+[README](README.md) and [operations runbook](OPERATIONS.md) have been reviewed.
 
 ## 1. Prepare the VPS
 
