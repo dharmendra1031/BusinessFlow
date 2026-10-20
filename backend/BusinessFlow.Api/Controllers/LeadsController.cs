@@ -41,7 +41,7 @@ public sealed class LeadsController(AppDbContext db, RecordAccessService records
             .Skip((page - 1) * pageSize).Take(pageSize)
             .Select(l => new
             {
-                l.Id, l.CustomerCode, l.Name, l.Phone, l.Email, l.CompanyName, l.Address,
+                l.Id, l.RowVersion, l.CustomerCode, l.Name, l.Phone, l.Email, l.CompanyName, l.Address,
                 l.LeadGivenBy, l.ProjectAmount, l.LastFollowUpDate, l.NextFollowUpDate, l.Requirement,
                 l.SourceId, Source = l.Source.Name, l.StatusId, Status = l.Status.Name,
                 l.AssignedToId, AssignedTo = l.AssignedTo == null ? null : l.AssignedTo.FullName,
@@ -56,7 +56,7 @@ public sealed class LeadsController(AppDbContext db, RecordAccessService records
     {
         var lead = await (await records.LeadsAsync(User, Action)).AsNoTracking()
             .Where(l => l.Id == id)
-            .Select(l => new { l.Id, l.CustomerCode, l.Name, l.Phone, l.Email, l.CompanyName, l.Address,
+            .Select(l => new { l.Id, l.RowVersion, l.CustomerCode, l.Name, l.Phone, l.Email, l.CompanyName, l.Address,
                 l.LeadGivenBy, l.ProjectAmount, l.LastFollowUpDate, l.NextFollowUpDate, l.Requirement,
                 l.SourceId, l.StatusId, l.AssignedToId, l.CreatedAtUtc, l.UpdatedAtUtc })
             .FirstOrDefaultAsync();
@@ -67,6 +67,8 @@ public sealed class LeadsController(AppDbContext db, RecordAccessService records
     [RequirePermission("leads.create")]
     public async Task<IActionResult> Create(LeadRequest request)
     {
+        if (request.StatusId is 5 or 6 && (!User.IsInRole("Admin") || string.IsNullOrWhiteSpace(request.OverrideReason)))
+            return BadRequest(new { message = "Create the lead with an open status, then request Won/Lost approval. Admin override requires a reason." });
         if (!await db.LeadSources.AnyAsync(s => s.Id == request.SourceId))
             return BadRequest(new { message = "Invalid source." });
         if (string.IsNullOrWhiteSpace(request.Name) || request.Name.Trim().Length < 2 || string.IsNullOrWhiteSpace(request.Phone))
@@ -96,7 +98,8 @@ public sealed class LeadsController(AppDbContext db, RecordAccessService records
         lead.CustomerCode = $"CUS-{lead.CreatedAtUtc.Year}-{lead.Id:D6}";
         db.AuditLogs.Add(new AuditLog
         {
-            UserId = userId, Action = "Create", TableName = "Leads", RecordId = lead.Id
+            UserId = userId, Action = "Create", TableName = "Leads", RecordId = lead.Id,
+            ChangedFields = request.StatusId is 5 or 6 ? "Admin terminal override: " + request.OverrideReason!.Trim() : null
         });
         await db.SaveChangesAsync();
         await transaction.CommitAsync();
@@ -109,6 +112,10 @@ public sealed class LeadsController(AppDbContext db, RecordAccessService records
     {
         var lead = await (await records.LeadsAsync(User, Action)).FirstOrDefaultAsync(l => l.Id == id);
         if (lead is null) return NotFound();
+        if (!ConcurrencyTokens.Apply(db, lead, request.RowVersion))
+            return BadRequest(new { message = "A valid row version is required. Reload this record." });
+        if (request.StatusId.HasValue && request.StatusId != lead.StatusId)
+            return BadRequest(new { message = "Use the status or approval action to change lead status." });
         if (!await db.LeadSources.AnyAsync(s => s.Id == request.SourceId))
             return BadRequest(new { message = "Invalid source." });
         if (string.IsNullOrWhiteSpace(request.Name) || request.Name.Trim().Length < 2 || string.IsNullOrWhiteSpace(request.Phone))
@@ -131,6 +138,7 @@ public sealed class LeadsController(AppDbContext db, RecordAccessService records
             ChangedFields = "Customer details"
         });
         await db.SaveChangesAsync();
+        Response.Headers["X-Row-Version"] = Convert.ToBase64String(lead.RowVersion);
         return NoContent();
     }
 
@@ -140,6 +148,8 @@ public sealed class LeadsController(AppDbContext db, RecordAccessService records
     {
         var lead = await (await records.LeadsAsync(User, Action)).FirstOrDefaultAsync(l => l.Id == id);
         if (lead is null) return NotFound();
+        if (!ConcurrencyTokens.Apply(db, lead, request.RowVersion))
+            return BadRequest(new { message = "A valid row version is required. Reload this record." });
         var userId = LeadAccess.UserId(User);
         var assignee = await db.Users.FirstOrDefaultAsync(u => u.Id == request.UserId && u.IsActive);
         if (assignee is null) return BadRequest(new { message = "Employee not found." });
@@ -171,11 +181,25 @@ public sealed class LeadsController(AppDbContext db, RecordAccessService records
     [RequirePermission("leads.status")]
     public async Task<IActionResult> ChangeStatus(long id, ChangeLeadStatusRequest request)
     {
+        if (request.StatusId is 5 or 6 && (!User.IsInRole("Admin") || string.IsNullOrWhiteSpace(request.OverrideReason)))
+            return BadRequest(new { message = "Request approval for Won/Lost. Admin override requires a reason." });
+        await using var transaction = await db.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable);
         var lead = await (await records.LeadsAsync(User, Action)).FirstOrDefaultAsync(l => l.Id == id);
         if (lead is null) return NotFound();
+        if (!ConcurrencyTokens.Apply(db, lead, request.RowVersion))
+            return BadRequest(new { message = "A valid row version is required. Reload this record." });
         if (!await db.LeadStatuses.AnyAsync(s => s.Id == request.StatusId))
             return BadRequest(new { message = "Invalid status." });
         if (lead.StatusId == request.StatusId) return NoContent();
+        if (request.StatusId is 5 or 6)
+        {
+            var pending = await db.LeadStatusApprovals.Where(x => x.LeadId == id && x.State == "Pending").ToListAsync();
+            foreach (var approval in pending)
+            {
+                approval.State = "Rejected"; approval.DecidedById = LeadAccess.UserId(User);
+                approval.DecidedAtUtc = DateTime.UtcNow; approval.Comment = "Superseded by an audited Admin override.";
+            }
+        }
         db.LeadStatusChanges.Add(new LeadStatusChange
         {
             LeadId = id, OldStatusId = lead.StatusId,
@@ -185,10 +209,11 @@ public sealed class LeadsController(AppDbContext db, RecordAccessService records
         db.AuditLogs.Add(new AuditLog
         {
             UserId = LeadAccess.UserId(User), Action = "Status", TableName = "Leads", RecordId = id,
-            ChangedFields = $"StatusId: {request.StatusId}"
+            ChangedFields = $"StatusId: {request.StatusId}" + (request.StatusId is 5 or 6 ? "; Admin override: " + request.OverrideReason!.Trim() : "")
         });
         lead.UpdatedAtUtc = DateTime.UtcNow;
         await db.SaveChangesAsync();
+        await transaction.CommitAsync();
         return NoContent();
     }
 

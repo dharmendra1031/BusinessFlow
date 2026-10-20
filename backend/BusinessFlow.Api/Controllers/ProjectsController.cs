@@ -52,7 +52,7 @@ public sealed class ProjectsController(AppDbContext db, RecordAccessService reco
             .Skip((page - 1) * pageSize).Take(pageSize)
             .Select(p => new
             {
-                p.Id, p.LeadId, p.CreatedById, p.Title, p.Status, p.StartDate, p.DueDate,
+                p.Id, p.RowVersion, p.LeadId, p.CreatedById, p.Title, p.Status, p.StartDate, p.DueDate,
                 p.OwnerId, OwnerName = p.Owner.FullName, Customer = p.Lead.Name,
                 p.CreatedAtUtc, p.UpdatedAtUtc,
                 TaskCount = p.Tasks.Count, DoneCount = p.Tasks.Count(t => t.Status == "Done")
@@ -85,12 +85,12 @@ public sealed class ProjectsController(AppDbContext db, RecordAccessService reco
         var project = await (await VisibleProjects()).AsNoTracking().Where(p => p.Id == id)
             .Select(p => new
             {
-                p.Id, p.LeadId, p.CreatedById, p.Title, p.Description, p.Status, p.StartDate, p.DueDate,
+                p.Id, p.RowVersion, p.LeadId, p.CreatedById, p.Title, p.Description, p.Status, p.StartDate, p.DueDate,
                 p.OwnerId, OwnerName = p.Owner.FullName, Customer = p.Lead.Name,
                 p.CreatedAtUtc, p.UpdatedAtUtc,
                 Tasks = p.Tasks.OrderBy(t => t.Id).Select(t => new
                 {
-                    t.Id, t.Title, t.Description, t.Status, t.Priority,
+                    t.Id, t.RowVersion, t.Title, t.Description, t.Status, t.Priority,
                     t.AssignedToId, AssignedTo = t.AssignedTo == null ? null : t.AssignedTo.FullName,
                     t.MilestoneId, t.SprintId, t.DueDate, t.CompletedAtUtc
                 }).ToList()
@@ -140,9 +140,12 @@ public sealed class ProjectsController(AppDbContext db, RecordAccessService reco
     [RequirePermission("projects.edit")]
     public async Task<IActionResult> Update(long id, UpdateProjectRequest request)
     {
+        await using var transaction = await db.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable);
         var project = await (await VisibleProjects()).Include(p => p.Owner).Include(p => p.Tasks)
             .FirstOrDefaultAsync(p => p.Id == id);
         if (project is null) return NotFound();
+        if (!ConcurrencyTokens.Apply(db, project, request.RowVersion))
+            return BadRequest(new { message = "A valid row version is required. Reload this record." });
         if (!await CanManage(project)) return Forbid();
         if (string.IsNullOrWhiteSpace(request.Title) || request.Title.Trim().Length < 2 ||
             !ProjectStatuses.Contains(request.Status))
@@ -178,6 +181,7 @@ public sealed class ProjectsController(AppDbContext db, RecordAccessService reco
         project.UpdatedAtUtc = DateTime.UtcNow;
         Audit("Update", "DevelopmentProjects", project.Id);
         await db.SaveChangesAsync();
+        await transaction.CommitAsync();
         return NoContent();
     }
 
@@ -219,6 +223,8 @@ public sealed class ProjectsController(AppDbContext db, RecordAccessService reco
             return BadRequest(new { message = "Reopen the project before editing tasks." });
         var task = await db.DevelopmentTasks.FirstOrDefaultAsync(t => t.Id == taskId && t.ProjectId == id);
         if (task is null) return NotFound();
+        if (!ConcurrencyTokens.Apply(db, task, request.RowVersion))
+            return BadRequest(new { message = "A valid row version is required. Reload this record." });
         var error = await TaskError(request.Title, request.Priority, request.AssignedToId,
             request.DueDate, project.DueDate, id, request.MilestoneId, request.SprintId);
         if (error is not null) return BadRequest(new { message = error });
@@ -250,6 +256,9 @@ public sealed class ProjectsController(AppDbContext db, RecordAccessService reco
         var task = await db.DevelopmentTasks.FirstOrDefaultAsync(t => t.Id == taskId && t.ProjectId == id);
         if (task is null) return NotFound();
         if (!await CanManage(project) && task.AssignedToId != LeadAccess.UserId(User)) return Forbid();
+        if (!ConcurrencyTokens.Apply(db, task, request.RowVersion))
+            return BadRequest(new { message = "A valid row version is required. Reload this record." });
+
         if (task.Status == request.Status) return NoContent();
 
         task.Status = request.Status;

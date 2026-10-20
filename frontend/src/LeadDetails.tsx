@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { api } from './api';
+import { api, ApiError } from './api';
 import { clearFieldError, handleDialogKeyDown, handleFormKeyDown, validateForm } from './formUtils';
 import { Icon } from './Icon';
 import { useFeedback } from './Feedback';
@@ -23,15 +23,20 @@ export default function LeadDetails({ lead, sources, token, onClose, onSaved }: 
   const [address, setAddress] = useState(lead.address ?? '');
   const [leadGivenBy, setLeadGivenBy] = useState(lead.leadGivenBy ?? '');
   const [projectAmount, setProjectAmount] = useState(lead.projectAmount?.toString() ?? '');
+  const [approvals, setApprovals] = useState<{ id: number; state: string; requestedStatusId: number; comment: string | null }[]>([]);
   const [history, setHistory] = useState<LeadFollowUpHistory[]>([]);
   const [sourceId, setSourceId] = useState(lead.sourceId);
   const [dueAt, setDueAt] = useState('');
   const [notes, setNotes] = useState('');
   const [saving, setSaving] = useState(false);
+  const [conflict, setConflict] = useState(false);
+  const [rowVersion, setRowVersion] = useState(lead.rowVersion);
   const [tab, setTab] = useState<'details' | 'followup' | 'history'>('details');
 
   useEffect(() => {
     if (tab !== 'history') return;
+    void api<typeof approvals>('/api/lead-approvals/leads/' + lead.id, token).then(setApprovals)
+      .catch(() => notify('error', 'Unable to load approval history'));
     void api<LeadFollowUpHistory[]>('/api/leads/' + lead.id + '/followups', token)
       .then(setHistory).catch(() => notify('error', 'Unable to load follow-up history'));
   }, [tab, lead.id, token, notify]);
@@ -43,14 +48,29 @@ export default function LeadDetails({ lead, sources, token, onClose, onSaved }: 
     try {
       await api('/api/leads/' + lead.id, token, {
         method: 'PUT',
-        body: JSON.stringify({ name, phone, email: email || null, companyName, requirement, sourceId,
+        onVersion: setRowVersion,
+        body: JSON.stringify({ rowVersion, name, phone, email: email || null, companyName, requirement, sourceId,
           address, leadGivenBy, projectAmount: projectAmount ? Number(projectAmount) : null }),
       });
       await onSaved();
       notify('success', 'Changes saved', name + ' was updated successfully.');
     } catch (err) {
+      if (err instanceof ApiError && err.status === 409) setConflict(true);
       notify('error', 'Unable to update lead', err instanceof Error ? err.message : undefined);
     } finally { setSaving(false); }
+  }
+
+  async function reloadLead() {
+    setSaving(true);
+    try {
+      const current = await api<Lead>('/api/leads/' + lead.id, token);
+      setName(current.name); setPhone(current.phone); setEmail(current.email ?? '');
+      setCompanyName(current.companyName ?? ''); setRequirement(current.requirement ?? '');
+      setAddress(current.address ?? ''); setLeadGivenBy(current.leadGivenBy ?? '');
+      setProjectAmount(current.projectAmount?.toString() ?? ''); setSourceId(current.sourceId);
+      setRowVersion(current.rowVersion); setConflict(false);
+    } catch (error) { notify('error', 'Unable to reload lead', error instanceof Error ? error.message : undefined); }
+    finally { setSaving(false); }
   }
 
   async function createFollowUp(event: React.FormEvent<HTMLFormElement>) {
@@ -93,10 +113,15 @@ export default function LeadDetails({ lead, sources, token, onClose, onSaved }: 
         <span className="source-tag">{lead.status}</span>
       </div>
       <div className="drawer-tabs">
-        <button className={tab === 'details' ? 'selected' : ''} onClick={() => setTab('details')}>Lead information</button>
-        <button className={tab === 'followup' ? 'selected' : ''} onClick={() => setTab('followup')}>New follow-up</button>
-        <button className={tab === 'history' ? 'selected' : ''} onClick={() => setTab('history')}>History</button>
+        <button disabled={saving} className={tab === 'details' ? 'selected' : ''} onClick={() => setTab('details')}>Lead information</button>
+        <button disabled={saving} className={tab === 'followup' ? 'selected' : ''} onClick={() => setTab('followup')}>New follow-up</button>
+        <button disabled={saving} className={tab === 'history' ? 'selected' : ''} onClick={() => setTab('history')}>History</button>
       </div>
+      {conflict && <div className="conflict-notice" role="alert"><strong>This lead changed.</strong>
+        <p>Your input is still here. Reloading replaces it with the latest saved details.</p>
+        <button disabled={saving} onClick={() => void reloadLead()}>Reload latest lead</button></div>}
+      {tab === 'history' && approvals.length > 0 && <section className="drawer-form"><h3>Status approvals</h3>
+        {approvals.map(item => <p key={item.id}>{item.requestedStatusId === 5 ? 'Won' : 'Lost'}: {item.state}{item.comment ? ' ? ' + item.comment : ''}</p>)}</section>}
       {tab === 'details' ? <form className="drawer-form" onSubmit={saveLead} onInput={clearFieldError}
         onKeyDown={handleFormKeyDown}>
         <label>Full name <span className="required">*</span>

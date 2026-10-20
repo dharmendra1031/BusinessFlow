@@ -1,3 +1,4 @@
+import { employeeLookup } from './employeeLookup';
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { api } from './api';
 import { useFeedback } from './Feedback';
@@ -27,7 +28,7 @@ export default function OrganizationPage({ token }: { token: string }) {
 
   const load = useCallback(async () => {
     const [organization, people] = await Promise.all([
-      api<Organization>('/api/admin/organization', token), api<Employee[]>('/api/employees', token),
+      api<Organization>('/api/admin/organization', token), employeeLookup(token, 'organization.manage'),
     ]);
     setData(organization);
     setEmployees(people);

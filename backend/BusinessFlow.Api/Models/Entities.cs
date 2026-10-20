@@ -25,6 +25,8 @@ public sealed class LeadStatus
 
 public sealed class Lead
 {
+    [System.ComponentModel.DataAnnotations.Timestamp]
+    public byte[] RowVersion { get; set; } = [];
     public long Id { get; set; }
     public string Name { get; set; } = string.Empty;
     public string Phone { get; set; } = string.Empty;

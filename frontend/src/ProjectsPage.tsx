@@ -1,5 +1,6 @@
+import { employeeLookup } from './employeeLookup';
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
-import { api } from './api';
+import { api, ApiError } from './api';
 import { Icon } from './Icon';
 import { useFeedback } from './Feedback';
 import ProjectActivity from './ProjectActivity';
@@ -24,6 +25,9 @@ export default function ProjectsPage({ token, user }: { token: string; user: Use
   const [leadSearch, setLeadSearch] = useState('');
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [selected, setSelected] = useState<DevelopmentProject | null>(null);
+  const [conflict, setConflict] = useState(false);
+  const [projectVersion, setProjectVersion] = useState('');
+  const [taskVersion, setTaskVersion] = useState('');
   const [planning, setPlanning] = useState<ProjectPlan>({ milestones: [], sprints: [] });
   const [showCreate, setShowCreate] = useState(false);
   const [working, setWorking] = useState(false);
@@ -68,7 +72,7 @@ export default function ProjectsPage({ token, user }: { token: string; user: Use
     if (!canManage) return;
     void loadEligible()
       .catch(() => notify('error', 'Unable to load won leads'));
-    void api<Employee[]>('/api/employees', token).then(setEmployees)
+    void employeeLookup(token, 'projects.create').then(setEmployees)
       .catch(() => notify('error', 'Unable to load team'));
   }, [load, loadEligible, canManage, token, notify]);
 
@@ -95,6 +99,7 @@ export default function ProjectsPage({ token, user }: { token: string; user: Use
   }
 
   function startEdit(project: DevelopmentProject) {
+    setProjectVersion(project.rowVersion);
     setName(project.title);
     setDescription(project.description || '');
     setOwnerId(String(project.ownerId));
@@ -137,13 +142,14 @@ export default function ProjectsPage({ token, user }: { token: string; user: Use
         notify('success', 'Project created', 'You can now add development tasks.');
       } else if (selected) {
         await api('/api/projects/' + selected.id, token, {
-          method: 'PUT', body: JSON.stringify({ ...payload, status: projectStatus }),
+          method: 'PUT', body: JSON.stringify({ ...payload, status: projectStatus, rowVersion: projectVersion }),
         });
         await load();
         await openProject(selected.id);
         notify('success', 'Project updated');
       }
     } catch (err) {
+      if (err instanceof ApiError && err.status === 409) setConflict(true);
       notify('error', 'Unable to save project', err instanceof Error ? err.message : undefined);
     } finally {
       setWorking(false);
@@ -151,6 +157,7 @@ export default function ProjectsPage({ token, user }: { token: string; user: Use
   }
 
   function startEditTask(task: DevelopmentTask) {
+    setTaskVersion(task.rowVersion);
     setEditingTask(task.id);
     setTaskTitle(task.title);
     setTaskPriority(task.priority);
@@ -170,6 +177,7 @@ export default function ProjectsPage({ token, user }: { token: string; user: Use
         (editingTask ? '/' + editingTask : ''), token, {
         method: editingTask ? 'PUT' : 'POST',
         body: JSON.stringify({
+          rowVersion: editingTask ? taskVersion : undefined,
           title: taskTitle.trim(), priority: taskPriority, description: taskDescription.trim() || null,
           assignedToId: assigneeId ? Number(assigneeId) : null,
           dueDate: taskDueDate || null,
@@ -188,6 +196,7 @@ export default function ProjectsPage({ token, user }: { token: string; user: Use
       await load();
       notify('success', editingTask ? 'Task updated' : 'Task created');
     } catch (err) {
+      if (err instanceof ApiError && err.status === 409) setConflict(true);
       notify('error', 'Unable to create task', err instanceof Error ? err.message : undefined);
     } finally {
       setWorking(false);
@@ -199,12 +208,13 @@ export default function ProjectsPage({ token, user }: { token: string; user: Use
     setTaskSaving(true);
     try {
       await api('/api/projects/' + selected.id + '/tasks/' + task.id + '/status', token, {
-        method: 'PATCH', body: JSON.stringify({ status }),
+        method: 'PATCH', body: JSON.stringify({ status, rowVersion: task.rowVersion }),
       });
       await openProject(selected.id);
       await load();
       notify('success', 'Task updated');
     } catch (err) {
+      if (err instanceof ApiError && err.status === 409) setConflict(true);
       notify('error', 'Unable to update task', err instanceof Error ? err.message : undefined);
     } finally { setTaskSaving(false); }
   }
@@ -280,6 +290,19 @@ export default function ProjectsPage({ token, user }: { token: string; user: Use
           <h2>{selected.title}</h2><p>{selected.customer} · {label(selected.status)}</p></div>
           <button className="icon-button" aria-label="Close" onClick={() => setSelected(null)}>
             <Icon name="close" /></button></div>
+    {conflict && selected && <div className="conflict-notice" role="alert"><strong>This project changed.</strong>
+      <p>Your input is preserved. Reload replaces the editor with the latest saved details.</p>
+      <button disabled={working || taskSaving} onClick={() => void (async () => {
+        try {
+          const current = await api<DevelopmentProject>('/api/projects/' + selected.id, token);
+          setSelected(current); startEdit(current);
+          if (editingTask) {
+            const task = current.tasks?.find(item => item.id === editingTask);
+            if (task) startEditTask(task); else setEditingTask(null);
+          }
+          setConflict(false);
+        } catch (error) { notify('error', 'Unable to reload project', error instanceof Error ? error.message : undefined); }
+      })()}>Reload latest project</button></div>}
         <p className="field-help">Owner: {selected.ownerName} ·
           {selected.tasks?.filter(task => task.status === 'Done').length || 0}/{selected.tasks?.length || 0} tasks done</p>
         {mayManage(selected) && <details className="project-section">

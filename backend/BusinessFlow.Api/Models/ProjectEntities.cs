@@ -2,6 +2,8 @@ namespace BusinessFlow.Api.Models;
 
 public sealed class DevelopmentProject
 {
+    [System.ComponentModel.DataAnnotations.Timestamp]
+    public byte[] RowVersion { get; set; } = [];
     public long Id { get; set; }
     public long LeadId { get; set; }
     public Lead Lead { get; set; } = null!;
@@ -20,6 +22,8 @@ public sealed class DevelopmentProject
 
 public sealed class DevelopmentTask
 {
+    [System.ComponentModel.DataAnnotations.Timestamp]
+    public byte[] RowVersion { get; set; } = [];
     public long Id { get; set; }
     public long ProjectId { get; set; }
     public DevelopmentProject Project { get; set; } = null!;

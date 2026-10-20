@@ -70,13 +70,13 @@ public sealed class LeadPermissionsTests
         await db.SaveChangesAsync();
 
         var managerController = Controller(db, manager.Id, "Manager");
-        Assert.IsType<ForbidResult>(await managerController.Assign(ownLead.Id, new AssignLeadRequest(outsider.Id)));
+        Assert.IsType<ForbidResult>(await managerController.Assign(ownLead.Id, new AssignLeadRequest(outsider.Id, Convert.ToBase64String(ownLead.RowVersion))));
         await db.Entry(ownLead).ReloadAsync();
         Assert.Equal(employee.Id, ownLead.AssignedToId);
         Assert.Empty(await db.LeadAssignments.ToListAsync());
 
         Assert.IsType<NoContentResult>(await managerController.Assign(ownLead.Id,
-            new AssignLeadRequest(manager.Id)));
+            new AssignLeadRequest(manager.Id, Convert.ToBase64String(ownLead.RowVersion))));
         await db.Entry(ownLead).ReloadAsync();
         Assert.Equal(manager.Id, ownLead.AssignedToId);
         Assert.Single(await db.LeadAssignments.ToListAsync());

@@ -11,7 +11,7 @@ public sealed class RolePermissionService(AppDbContext db)
     [
         "dashboard.view", "leads.view", "leads.create", "leads.edit", "leads.assign",
         "followups.view", "followups.manage", "projects.view", "reports.view",
-        "employees.view", "leads.status", "leads.request", "leads.approve",
+        "employees.view", "employees.lookup", "leads.status", "leads.request", "leads.approve",
         "projects.create", "projects.edit", "tasks.create", "tasks.edit", "tasks.status",
         "bugs.view", "bugs.create", "bugs.edit", "bugs.status", "bugs.close",
         "worklogs.view", "worklogs.post", "planning.view", "planning.manage",

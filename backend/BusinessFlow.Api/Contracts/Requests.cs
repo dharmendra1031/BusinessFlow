@@ -21,10 +21,10 @@ public sealed record LeadRequest(
     [MaxLength(500)] string? Address = null,
     [MaxLength(150)] string? LeadGivenBy = null,
     [Range(typeof(decimal), "0", "999999999999999.999")] decimal? ProjectAmount = null,
-    long? StatusId = null);
+    long? StatusId = null, string? RowVersion = null, [MaxLength(500)] string? OverrideReason = null);
 
-public sealed record AssignLeadRequest(long UserId);
-public sealed record ChangeLeadStatusRequest(long StatusId);
+public sealed record AssignLeadRequest(long UserId, string? RowVersion = null);
+public sealed record ChangeLeadStatusRequest(long StatusId, string? RowVersion = null, [MaxLength(500)] string? OverrideReason = null);
 public sealed record CreateFollowUpRequest(DateTime DueAtUtc, [Required, MaxLength(2000)] string Notes);
 
 public sealed record UpdateEmployeeRequest(

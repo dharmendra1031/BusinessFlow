@@ -1,7 +1,17 @@
 const apiUrl = import.meta.env.VITE_API_URL || '';
 let csrfToken = '';
+let requests = 0;
+
+function requestActivity(change: number) {
+  requests = Math.max(0, requests + change);
+  window.dispatchEvent(new CustomEvent('businessflow:requests', { detail: requests }));
+}
 
 export function setCsrfToken(value: string) { csrfToken = value; }
+
+export class ApiError extends Error {
+  constructor(message: string, public readonly status: number) { super(message); }
+}
 
 function errorText(data: unknown, status: number): string {
   if (!data || typeof data !== 'object') return 'Request failed (' + status + ')';
@@ -21,12 +31,14 @@ function errorText(data: unknown, status: number): string {
   return 'Request failed (' + status + ')';
 }
 
-export async function api<T>(path: string, token: string, options: RequestInit = {}): Promise<T> {
+export async function api<T>(path: string, token: string, options: RequestInit & { onVersion?: (version: string) => void } = {}): Promise<T> {
+  const { onVersion, ...requestOptions } = options;
   let response: Response;
+  requestActivity(1);
   try {
     response = await fetch(apiUrl + path, {
       credentials: 'same-origin',
-      ...options,
+      ...requestOptions,
       headers: {
         'Content-Type': 'application/json',
         ...(token ? { Authorization: 'Bearer ' + token } : {}),
@@ -37,23 +49,30 @@ export async function api<T>(path: string, token: string, options: RequestInit =
     });
   } catch {
     throw new Error('Cannot reach the CRM server. Check your connection and try again.');
+  } finally {
+    requestActivity(-1);
   }
 
   if (!response.ok) {
     const data: unknown = await response.json().catch(() => null);
-    throw new Error(errorText(data, response.status));
+    throw new ApiError(errorText(data, response.status), response.status);
   }
+  const version = response.headers.get('X-Row-Version');
+  if (version) onVersion?.(version);
   return response.status === 204 ? undefined as T : response.json() as Promise<T>;
 }
 
 export async function apiBlob(path: string, token: string): Promise<Blob> {
+  requestActivity(1);
+  try {
   const response = await fetch(apiUrl + path, {
     credentials: 'same-origin',
     headers: token ? { Authorization: 'Bearer ' + token } : {}
   });
   if (!response.ok) {
     const data: unknown = await response.json().catch(() => null);
-    throw new Error(errorText(data, response.status));
+    throw new ApiError(errorText(data, response.status), response.status);
   }
-  return response.blob();
+  return await response.blob();
+  } finally { requestActivity(-1); }
 }

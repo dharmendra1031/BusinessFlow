@@ -239,6 +239,12 @@ namespace BusinessFlow.Api.Migrations
                     b.Property<long>("OwnerId")
                         .HasColumnType("bigint");
 
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
                     b.Property<DateOnly?>("StartDate")
                         .HasColumnType("date");
 
@@ -301,6 +307,12 @@ namespace BusinessFlow.Api.Migrations
 
                     b.Property<long>("ProjectId")
                         .HasColumnType("bigint");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
 
                     b.Property<long?>("SprintId")
                         .HasColumnType("bigint");
@@ -394,6 +406,12 @@ namespace BusinessFlow.Api.Migrations
                     b.Property<string>("Requirement")
                         .HasMaxLength(2000)
                         .HasColumnType("nvarchar(2000)");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
 
                     b.Property<long>("SourceId")
                         .HasColumnType("bigint");
@@ -613,6 +631,70 @@ namespace BusinessFlow.Api.Migrations
                             Id = 9L,
                             Name = "Not Interested",
                             SortOrder = 9
+                        });
+                });
+
+            modelBuilder.Entity("BusinessFlow.Api.Models.LeadStatusApproval", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<string>("Comment")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<DateTime?>("DecidedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<long?>("DecidedById")
+                        .HasColumnType("bigint");
+
+                    b.Property<long>("LeadId")
+                        .HasColumnType("bigint");
+
+                    b.Property<byte[]>("LeadVersion")
+                        .IsRequired()
+                        .HasMaxLength(8)
+                        .HasColumnType("varbinary(8)");
+
+                    b.Property<DateTime>("RequestedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<long>("RequestedById")
+                        .HasColumnType("bigint");
+
+                    b.Property<long>("RequestedStatusId")
+                        .HasColumnType("bigint");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<string>("State")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DecidedById");
+
+                    b.HasIndex("LeadId")
+                        .IsUnique()
+                        .HasFilter("[State] = N'Pending'");
+
+                    b.HasIndex("RequestedById");
+
+                    b.HasIndex("RequestedStatusId");
+
+                    b.ToTable("LeadStatusApprovals", t =>
+                        {
+                            t.HasCheckConstraint("CK_LeadStatusApprovals_State", "[State] IN (N'Pending', N'Approved', N'Rejected')");
                         });
                 });
 
@@ -1216,6 +1298,32 @@ namespace BusinessFlow.Api.Migrations
                         .IsRequired();
 
                     b.Navigation("Lead");
+                });
+
+            modelBuilder.Entity("BusinessFlow.Api.Models.LeadStatusApproval", b =>
+                {
+                    b.HasOne("BusinessFlow.Api.Models.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("DecidedById")
+                        .OnDelete(DeleteBehavior.NoAction);
+
+                    b.HasOne("BusinessFlow.Api.Models.Lead", null)
+                        .WithMany()
+                        .HasForeignKey("LeadId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.HasOne("BusinessFlow.Api.Models.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("RequestedById")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.HasOne("BusinessFlow.Api.Models.LeadStatus", null)
+                        .WithMany()
+                        .HasForeignKey("RequestedStatusId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("BusinessFlow.Api.Models.LeadStatusChange", b =>

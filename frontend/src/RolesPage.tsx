@@ -1,3 +1,4 @@
+import { employeeLookup } from './employeeLookup';
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { api } from './api';
 import { useFeedback } from './Feedback';
@@ -26,7 +27,7 @@ export default function RolesPage({ token }: { token: string }) {
 
   const load = useCallback(async () => {
     const [settings, people] = await Promise.all([
-      api<RoleMatrix>('/api/admin/roles', token), api<Employee[]>('/api/employees', token),
+      api<RoleMatrix>('/api/admin/roles', token), employeeLookup(token, 'roles.manage'),
     ]);
     setMatrix(settings); setEmployees(people);
   }, [token]);

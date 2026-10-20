@@ -3,7 +3,7 @@ import { Icon } from './Icon';
 
 type Level = 'success' | 'error' | 'warning' | 'info';
 type Notice = { id: number; level: Level; title: string; detail?: string };
-type ConfirmOptions = { title: string; message: string; confirmText?: string; danger?: boolean };
+type ConfirmOptions = { title: string; message: string; confirmText?: string; danger?: boolean; level?: Level };
 type Confirmation = ConfirmOptions & { resolve: (accepted: boolean) => void };
 type FeedbackApi = {
   notify: (level: Level, title: string, detail?: string) => void;
@@ -25,15 +25,36 @@ export function FeedbackProvider({ children }: { children: React.ReactNode }) {
   const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
   const dialogRef = useRef<HTMLDivElement>(null);
   const activeDialog = useRef<Confirmation | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    function update(event: Event) {
+      const count = (event as CustomEvent<number>).detail;
+      clearTimeout(timer);
+      if (count > 0) timer = setTimeout(() => setLoading(true), 450);
+      else setLoading(false);
+    }
+    window.addEventListener('businessflow:requests', update);
+    return () => { clearTimeout(timer); window.removeEventListener('businessflow:requests', update); };
+  }, []);
 
   const dismiss = useCallback((id: number) => {
     setNotices(current => current.filter(notice => notice.id !== id));
   }, []);
 
   const notify = useCallback((level: Level, title: string, detail?: string) => {
+    if (level === 'success' || level === 'error') {
+      activeDialog.current?.resolve(false);
+      const next: Confirmation = { title, message: detail ?? (level === 'success' ? 'The action completed successfully.' : 'Please review the details and try again.'),
+        level, danger: level === 'error', resolve: () => {} };
+      activeDialog.current = next;
+      setConfirmation(next);
+      return;
+    }
     const id = ++nextId.current;
     setNotices(current => [...current.slice(-3), { id, level, title, detail }]);
-    const timer = setTimeout(() => dismiss(id), level === 'error' ? 8000 : 5000);
+    const timer = setTimeout(() => dismiss(id), 5000);
     timers.current.push(timer);
   }, [dismiss]);
 
@@ -69,7 +90,7 @@ export function FeedbackProvider({ children }: { children: React.ReactNode }) {
       if (!controls.length) return;
       const first = controls[0];
       const last = controls[controls.length - 1];
-      if (event.shiftKey && document.activeElement === first) {
+      if (event.shiftKey && (document.activeElement === first || document.activeElement === dialogRef.current)) {
         event.preventDefault();
         last.focus();
       } else if (!event.shiftKey && document.activeElement === last) {
@@ -95,20 +116,25 @@ export function FeedbackProvider({ children }: { children: React.ReactNode }) {
         </button>
       </div>)}
     </div>
+    {loading && !confirmation && <div className="request-loading" role="status" aria-live="polite">
+      <div className="loading-card"><span className="feedback-spinner" aria-hidden="true" />
+        <div><strong>Please wait…</strong><p>Processing your request</p></div></div>
+    </div>}
     {confirmation && <div className="dialog-backdrop" onMouseDown={event => {
       if (event.currentTarget === event.target) closeDialog(false);
     }}>
-      <div className="confirm-dialog" role="alertdialog" aria-modal="true"
+      <div className={'confirm-dialog feedback-dialog ' + (confirmation.level ? 'feedback-' + confirmation.level : '')} role="alertdialog" aria-modal="true"
         aria-labelledby="dialog-title" aria-describedby="dialog-description" tabIndex={-1} ref={dialogRef}>
         <span className={'dialog-symbol ' + (confirmation.danger ? 'dialog-danger' : 'dialog-primary')}>
-          <Icon name={confirmation.danger ? 'warning' : 'info'} size={24} />
+          <Icon name={confirmation.level === 'success' ? 'check' : confirmation.danger ? 'warning' : 'info'} size={24} />
         </span>
         <h2 id="dialog-title">{confirmation.title}</h2>
         <p id="dialog-description">{confirmation.message}</p>
         <div className="dialog-actions">
-          <button autoFocus onClick={() => closeDialog(false)}>Cancel</button>
+          {!confirmation.level && <button autoFocus onClick={() => closeDialog(false)}>Cancel</button>}
           <button className={confirmation.danger ? 'danger-button' : 'primary'}
-            onClick={() => closeDialog(true)}>{confirmation.confirmText || 'Confirm'}</button>
+            autoFocus={!!confirmation.level} onClick={() => closeDialog(true)}>
+            {confirmation.level === 'success' ? 'Done' : confirmation.level === 'error' ? 'Close' : confirmation.confirmText || 'Confirm'}</button>
         </div>
       </div>
     </div>}

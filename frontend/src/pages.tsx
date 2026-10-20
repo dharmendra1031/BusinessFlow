@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useState } from 'react';
+import LeadStatusRequest from './LeadStatusRequest';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { api } from './api';
 import { clearFieldError, handleDialogKeyDown, handleFormKeyDown, validateForm } from './formUtils';
 import { Icon } from './Icon';
@@ -11,15 +12,20 @@ function useResource<T>(path: string, token: string) {
   const [data, setData] = useState<T | null>(null);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
+  const latestRequest = useRef(0);
   const refresh = useCallback(async () => {
+    const requestId = ++latestRequest.current;
     if (!path) { setLoading(false); return; }
     setLoading(true);
     try {
-      setData(await api<T>(path, token));
+      const result = await api<T>(path, token);
+      if (requestId !== latestRequest.current) return;
+      setData(result);
       setError('');
     } catch (err) {
+      if (requestId !== latestRequest.current) return;
       setError(err instanceof Error ? err.message : 'Unable to load data');
-    } finally { setLoading(false); }
+    } finally { if (requestId === latestRequest.current) setLoading(false); }
   }, [path, token]);
   useEffect(() => { void refresh(); }, [refresh]);
   return { data, error, loading, refresh };
@@ -203,6 +209,7 @@ export function LeadsPage({ token, user, newLeadRequest, onNewLeadOpened }: {
   const [page, setPage] = useState(1);
   const [showNew, setShowNew] = useState(false);
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
+  const [statusRequest, setStatusRequest] = useState<{ lead: Lead; statusId: number } | null>(null);
   const [working, setWorking] = useState(false);
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
@@ -243,7 +250,8 @@ export function LeadsPage({ token, user, newLeadRequest, onNewLeadOpened }: {
   const { data: statuses } = useResource<Lookup[]>('/api/masters/lead-statuses', token);
   const { data: sources } = useResource<Lookup[]>('/api/masters/lead-sources', token);
   const canAssign = user.roles.includes('Admin') || user.roles.includes('Manager');
-  const { data: employees } = useResource<Employee[]>(canAssign ? '/api/employees' : '', token);
+  const { data: employeeOptions } = useResource<Paged<Employee>>(canAssign ? '/api/employees/lookup?action=leads.assign&pageSize=200' : '', token);
+  const employees = employeeOptions?.items;
 
   async function saveLead(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -267,18 +275,13 @@ export function LeadsPage({ token, user, newLeadRequest, onNewLeadOpened }: {
   async function changeStatus(lead: Lead, nextStatusId: number) {
     const status = statuses?.find(item => item.id === nextStatusId);
     if (!status || nextStatusId === lead.statusId) return;
-    if (status.name === 'Won' || status.name === 'Lost') {
-      const accepted = await confirm({
-        title: 'Mark lead as ' + status.name.toLowerCase() + '?',
-        message: 'This will move ' + lead.name + ' to ' + status.name + ' in your pipeline.',
-        confirmText: 'Mark ' + status.name,
-        danger: status.name === 'Lost',
-      });
-      if (!accepted) return;
+    if (nextStatusId === 5 || nextStatusId === 6) {
+      setStatusRequest({ lead, statusId: nextStatusId });
+      return;
     }
     try {
       await api('/api/leads/' + lead.id + '/status', token, {
-        method: 'PATCH', body: JSON.stringify({ statusId: nextStatusId }),
+        method: 'PATCH', body: JSON.stringify({ statusId: nextStatusId, rowVersion: lead.rowVersion }),
       });
       await refresh();
       notify('success', 'Status updated', lead.name + ' is now ' + status.name + '.');
@@ -299,7 +302,7 @@ export function LeadsPage({ token, user, newLeadRequest, onNewLeadOpened }: {
     if (!accepted) return;
     try {
       await api('/api/leads/' + lead.id + '/assign', token, {
-        method: 'POST', body: JSON.stringify({ userId: assigneeId }),
+        method: 'POST', body: JSON.stringify({ userId: assigneeId, rowVersion: lead.rowVersion }),
       });
       await refresh();
       notify('success', 'Lead assigned', employee.fullName + ' is now responsible for this lead.');
@@ -309,6 +312,9 @@ export function LeadsPage({ token, user, newLeadRequest, onNewLeadOpened }: {
   }
 
   return <section>
+    {statusRequest && <LeadStatusRequest lead={statusRequest.lead} statusId={statusRequest.statusId}
+      isAdmin={user.roles.includes('Admin')} token={token} onClose={() => setStatusRequest(null)} onSaved={refresh} />}
+
     <header className="page-header"><div><span className="section-kicker">SALES WORKSPACE</span>
       <h1>Manage leads</h1><p>Track, qualify and follow up with every opportunity.</p></div>
       <button className="primary" onClick={() => setShowNew(true)}><Icon name="plus" size={18} /> Add lead</button>
@@ -394,7 +400,7 @@ export function LeadsPage({ token, user, newLeadRequest, onNewLeadOpened }: {
           <label>Project amount (KWD)<input type="number" min="0" max="999999999999999.999" step="0.001" value={projectAmount}
             onChange={event => setProjectAmount(event.target.value)} /></label>
           <label>Lead status<select value={newStatusId} onChange={event => setNewStatusId(Number(event.target.value))}>
-            {statuses?.map(status => <option key={status.id} value={status.id}>{status.name}</option>)}
+            {statuses?.filter(status => status.id !== 5 && status.id !== 6).map(status => <option key={status.id} value={status.id}>{status.name}</option>)}
           </select></label>
           <label>Lead source<select value={sourceId} onChange={event => setSourceId(Number(event.target.value))}>
             {sources?.map(source => <option key={source.id} value={source.id}>{source.name}</option>)}</select></label>
@@ -513,7 +519,17 @@ export function FollowUpsPage({ token }: { token: string }) {
 
 export function EmployeesPage({ token, user }: { token: string; user: User }) {
   const { notify } = useFeedback();
-  const { data, refresh, error } = useResource<Employee[]>('/api/employees', token);
+  const [directorySearch, setDirectorySearch] = useState('');
+  const [directoryRole, setDirectoryRole] = useState('');
+  const [activeFilter, setActiveFilter] = useState('');
+  const [directoryPage, setDirectoryPage] = useState(1);
+  const params = new URLSearchParams({ search: directorySearch, role: directoryRole, page: String(directoryPage), pageSize: '20' });
+  if (activeFilter) params.set('isActive', activeFilter);
+  const { data: directory, refresh, error } = useResource<Paged<Employee>>('/api/employees?' + params, token);
+  const { data: lookup } = useResource<Paged<Employee>>('/api/employees/lookup?action=' +
+    (user.roles.includes('Admin') ? 'employees.create' : 'employees.view') + '&pageSize=200', token);
+  const data = directory?.items;
+  const managers = lookup?.items ?? [];
   const [showForm, setShowForm] = useState(false);
   const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null);
   const [working, setWorking] = useState(false);
@@ -555,19 +571,28 @@ export function EmployeesPage({ token, user }: { token: string; user: User }) {
     <h1>Team members</h1><p>People responsible for keeping leads on track.</p></div>
     {canCreate && <button className="primary" onClick={() => setShowForm(true)}><Icon name="plus" size={18} /> Add employee</button>}
   </header>
+    <div className="table-toolbar">
+      <label>Search employees<input maxLength={150} value={directorySearch} onChange={event => { setDirectorySearch(event.target.value); setDirectoryPage(1); }} /></label>
+      <label>Employee role<input maxLength={80} placeholder="All roles" value={directoryRole} onChange={event => { setDirectoryRole(event.target.value); setDirectoryPage(1); }} /></label>
+      <label>Employee status<select value={activeFilter} onChange={event => { setActiveFilter(event.target.value); setDirectoryPage(1); }}>
+        <option value="">All statuses</option><option value="true">Active</option><option value="false">Inactive</option></select></label>
+    </div>
     {error && <ErrorState message={error} retry={() => void refresh()} />}
     <section className="panel team-panel">
-      <div className="panel-heading"><div><h2>Team directory</h2><p>{data?.filter(member => member.isActive).length ?? 0} active members</p></div></div>
+      <div className="panel-heading"><div><h2>Team directory</h2><p>{directory?.total ?? 0} matching members</p></div></div>
       {data?.length ? <div className="table-scroll"><table><thead><tr><th>Employee</th><th>Email</th>
         <th>Reporting manager</th><th>Status</th><th /></tr></thead><tbody>
         {data.map(member => <tr key={member.id}><td><div className="person-cell">
           <span className="avatar avatar-person">{member.fullName.charAt(0).toUpperCase()}</span>
           <strong>{member.fullName}</strong></div></td>
-          <td>{member.email}</td><td>{data.find(person => person.id === member.managerId)?.fullName || '—'}</td>
+          <td>{member.email}</td><td>{managers.find(person => person.id === member.managerId)?.fullName || '—'}</td>
           <td>{member.isActive ? 'Active' : 'Inactive'}</td>
           <td>{canCreate && <button className="text-action" onClick={() => setSelectedEmployee(member)}>Manage</button>}</td>
         </tr>)}</tbody></table></div> : <EmptyState title="No employees found" detail="Team members will appear here." />}
     </section>
+    <div className="table-toolbar"><button disabled={directoryPage === 1} onClick={() => setDirectoryPage(current => current - 1)}>Previous employees</button>
+      <span>Page {directoryPage} ? {directory?.total ?? 0} employees</span>
+      <button disabled={directoryPage * 20 >= (directory?.total ?? 0)} onClick={() => setDirectoryPage(current => current + 1)}>Next employees</button></div>
     {showForm && <div className="drawer-backdrop" onMouseDown={event => {
       if (event.target === event.currentTarget && !working) setShowForm(false);
     }}><aside className="detail-drawer" role="dialog" aria-modal="true" aria-labelledby="employee-dialog-title"
@@ -593,14 +618,14 @@ export function EmployeesPage({ token, user }: { token: string; user: User }) {
           <option>Employee</option><option>Manager</option></select></label>
         <label>Reporting manager<select value={managerId} onChange={event => setManagerId(event.target.value)}>
           <option value="">None</option>
-          {data?.filter(member => member.roles?.includes('Manager')).map(member =>
+          {managers.filter(member => member.roles?.includes('Manager')).map(member =>
             <option key={member.id} value={member.id}>{member.fullName}</option>)}
         </select></label>
         <div className="drawer-actions"><button type="button" disabled={working} onClick={() => setShowForm(false)}>Cancel</button>
           <button className="primary" disabled={working}>{working ? 'Creating…' : 'Create employee'}</button></div>
       </form>
     </aside></div>}
-    {selectedEmployee && <EmployeeManager employee={selectedEmployee} team={data ?? []}
+    {selectedEmployee && <EmployeeManager employee={selectedEmployee} team={managers}
       token={token} onClose={() => setSelectedEmployee(null)} onSaved={refresh} />}
   </section>;
 }

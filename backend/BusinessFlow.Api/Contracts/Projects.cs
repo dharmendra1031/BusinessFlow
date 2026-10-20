@@ -16,7 +16,7 @@ public sealed record UpdateProjectRequest(
     [Required] string Status,
     [Range(1, long.MaxValue)] long OwnerId,
     DateOnly? StartDate,
-    DateOnly? DueDate);
+    DateOnly? DueDate, string? RowVersion = null);
 
 public sealed record CreateDevelopmentTaskRequest(
     [Required, MinLength(2), MaxLength(150)] string Title,
@@ -34,6 +34,6 @@ public sealed record UpdateDevelopmentTaskRequest(
     long? AssignedToId,
     DateOnly? DueDate,
     long? MilestoneId = null,
-    long? SprintId = null);
+    long? SprintId = null, string? RowVersion = null);
 
-public sealed record UpdateDevelopmentTaskStatusRequest([Required] string Status);
+public sealed record UpdateDevelopmentTaskStatusRequest([Required] string Status, string? RowVersion = null);

@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test } from './fixtures';
 
 test('Organization: admin creates department and team and sees safe disable errors', async ({ page }) => {
   await page.addInitScript(session => sessionStorage.setItem('crmSession', JSON.stringify(session)), {
@@ -18,7 +18,7 @@ test('Organization: admin creates department and team and sees safe disable erro
   await expect(page.getByRole('cell', { name: teamName, exact: true })).toBeVisible();
   await departments.getByRole('row').filter({ has: page.getByRole('cell', { name: department, exact: true }) })
     .getByRole('button', { name: 'Deactivate', exact: true }).click();
-  await expect(page.getByRole('status').filter({ hasText: 'Transfer or deactivate' })).toBeVisible();
+  await expect(page.getByRole('alertdialog').filter({ hasText: 'Transfer or deactivate' })).toBeVisible();
 });
 
 test('Custom roles: admin creates a role and configures an action with its data scope', async ({ page }) => {

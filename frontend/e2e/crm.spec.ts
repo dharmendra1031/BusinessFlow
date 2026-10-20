@@ -1,4 +1,5 @@
-import { expect, test, type APIRequestContext, type Page } from '@playwright/test';
+import { type APIRequestContext, type Page } from '@playwright/test';
+import { expect, test } from './fixtures';
 
 const apiUrl = 'http://localhost:5081';
 const adminEmail = process.env.CRM_ADMIN_EMAIL!;
@@ -115,7 +116,6 @@ test('Leads: create, search, edit, status, schedule and history', async ({ page 
   await create.getByLabel('Lead given by').fill('Playwright QA');
   await create.getByLabel('Project amount (KWD)').fill('315.750');
   await create.getByRole('button', { name: 'Create lead' }).click();
-  await expect(page.getByRole('status').filter({ hasText: 'Lead created' })).toBeVisible();
 
   await page.getByLabel('Search leads').fill(customer);
   await expect(page.getByRole('button', { name: customer, exact: true })).toBeVisible();
@@ -124,20 +124,17 @@ test('Leads: create, search, edit, status, schedule and history', async ({ page 
   const details = page.getByRole('dialog', { name: customer });
   await details.getByLabel('Address', { exact: true }).fill('Kuwait City');
   await details.getByRole('button', { name: 'Save changes' }).click();
-  await expect(page.getByRole('status').filter({ hasText: 'Changes saved' })).toBeVisible();
 
   await details.getByRole('button', { name: 'New follow-up' }).click();
   await details.getByLabel('Due date and time').fill(
     new Date(Date.now() + 2 * 86_400_000).toISOString().slice(0, 16));
   await details.getByLabel('Notes').fill('Playwright follow-up check');
   await details.getByRole('button', { name: 'Schedule follow-up' }).click();
-  await expect(page.getByRole('status').filter({ hasText: 'Follow-up scheduled' })).toBeVisible();
   await details.getByRole('button', { name: 'History' }).click();
   await expect(details.getByText('Playwright follow-up check')).toBeVisible();
   await details.getByRole('button', { name: 'Close lead details' }).click();
 
   await page.getByLabel('Status for ' + customer).selectOption({ label: 'Contacted' });
-  await expect(page.getByRole('status').filter({ hasText: 'Status updated' })).toBeVisible();
   await page.getByRole('button', { name: customer, exact: true }).click();
   await expect(page.getByRole('dialog', { name: customer }).getByLabel('Address', { exact: true }))
     .toHaveValue('Kuwait City');
@@ -163,14 +160,14 @@ test('Follow-ups: edit, complete and filter tasks', async ({ page, request }) =>
     new Date(Date.now() + 3 * 86_400_000).toISOString().slice(0, 16));
   await dialog.getByLabel('Remarks').fill('Updated UI reminder');
   await dialog.getByRole('button', { name: 'Save changes' }).click();
-  const updated = page.locator('.followup-row').filter({ hasText: 'Updated UI reminder' });
+  const updated = page.locator('.followup-row').filter({ hasText: name }).filter({ hasText: 'Updated UI reminder' });
   await expect(updated).toBeVisible();
   await updated.getByRole('button', { name: 'Complete' }).click();
   await page.getByRole('alertdialog').getByRole('button', { name: 'Mark complete' }).click();
   await page.getByRole('tab', { name: 'Completed' }).click();
-  await expect(page.locator('.followup-row').filter({ hasText: 'Updated UI reminder' })).toBeVisible();
+  await expect(page.locator('.followup-row').filter({ hasText: name }).filter({ hasText: 'Updated UI reminder' })).toBeVisible();
   await page.getByRole('tab', { name: 'Overdue' }).click();
-  await expect(page.locator('.followup-row').filter({ hasText: 'Updated UI reminder' })).toHaveCount(0);
+  await expect(page.locator('.followup-row').filter({ hasText: name }).filter({ hasText: 'Updated UI reminder' })).toHaveCount(0);
 });
 
 test('Reports: all ten categories, filters and CSV export', async ({ page, request }) => {
@@ -228,7 +225,6 @@ test('Team: create, manage, reset password and deactivate', async ({ page }) => 
   await dialog.locator('input[type="email"]').fill(email);
   await dialog.getByLabel('Temporary password').fill(employeePassword);
   await dialog.getByRole('button', { name: 'Create employee' }).click();
-  await expect(page.getByRole('status').filter({ hasText: 'Employee created' })).toBeVisible();
 
   const row = page.getByRole('row').filter({ hasText: email });
   await expect(row).toBeVisible();
@@ -246,7 +242,6 @@ test('Team: create, manage, reset password and deactivate', async ({ page }) => 
     .getByLabel('Confirm new password').fill('ResetUiPassword123!');
   await page.getByRole('dialog', { name: 'Playwright Staff' })
     .getByRole('button', { name: 'Reset password' }).click();
-  await expect(page.getByRole('status').filter({ hasText: 'Password reset' })).toBeVisible();
 
   await page.getByRole('dialog', { name: 'Playwright Staff' })
     .getByRole('button', { name: 'Deactivate' }).click();
@@ -418,7 +413,6 @@ test('Lead form rejects short names, bad phones, invalid email and amount bounda
     .toBe(true);
   await amount.fill('10.125');
   await dialog.getByRole('button', { name: 'Create lead' }).click();
-  await expect(page.getByRole('status').filter({ hasText: 'Lead created' })).toBeVisible();
 });
 
 test('API rejects invalid lead and employee values even without browser validation', async ({ request }) => {

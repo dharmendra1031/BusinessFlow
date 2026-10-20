@@ -1,12 +1,10 @@
 using System.Text;
-using System.Threading.RateLimiting;
 using BusinessFlow.Api.Data;
 using BusinessFlow.Api.Models;
 using BusinessFlow.Api.Services;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Antiforgery;
 using Microsoft.AspNetCore.Identity;
-using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 
@@ -17,7 +15,7 @@ if (string.IsNullOrWhiteSpace(secret) || Encoding.UTF8.GetByteCount(secret) < 32
 if (builder.Environment.IsProduction() && secret.StartsWith("REPLACE_WITH_", StringComparison.Ordinal))
     throw new InvalidOperationException("Replace the production Jwt:Key placeholder before starting the API.");
 
-builder.Services.AddControllers();
+builder.Services.AddControllers(options => options.Filters.Add<ConcurrencyExceptionFilter>());
 builder.Services.AddAntiforgery(options =>
 {
     options.HeaderName = "X-CSRF-TOKEN";
@@ -27,22 +25,8 @@ builder.Services.AddAntiforgery(options =>
         ? CookieSecurePolicy.SameAsRequest : CookieSecurePolicy.Always;
 });
 builder.Services.AddProblemDetails();
-var loginLimit = builder.Configuration.GetValue<int?>("RateLimiting:LoginRequestsPerMinute") ?? 5;
-if (loginLimit is < 1 or > 50)
-    throw new InvalidOperationException("Login rate limit must be between 1 and 50 per minute.");
-builder.Services.AddRateLimiter(options =>
-{
-    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
-    options.AddPolicy("login", context => RateLimitPartition.GetFixedWindowLimiter(
-        context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
-        _ => new FixedWindowRateLimiterOptions
-        {
-            PermitLimit = loginLimit,
-            Window = TimeSpan.FromMinutes(1),
-            QueueLimit = 0,
-            AutoReplenishment = true
-        }));
-});
+builder.Services.AddSingleton(TimeProvider.System);
+builder.Services.AddSingleton<LoginAttemptLimiter>();
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection")
     ?? throw new InvalidOperationException("Configure DefaultConnection.");
 if (builder.Environment.IsProduction() && connectionString.Contains("YOUR_SQL_", StringComparison.Ordinal))
@@ -65,6 +49,7 @@ builder.Services.AddScoped<RolePermissionService>();
 builder.Services.AddScoped<OrganizationService>();
 builder.Services.AddScoped<RoleAdministrationService>();
 builder.Services.AddScoped<RecordAccessService>();
+builder.Services.AddScoped<LeadApprovalService>();
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
     {
@@ -120,6 +105,7 @@ builder.Services.AddCors(options => options.AddPolicy("Frontend", policy =>
         .AllowAnyHeader().AllowAnyMethod()));
 
 var app = builder.Build();
+_ = app.Services.GetRequiredService<LoginAttemptLimiter>();
 if (!app.Environment.IsDevelopment())
 {
     app.UseExceptionHandler();
@@ -146,7 +132,6 @@ app.UseDefaultFiles();
 app.UseStaticFiles();
 app.UseRouting();
 app.UseCors("Frontend");
-app.UseRateLimiter();
 app.UseAuthentication();
 app.Use(async (context, next) =>
 {

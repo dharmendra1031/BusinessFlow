@@ -1,3 +1,4 @@
+import { employeeLookup } from './employeeLookup';
 import { useEffect, useState } from 'react';
 import { api, apiBlob } from './api';
 import { handleFormKeyDown } from './formUtils';
@@ -27,7 +28,7 @@ export default function ReportsPage({ token, user }: { token: string; user: User
   useEffect(() => {
     void api<Lookup[]>('/api/masters/lead-statuses', token).then(setStatuses).catch(() => {});
     if (user.roles.includes('Admin') || user.roles.includes('Manager'))
-      void api<Employee[]>('/api/employees', token).then(setEmployees).catch(() => {});
+      void employeeLookup(token, 'reports.view').then(setEmployees).catch(() => {});
   }, [token, user.roles]);
   const [report, setReport] = useState<ReportResult | null>(null);
   const [loading, setLoading] = useState(false);

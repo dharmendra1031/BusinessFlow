@@ -9,6 +9,7 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
     : IdentityDbContext<ApplicationUser, IdentityRole<long>, long>(options)
 {
     public DbSet<Lead> Leads => Set<Lead>();
+    public DbSet<LeadStatusApproval> LeadStatusApprovals => Set<LeadStatusApproval>();
     public DbSet<Department> Departments => Set<Department>();
     public DbSet<RolePermissionGrant> RolePermissionGrants => Set<RolePermissionGrant>();
     public DbSet<UserPermissionRestriction> UserPermissionRestrictions => Set<UserPermissionRestriction>();
@@ -31,6 +32,19 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
+
+        modelBuilder.Entity<LeadStatusApproval>(entity =>
+        {
+            entity.Property(x => x.State).HasMaxLength(20).IsRequired();
+            entity.Property(x => x.Comment).HasMaxLength(500);
+            entity.Property(x => x.LeadVersion).HasMaxLength(8).IsRequired();
+            entity.HasIndex(x => x.LeadId).IsUnique().HasFilter("[State] = N'Pending'");
+            entity.HasOne<Lead>().WithMany().HasForeignKey(x => x.LeadId).OnDelete(DeleteBehavior.NoAction);
+            entity.HasOne<LeadStatus>().WithMany().HasForeignKey(x => x.RequestedStatusId).OnDelete(DeleteBehavior.NoAction);
+            entity.HasOne<ApplicationUser>().WithMany().HasForeignKey(x => x.RequestedById).OnDelete(DeleteBehavior.NoAction);
+            entity.HasOne<ApplicationUser>().WithMany().HasForeignKey(x => x.DecidedById).OnDelete(DeleteBehavior.NoAction);
+            entity.ToTable(t => t.HasCheckConstraint("CK_LeadStatusApprovals_State", "[State] IN (N'Pending', N'Approved', N'Rejected')"));
+        });
 
         modelBuilder.Entity<RolePermissionGrant>(entity =>
         {

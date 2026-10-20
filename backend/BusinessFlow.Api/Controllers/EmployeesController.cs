@@ -17,24 +17,60 @@ public sealed class EmployeesController(AppDbContext db, UserManager<Application
     private string Action => RolePermissionService.ForRequest(Request) ?? "employees.view";
     [HttpGet]
     [RequirePermission("employees.view")]
-    public async Task<IActionResult> List()
+    public async Task<IActionResult> List(string? search = null, string? role = null, bool? isActive = null,
+        long? managerId = null, long? departmentId = null, long? teamId = null, int page = 1, int pageSize = 20,
+        CancellationToken ct = default)
     {
-        var query = (await records.EmployeesAsync(User, Action)).AsNoTracking();
-
-        var employees = await query.OrderBy(u => u.FullName)
-            .Select(u => new { u.Id, u.FullName, u.Email, u.PhoneNumber, u.IsActive, u.ManagerId, u.DepartmentId }).ToListAsync();
-
-        var ids = employees.Select(u => u.Id).ToArray();
-        var roles = await (from userRole in db.UserRoles
-                           join role in db.Roles on userRole.RoleId equals role.Id
-                           where ids.Contains(userRole.UserId)
-                           select new { userRole.UserId, role.Name }).ToListAsync();
-
-        return Ok(employees.Select(u => new
+        if (!ValidPage(page, pageSize) || search?.Length > 150 || role?.Length > 80) return BadRequest();
+        var query = (await records.EmployeesAsync(User, Action, ct)).AsNoTracking();
+        query = Search(query, search);
+        if (isActive.HasValue) query = query.Where(x => x.IsActive == isActive);
+        if (managerId.HasValue) query = query.Where(x => x.ManagerId == managerId);
+        if (departmentId.HasValue) query = query.Where(x => x.DepartmentId == departmentId);
+        if (teamId.HasValue) query = query.Where(x => db.TeamMemberships.Any(m => m.TeamId == teamId && m.UserId == x.Id));
+        if (!string.IsNullOrWhiteSpace(role))
         {
-            u.Id, u.FullName, u.Email, u.PhoneNumber, u.IsActive, u.ManagerId, u.DepartmentId,
-            roles = roles.Where(r => r.UserId == u.Id).Select(r => r.Name).ToArray()
-        }));
+            var roleUsers = from membership in db.UserRoles join identityRole in db.Roles on membership.RoleId equals identityRole.Id
+                where identityRole.Name == role select membership.UserId;
+            query = query.Where(x => roleUsers.Contains(x.Id));
+        }
+        return await Page(query, page, pageSize, ct);
+    }
+
+    private static bool ValidPage(int page, int pageSize) => page >= 1 && pageSize is >= 1 and <= 200 &&
+        (long)(page - 1) * pageSize <= int.MaxValue;
+
+    private static IQueryable<ApplicationUser> Search(IQueryable<ApplicationUser> query, string? search)
+    {
+        if (string.IsNullOrWhiteSpace(search)) return query;
+        var term = search.Trim();
+        return query.Where(x => x.FullName.Contains(term) || x.Email != null && x.Email.Contains(term));
+    }
+
+    private async Task<IActionResult> Page(IQueryable<ApplicationUser> query, int page, int pageSize, CancellationToken ct)
+    {
+        var total = await query.CountAsync(ct);
+        var employees = await query.OrderBy(x => x.FullName).ThenBy(x => x.Id).Skip((page - 1) * pageSize).Take(pageSize)
+            .Select(x => new { x.Id, x.FullName, x.Email, x.PhoneNumber, x.IsActive, x.ManagerId, x.DepartmentId }).ToListAsync(ct);
+        var ids = employees.Select(x => x.Id).ToArray();
+        var memberships = await (from member in db.UserRoles join role in db.Roles on member.RoleId equals role.Id
+            where ids.Contains(member.UserId) select new { member.UserId, role.Name }).ToListAsync(ct);
+        var roles = memberships.ToLookup(x => x.UserId, x => x.Name);
+        var items = employees.Select(x => new { x.Id, x.FullName, x.Email, x.PhoneNumber, x.IsActive, x.ManagerId,
+            x.DepartmentId, roles = roles[x.Id].ToArray() });
+        return Ok(new { total, page, pageSize, items });
+    }
+
+    [HttpGet("lookup")]
+    [RequirePermission("employees.lookup")]
+    public async Task<IActionResult> Lookup(string action = "leads.assign", string? search = null,
+        int page = 1, int pageSize = 20, CancellationToken ct = default)
+    {
+        string[] supported = ["leads.assign", "projects.create", "projects.edit", "tasks.create", "tasks.edit",
+            "bugs.create", "bugs.edit", "reports.view", "organization.manage", "roles.manage", "employees.create", "employees.edit", "employees.view"];
+        if (!supported.Contains(action) || !ValidPage(page, pageSize) || search?.Length > 150) return BadRequest();
+        var query = Search((await records.EmployeesAsync(User, action, ct)).AsNoTracking().Where(x => x.IsActive), search);
+        return await Page(query, page, pageSize, ct);
     }
 
     [Authorize(Roles = "Admin")]

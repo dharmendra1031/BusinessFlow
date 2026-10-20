@@ -5,20 +5,24 @@ using Microsoft.AspNetCore.Antiforgery;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.AspNetCore.RateLimiting;
 
 namespace BusinessFlow.Api.Controllers;
 
 [ApiController]
 [Route("api/auth")]
 public sealed class AuthController(UserManager<ApplicationUser> users, TokenService tokens,
-    IAntiforgery antiforgery, IWebHostEnvironment environment) : ControllerBase
+    IAntiforgery antiforgery, IWebHostEnvironment environment, LoginAttemptLimiter limiter) : ControllerBase
 {
     [AllowAnonymous]
-    [EnableRateLimiting("login")]
     [HttpPost("login")]
     public async Task<IActionResult> Login(LoginRequest request)
     {
+        if (!await limiter.CheckAsync(request.Email, HttpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown", HttpContext.RequestAborted))
+        {
+            Response.Headers.RetryAfter = "60";
+            return StatusCode(StatusCodes.Status429TooManyRequests,
+                new { message = "Too many sign-in attempts. Please wait a minute and try again." });
+        }
         var user = await users.FindByEmailAsync(request.Email.Trim());
         if (user is null || !user.IsActive || await users.IsLockedOutAsync(user))
             return Unauthorized(new { message = "Invalid login." });

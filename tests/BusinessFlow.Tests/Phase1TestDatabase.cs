@@ -1,6 +1,8 @@
 using BusinessFlow.Api.Data;
 using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 
 namespace BusinessFlow.Tests;
 
@@ -10,7 +12,7 @@ internal sealed class Phase1TestDatabase : IAsyncDisposable
     public string ConnectionString => connection;
     private Phase1TestDatabase(string connection) => this.connection = connection;
 
-    public static async Task<Phase1TestDatabase> CreateAsync()
+    public static async Task<Phase1TestDatabase> CreateAsync(string? targetMigration = null)
     {
         var configured = Environment.GetEnvironmentVariable("CRM_TEST_CONNECTION")
             ?? throw new InvalidOperationException("CRM_TEST_CONNECTION is required.");
@@ -20,7 +22,7 @@ internal sealed class Phase1TestDatabase : IAsyncDisposable
         builder.InitialCatalog = "LeadManagement_CITests_Phase1_" + Guid.NewGuid().ToString("N");
         var fixture = new Phase1TestDatabase(builder.ConnectionString);
         await using var db = fixture.CreateContext();
-        await db.Database.MigrateAsync();
+        await db.GetService<IMigrator>().MigrateAsync(targetMigration);
         return fixture;
     }
 
