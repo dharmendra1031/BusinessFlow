@@ -6,6 +6,7 @@ import { Icon } from './Icon';
 import { useFeedback } from './Feedback';
 import LeadDetails from './LeadDetails';
 import EmployeeManager from './EmployeeManager';
+import EmployeeSearchSelect from './EmployeeSearchSelect';
 import type { Dashboard, Employee, FollowUp, Lead, Lookup, Paged, User } from './types';
 
 function useResource<T>(path: string, token: string) {
@@ -211,6 +212,9 @@ export function LeadsPage({ token, user, permissions, newLeadRequest, onNewLeadO
   const [showNew, setShowNew] = useState(false);
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
   const [statusRequest, setStatusRequest] = useState<{ lead: Lead; statusId: number } | null>(null);
+  const [assigningLead, setAssigningLead] = useState<Lead | null>(null);
+  const [assignmentId, setAssignmentId] = useState('');
+  const [assignmentName, setAssignmentName] = useState('');
   const [working, setWorking] = useState(false);
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
@@ -296,13 +300,13 @@ export function LeadsPage({ token, user, permissions, newLeadRequest, onNewLeadO
     }
   }
 
-  async function assignLead(lead: Lead, assigneeId: number) {
+  async function assignLead(lead: Lead, assigneeId: number, selectedName?: string) {
     if (!assigneeId || assigneeId === lead.assignedToId) return;
-    const employee = employees?.find(item => item.id === assigneeId);
-    if (!employee) return;
+    const name = selectedName || employees?.find(item => item.id === assigneeId)?.fullName;
+    if (!name) return;
     const accepted = await confirm({
       title: 'Assign this lead?',
-      message: lead.name + ' will be assigned to ' + employee.fullName + '. Pending follow-ups will also move to them.',
+      message: lead.name + ' will be assigned to ' + name + '. Pending follow-ups will also move to them.',
       confirmText: 'Assign lead',
     });
     if (!accepted) return;
@@ -310,8 +314,9 @@ export function LeadsPage({ token, user, permissions, newLeadRequest, onNewLeadO
       await api('/api/leads/' + lead.id + '/assign', token, {
         method: 'POST', body: JSON.stringify({ userId: assigneeId, rowVersion: lead.rowVersion }),
       });
+      setAssigningLead(null);
       await refresh();
-      notify('success', 'Lead assigned', employee.fullName + ' is now responsible for this lead.');
+      notify('success', 'Lead assigned', name + ' is now responsible for this lead.');
     } catch (err) {
       notify('error', 'Assignment failed', err instanceof Error ? err.message : undefined);
     }
@@ -361,7 +366,13 @@ export function LeadsPage({ token, user, permissions, newLeadRequest, onNewLeadO
                 {employees?.filter(employee => employee.isActive).map(employee => <option key={employee.id} value={employee.id}>{employee.fullName}</option>)}
                 {!employees?.some(employee => employee.id === lead.assignedToId && employee.isActive) && lead.assignedToId &&
                   <option value={lead.assignedToId}>{lead.assignedTo || 'Current employee'}</option>}
-              </select> : (lead.assignedTo || 'Unassigned')}</td>
+              </select> : (lead.assignedTo || 'Unassigned')}
+                {canAssign && <button type="button" className="text-action"
+                  aria-label={'Find assignee for ' + lead.name} onClick={() => {
+                    setAssigningLead(lead);
+                    setAssignmentId(lead.assignedToId?.toString() ?? '');
+                    setAssignmentName(lead.assignedTo ?? '');
+                  }}>Find employee</button>}</td>
               <td><button className="icon-button row-edit" aria-label={(canEdit ? 'Edit ' : 'View ') + lead.name}
                 onClick={() => setSelectedLead(lead)}><Icon name="chevron" size={19} /></button></td>
             </tr>)}</tbody></table>
@@ -373,6 +384,30 @@ export function LeadsPage({ token, user, permissions, newLeadRequest, onNewLeadO
             onClick={() => setPage(value => value + 1)}>Next <Icon name="chevron" size={15} /></button></div>
       </div>
     </section>
+    {assigningLead && <div className="drawer-backdrop">
+      <aside className="detail-drawer" role="dialog" aria-modal="true"
+        aria-label={'Assign lead ' + assigningLead.name}
+        onKeyDown={event => handleDialogKeyDown(event, () => setAssigningLead(null))}>
+        <div className="drawer-header"><h2>Assign {assigningLead.name}</h2>
+          <button type="button" className="icon-button" aria-label="Close assignment"
+            onClick={() => setAssigningLead(null)}><Icon name="close" /></button></div>
+        <form className="drawer-form" onSubmit={event => {
+          event.preventDefault();
+          void assignLead(assigningLead, Number(assignmentId), assignmentName);
+        }}>
+          <EmployeeSearchSelect token={token} action="leads.assign" label="Assign to"
+            required value={assignmentId} selectedName={assigningLead.assignedTo ?? undefined}
+            onChange={(value, employee) => {
+              setAssignmentId(value); setAssignmentName(employee?.fullName ?? assigningLead.assignedTo ?? '');
+            }} />
+          <div className="drawer-actions">
+            <button type="button" onClick={() => setAssigningLead(null)}>Cancel</button>
+            <button type="submit" className="primary"
+              disabled={!assignmentId || Number(assignmentId) === assigningLead.assignedToId}>Assign lead</button>
+          </div>
+        </form>
+      </aside>
+    </div>}
     {selectedLead && <LeadDetails key={selectedLead.id} lead={selectedLead} sources={sources ?? []}
       canEdit={canEdit} canManageFollowUps={permissions['followups.manage'] === true}
       canViewFollowUps={permissions['followups.view'] === true} token={token} onClose={() => setSelectedLead(null)}
