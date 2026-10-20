@@ -67,3 +67,12 @@ Phase 1 remains in progress. Full action-capability UI, additional directory/loo
 - GitHub [CRM verification run 39435978029](https://github.com/dharmendra1031/BusinessFlow/actions/runs/39435978029) for `5c6ee43` passed **36/36 SQL/API** and **37/37 Playwright Chromium tests**, EF migration snapshot, dependency audit and frontend production build.
 - GitHub [Windows IIS package run 39435978354](https://github.com/dharmendra1031/BusinessFlow/actions/runs/39435978354) for `5c6ee43` passed.
 - Remaining enterprise acceptance: exact action and record-scope capability UI for complex custom roles, final security review, staging database migration/recovery, and actual concurrent-user load testing. CI is not production sign-off.
+
+## Custom role and record-scope security checkpoint — 20 October 2026
+
+- Security code and tests verified on `4140d94`. The employee report-filter lookup now returns ID/name/active state only; assignment lookups omit phone, department and role membership data.
+- Added two SQL-backed tests for custom organization-report lookup minimization and department transfer revocation across Leads, Projects and assignment candidates.
+- [CI 39449608324](https://github.com/dharmendra1031/BusinessFlow/actions/runs/39449608324): **38/38 SQL/API tests**, **37/37 Playwright tests**, dependency audit and frontend build passed.
+- [IIS package 39449608325](https://github.com/dharmendra1031/BusinessFlow/actions/runs/39449608325): passed.
+- Detailed findings and remaining risks: [phase1-security-review.md](phase1-security-review.md). Still **not production accepted**.
+
