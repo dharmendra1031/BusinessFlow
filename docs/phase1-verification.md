@@ -38,3 +38,13 @@ Phase 1 remains in progress. Full action-capability UI, additional directory/loo
 - `npm run build`: passed. EF `migrations has-pending-model-changes`: no pending changes. `git diff --check`: no whitespace errors.
 - `Phase1MigrationTests` builds the pre-Phase1 schema, seeds baseline users/roles/leads/projects/tasks and a role restriction using only old columns, then upgrades. Existing numeric IDs, Won status, role restriction and populated rowversions are verified.
 - Windows file-lock limitation: backend builds during a live Playwright server can lock the Debug executable. SQL verification uses Release while the browser server runs Debug. No test failure is hidden by this separation.
+
+## GitHub CI recovery and scoped UI checkpoint — 20 October 2026
+
+- Prior `39bce36` GitHub SQL/API run failed one test out of 36: `Phase1LoginApiTests.Missing_account_attempts_are_limited_across_spoofed_forwarded_addresses`. The browser CI environment set `RateLimiting__LoginRequestsPerMinute=30` while the security test assumed the default account limit of five.
+- Commit `c2cd4a0` sets `LoginAccountRequestsPerMinute=5` and `LoginIpRequestsPerMinute=300` inside the integration test host only, isolating tests from the browser runner configuration. Production login throttling was **not changed**.
+- GitHub [CI run 39382007965](https://github.com/dharmendra1031/BusinessFlow/actions/runs/39382007965) passed **36/36 SQL/API tests** and **32/32 Chromium tests**; Windows [IIS packaging run 39382007789](https://github.com/dharmendra1031/BusinessFlow/actions/runs/39382007789) passed.
+- Commit `fa497af` aligns Team navigation and lead Create/Edit/Assign/Status and follow-up controls with effective permissions instead of hard-coded Manager/Admin-only UI rules. GitHub [CI run 39383136109](https://github.com/dharmendra1031/BusinessFlow/actions/runs/39383136109) passed.
+- Commit `ff61165` adds browser regression cases for restricted-employee read-only leads and a custom-role `employees.view` grant. GitHub [CI run 39383449392](https://github.com/dharmendra1031/BusinessFlow/actions/runs/39383449392) passed **36/36 SQL/API tests** and **34/34 Chromium tests**; [IIS packaging run 39383449383](https://github.com/dharmendra1031/BusinessFlow/actions/runs/39383449383) passed.
+- Remaining Phase 1: permission-driven Project/Task/Bug/Worklog UI capabilities, large assignment lookup selection beyond initial 200 records, final review of scope revocation and multi-role interactions, staging migration/recovery evidence and release sign-off.
+- Evidence above reflects isolated CI environments. **No live production deployment, 100–200-user load capability or final Phase 1 production acceptance is asserted.**
