@@ -48,3 +48,12 @@ Phase 1 remains in progress. Full action-capability UI, additional directory/loo
 - Commit `ff61165` adds browser regression cases for restricted-employee read-only leads and a custom-role `employees.view` grant. GitHub [CI run 39383449392](https://github.com/dharmendra1031/BusinessFlow/actions/runs/39383449392) passed **36/36 SQL/API tests** and **34/34 Chromium tests**; [IIS packaging run 39383449383](https://github.com/dharmendra1031/BusinessFlow/actions/runs/39383449383) passed.
 - Remaining Phase 1: permission-driven Project/Task/Bug/Worklog UI capabilities, large assignment lookup selection beyond initial 200 records, final review of scope revocation and multi-role interactions, staging migration/recovery evidence and release sign-off.
 - Evidence above reflects isolated CI environments. **No live production deployment, 100–200-user load capability or final Phase 1 production acceptance is asserted.**
+
+## Scoped project UI checkpoint — 20 October 2026
+
+- Commits `bfd870d`, `b6a652c`, `4038401`, and `e557250` align project creation/editing, task creation/edit/status, sprint/milestone management, bug create/edit/status/close, and worklog viewing/posting controls with effective role permissions. Unauthorized bug/worklog and planning API reads are no longer made by the project screen when the permission is denied. Backend action and record-scope enforcement remains authoritative.
+- New `frontend/e2e/scoped-ui.spec.ts` coverage verifies a task-assigned employee with explicit restrictions can see the assigned task without denied status, activity, planning and worklog controls.
+- Intermediate commits had frontend TypeScript/JSX compilation errors and failed CI. These were corrected before declaring the current code verified.
+- The GitHub [SQL/API and Chromium workflow for `e557250`](https://github.com/dharmendra1031/BusinessFlow/actions/runs/39394296117) completed successfully: **36/36 SQL/API tests** and **35/35 Chromium tests**, frontend production build and dependency audit passed.
+- The corresponding [Windows IIS package workflow](https://github.com/dharmendra1031/BusinessFlow/actions/runs/39394296035) completed successfully.
+- **Remaining:** searchable/paginated employee assignment selectors beyond the initial 200 results, exact per-record UI capabilities for nondefault custom-role scopes, final security review, staging migration and backup/restore acceptance. No 100–200 simultaneous-user capacity claim or live deployment acceptance is made.
