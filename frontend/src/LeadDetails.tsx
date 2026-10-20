@@ -8,12 +8,15 @@ import type { Lead, LeadFollowUpHistory, Lookup } from './types';
 type Props = {
   lead: Lead;
   sources: Lookup[];
+  canEdit: boolean;
+  canManageFollowUps: boolean;
+  canViewFollowUps: boolean;
   token: string;
   onClose: () => void;
   onSaved: () => Promise<void>;
 };
 
-export default function LeadDetails({ lead, sources, token, onClose, onSaved }: Props) {
+export default function LeadDetails({ lead, sources, canEdit, canManageFollowUps, canViewFollowUps, token, onClose, onSaved }: Props) {
   const { notify } = useFeedback();
   const [name, setName] = useState(lead.name);
   const [phone, setPhone] = useState(lead.phone);
@@ -37,13 +40,13 @@ export default function LeadDetails({ lead, sources, token, onClose, onSaved }: 
     if (tab !== 'history') return;
     void api<typeof approvals>('/api/lead-approvals/leads/' + lead.id, token).then(setApprovals)
       .catch(() => notify('error', 'Unable to load approval history'));
-    void api<LeadFollowUpHistory[]>('/api/leads/' + lead.id + '/followups', token)
+    if (canViewFollowUps) void api<LeadFollowUpHistory[]>('/api/leads/' + lead.id + '/followups', token)
       .then(setHistory).catch(() => notify('error', 'Unable to load follow-up history'));
-  }, [tab, lead.id, token, notify]);
+  }, [tab, lead.id, token, notify, canViewFollowUps]);
 
   async function saveLead(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!validateForm(event.currentTarget) || saving) return;
+    if (!canEdit || !validateForm(event.currentTarget) || saving) return;
     setSaving(true);
     try {
       await api('/api/leads/' + lead.id, token, {
@@ -75,7 +78,7 @@ export default function LeadDetails({ lead, sources, token, onClose, onSaved }: 
 
   async function createFollowUp(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!validateForm(event.currentTarget) || saving) return;
+    if (!canManageFollowUps || !validateForm(event.currentTarget) || saving) return;
     const date = new Date(dueAt);
     if (!Number.isFinite(date.getTime()) || date <= new Date()) {
       notify('warning', 'Check the due date', 'Please select a future date and time.');
@@ -114,7 +117,7 @@ export default function LeadDetails({ lead, sources, token, onClose, onSaved }: 
       </div>
       <div className="drawer-tabs">
         <button disabled={saving} className={tab === 'details' ? 'selected' : ''} onClick={() => setTab('details')}>Lead information</button>
-        <button disabled={saving} className={tab === 'followup' ? 'selected' : ''} onClick={() => setTab('followup')}>New follow-up</button>
+        {canManageFollowUps && <button disabled={saving} className={tab === 'followup' ? 'selected' : ''} onClick={() => setTab('followup')}>New follow-up</button>}
         <button disabled={saving} className={tab === 'history' ? 'selected' : ''} onClick={() => setTab('history')}>History</button>
       </div>
       {conflict && <div className="conflict-notice" role="alert"><strong>This lead changed.</strong>
@@ -125,29 +128,29 @@ export default function LeadDetails({ lead, sources, token, onClose, onSaved }: 
       {tab === 'details' ? <form className="drawer-form" onSubmit={saveLead} onInput={clearFieldError}
         onKeyDown={handleFormKeyDown}>
         <label>Full name <span className="required">*</span>
-          <input autoFocus required minLength={2} maxLength={150} value={name} onChange={event => setName(event.target.value)} /></label>
+          <input autoFocus readOnly={!canEdit} required minLength={2} maxLength={150} value={name} onChange={event => setName(event.target.value)} /></label>
         <label>Phone number <span className="required">*</span>
-          <input required type="tel" autoComplete="tel" maxLength={30}
+          <input readOnly={!canEdit} required type="tel" autoComplete="tel" maxLength={30}
           title="Enter a phone number with 7 to 15 digits." value={phone} onChange={event => setPhone(event.target.value)} /></label>
-        <label>Email address<input type="email" maxLength={256} value={email}
+        <label>Email address<input readOnly={!canEdit} type="email" maxLength={256} value={email}
           onChange={event => setEmail(event.target.value)} /></label>
-        <label>Company name<input maxLength={200} value={companyName}
+        <label>Company name<input readOnly={!canEdit} maxLength={200} value={companyName}
           onChange={event => setCompanyName(event.target.value)} /></label>
-        <label>Lead source<select value={sourceId} onChange={event => setSourceId(Number(event.target.value))}>
+        <label>Lead source<select disabled={!canEdit} value={sourceId} onChange={event => setSourceId(Number(event.target.value))}>
           {sources.map(source => <option key={source.id} value={source.id}>{source.name}</option>)}
         </select></label>
-        <label>Address<input maxLength={500} value={address}
+        <label>Address<input readOnly={!canEdit} maxLength={500} value={address}
           onChange={event => setAddress(event.target.value)} /></label>
-        <label>Lead given by <span className="required">*</span><input required maxLength={150} value={leadGivenBy}
+        <label>Lead given by <span className="required">*</span><input readOnly={!canEdit} required maxLength={150} value={leadGivenBy}
           onChange={event => setLeadGivenBy(event.target.value)} /></label>
-        <label>Project amount (KWD)<input type="number" min="0" max="999999999999999.999" step="0.001" value={projectAmount}
+        <label>Project amount (KWD)<input readOnly={!canEdit} type="number" min="0" max="999999999999999.999" step="0.001" value={projectAmount}
           onChange={event => setProjectAmount(event.target.value)} /></label>
         <label>Last follow-up<input readOnly value={lead.lastFollowUpDate ?? ''} /></label>
         <label>Next follow-up<input readOnly value={lead.nextFollowUpDate ?? ''} /></label>
-        <label>Requirement<textarea maxLength={2000} value={requirement}
+        <label>Requirement<textarea readOnly={!canEdit} maxLength={2000} value={requirement}
           onChange={event => setRequirement(event.target.value)} /></label>
         <div className="drawer-actions"><button type="button" disabled={saving} onClick={onClose}>Cancel</button>
-          <button className="primary" disabled={saving}>{saving ? 'Saving…' : 'Save changes'}</button></div>
+          {canEdit && <button className="primary" disabled={saving}>{saving ? 'Saving…' : 'Save changes'}</button>}</div>
       </form> : tab === 'followup' ? <form className="drawer-form" onSubmit={createFollowUp} onInput={clearFieldError}
         onKeyDown={handleFormKeyDown}>
         <p className="form-intro">Choose when to contact this lead again. The follow-up will be assigned to the lead owner.</p>

@@ -199,8 +199,9 @@ export function DashboardPage({ token, onNavigate }: {
   </section>;
 }
 
-export function LeadsPage({ token, user, newLeadRequest, onNewLeadOpened }: {
-  token: string; user: User; newLeadRequest: number; onNewLeadOpened: () => void;
+export function LeadsPage({ token, user, permissions, newLeadRequest, onNewLeadOpened }: {
+  token: string; user: User; permissions: Record<string, boolean>;
+  newLeadRequest: number; onNewLeadOpened: () => void;
 }) {
   const { notify, confirm } = useFeedback();
   const [search, setSearch] = useState('');
@@ -249,7 +250,11 @@ export function LeadsPage({ token, user, newLeadRequest, onNewLeadOpened }: {
     '/api/leads?' + params, token);
   const { data: statuses } = useResource<Lookup[]>('/api/masters/lead-statuses', token);
   const { data: sources } = useResource<Lookup[]>('/api/masters/lead-sources', token);
-  const canAssign = user.roles.includes('Admin') || user.roles.includes('Manager');
+  const canCreate = permissions['leads.create'] === true;
+  const canEdit = permissions['leads.edit'] === true;
+  const canAssign = permissions['leads.assign'] === true;
+  const canStatus = permissions['leads.status'] === true;
+  const canRequestStatus = permissions['leads.request'] === true;
   const { data: employeeOptions } = useResource<Paged<Employee>>(canAssign ? '/api/employees/lookup?action=leads.assign&pageSize=200' : '', token);
   const employees = employeeOptions?.items;
 
@@ -276,6 +281,7 @@ export function LeadsPage({ token, user, newLeadRequest, onNewLeadOpened }: {
     const status = statuses?.find(item => item.id === nextStatusId);
     if (!status || nextStatusId === lead.statusId) return;
     if (nextStatusId === 5 || nextStatusId === 6) {
+      if (!canRequestStatus) return;
       setStatusRequest({ lead, statusId: nextStatusId });
       return;
     }
@@ -317,7 +323,7 @@ export function LeadsPage({ token, user, newLeadRequest, onNewLeadOpened }: {
 
     <header className="page-header"><div><span className="section-kicker">SALES WORKSPACE</span>
       <h1>Manage leads</h1><p>Track, qualify and follow up with every opportunity.</p></div>
-      <button className="primary" onClick={() => setShowNew(true)}><Icon name="plus" size={18} /> Add lead</button>
+      {canCreate && <button className="primary" onClick={() => setShowNew(true)}><Icon name="plus" size={18} /> Add lead</button>}
     </header>
     <section className="panel leads-panel">
       <div className="table-toolbar">
@@ -343,9 +349,12 @@ export function LeadsPage({ token, user, newLeadRequest, onNewLeadOpened }: {
               <td><a className="table-phone" href={'tel:' + lead.phone}>{lead.phone}</a></td>
               <td>{lead.projectAmount?.toLocaleString('en-KW') ?? '—'}</td>
               <td><span className="source-tag">{lead.source}</span></td>
-              <td><select className="inline-select" aria-label={'Status for ' + lead.name} value={lead.statusId}
+              <td>{canStatus || canRequestStatus ? <select className="inline-select" aria-label={'Status for ' + lead.name} value={lead.statusId}
                 onChange={event => void changeStatus(lead, Number(event.target.value))}>
-                {statuses?.map(status => <option key={status.id} value={status.id}>{status.name}</option>)}</select></td>
+                {statuses?.filter(status => status.id === lead.statusId ||
+                  (status.id === 5 || status.id === 6 ? canRequestStatus : canStatus))
+                  .map(status => <option key={status.id} value={status.id}>{status.name}</option>)}</select>
+                : <span>{lead.status}</span>}</td>
               <td>{canAssign ? <select className="inline-select" aria-label={'Assign ' + lead.name}
                 value={lead.assignedToId ?? ''} onChange={event => void assignLead(lead, Number(event.target.value))}>
                 <option value="" disabled>Unassigned</option>
@@ -353,7 +362,7 @@ export function LeadsPage({ token, user, newLeadRequest, onNewLeadOpened }: {
                 {!employees?.some(employee => employee.id === lead.assignedToId && employee.isActive) && lead.assignedToId &&
                   <option value={lead.assignedToId}>{lead.assignedTo || 'Current employee'}</option>}
               </select> : (lead.assignedTo || 'Unassigned')}</td>
-              <td><button className="icon-button row-edit" aria-label={'Edit ' + lead.name}
+              <td><button className="icon-button row-edit" aria-label={(canEdit ? 'Edit ' : 'View ') + lead.name}
                 onClick={() => setSelectedLead(lead)}><Icon name="chevron" size={19} /></button></td>
             </tr>)}</tbody></table>
         </div> : !error && <EmptyState title="No leads found"
@@ -365,7 +374,8 @@ export function LeadsPage({ token, user, newLeadRequest, onNewLeadOpened }: {
       </div>
     </section>
     {selectedLead && <LeadDetails key={selectedLead.id} lead={selectedLead} sources={sources ?? []}
-      token={token} onClose={() => setSelectedLead(null)}
+      canEdit={canEdit} canManageFollowUps={permissions['followups.manage'] === true}
+      canViewFollowUps={permissions['followups.view'] === true} token={token} onClose={() => setSelectedLead(null)}
       onSaved={async () => {
         await refresh();
         const latest = await api<Partial<Lead>>('/api/leads/' + selectedLead.id, token);

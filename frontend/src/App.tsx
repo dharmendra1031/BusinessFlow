@@ -106,7 +106,7 @@ function Workspace() {
   }} />;
 
   const user = session.user;
-  const canSeeTeam = user.roles.includes('Admin') || user.roles.includes('Manager');
+  const canSeeTeam = allowed?.['employees.view'] === true;
   const moduleAccess: Partial<Record<Screen, string>> = {
     approvals: 'leads.approve', dashboard: 'dashboard.view', leads: 'leads.view', projects: 'projects.view',
     followups: 'followups.view', employees: 'employees.view', reports: 'reports.view',
@@ -153,7 +153,7 @@ function Workspace() {
           <span className="today">{new Date().toLocaleDateString(undefined, {
             day: 'numeric', month: 'short', year: 'numeric'
           })}</span>
-          {allowed?.['leads.create'] !== false && <button className="primary topbar-add" onClick={() => {
+          {allowed?.['leads.create'] === true && <button className="primary topbar-add" onClick={() => {
             navigate('leads');
             setNewLeadRequest(value => value + 1);
           }}><Icon name="plus" size={17} /> New lead</button>}
@@ -162,7 +162,7 @@ function Workspace() {
       </header>
       <main className="content" id="main-content" tabIndex={-1}>
         {screen === 'dashboard' && <DashboardPage token={session.token} onNavigate={navigate} />}
-        {screen === 'leads' && <LeadsPage token={session.token} user={user}
+        {screen === 'leads' && <LeadsPage token={session.token} user={user} permissions={allowed ?? {}}
           newLeadRequest={newLeadRequest} onNewLeadOpened={() => setNewLeadRequest(0)} />}
         {screen === 'projects' && <ProjectsPage token={session.token} user={user} />}
         {screen === 'followups' && <FollowUpsPage token={session.token} />}
