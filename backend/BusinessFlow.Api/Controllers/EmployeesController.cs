@@ -70,7 +70,20 @@ public sealed class EmployeesController(AppDbContext db, UserManager<Application
             "bugs.create", "bugs.edit", "reports.view", "organization.manage", "roles.manage", "employees.create", "employees.edit", "employees.view"];
         if (!supported.Contains(action) || !ValidPage(page, pageSize) || search?.Length > 150) return BadRequest();
         var query = Search((await records.EmployeesAsync(User, action, ct)).AsNoTracking().Where(x => x.IsActive), search);
-        return await Page(query, page, pageSize, ct);
+        // Directory administration needs full employee details. Assignment and report lookups do not.
+        if (action is "organization.manage" or "roles.manage" or "employees.create" or "employees.edit" or "employees.view")
+            return await Page(query, page, pageSize, ct);
+
+        var total = await query.CountAsync(ct);
+        var results = query.OrderBy(x => x.FullName).ThenBy(x => x.Id).Skip((page - 1) * pageSize).Take(pageSize);
+        if (action == "reports.view")
+        {
+            var reportUsers = await results.Select(x => new { x.Id, x.FullName, x.IsActive }).ToListAsync(ct);
+            return Ok(new { total, page, pageSize, items = reportUsers });
+        }
+        var assignees = await results.Select(x => new { x.Id, x.FullName, x.Email, x.IsActive, x.ManagerId })
+            .ToListAsync(ct);
+        return Ok(new { total, page, pageSize, items = assignees });
     }
 
     [Authorize(Roles = "Admin")]
