@@ -211,7 +211,7 @@ export default function ProjectActivity({ project, user, token, canManage, permi
           <button className="primary" disabled={working}>{editingBugId ? 'Save bug' : 'Report bug'}</button>
         </div>
       </form>
-    </details>
+    </details>}
 
     {canViewWorklogs && <section className="project-section" aria-label="Daily developer worklogs">
       <h3>Daily worklogs · {worklogs.totalHours.toFixed(2)} hours shown</h3>
