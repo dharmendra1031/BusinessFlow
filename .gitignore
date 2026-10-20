@@ -11,3 +11,6 @@ tmp/
 .env.*
 !.env.example
 *.user
+
+.worktrees/
+.superpowers/
