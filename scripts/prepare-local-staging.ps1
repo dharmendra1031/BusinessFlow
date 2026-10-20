@@ -33,7 +33,7 @@ $staging = SqlIdentifier $stagingDatabase
 $stagingText = SqlLiteral $stagingDatabase
 $backupFile = Join-Path $BackupDirectory "${stagingDatabase}.bak"
 $backupText = SqlLiteral $backupFile
-$dataPath = $DataDirectory.TrimEnd('\\', '/') + '\\'
+$dataPath = $DataDirectory.TrimEnd('\', '/') + '\'
 $dataPathText = SqlLiteral $dataPath
 
 function Invoke-DatabaseSql([string]$query) {
@@ -117,8 +117,8 @@ RESTORE VERIFYONLY FROM DISK = $backupText WITH CHECKSUM;
 -- For a backup of this very source instance, sys.master_files provides the logical names.
 RESTORE FILELISTONLY FROM DISK = $backupText;
 IF DB_ID($stagingText) IS NOT NULL THROW 51009, 'Target appeared during backup: refusing overwrite.', 1;
-DECLARE @restoreSql nvarchar(max) = N'RESTORE DATABASE $staging FROM DISK = ' +
-    $backupText + N' WITH ' + @moves + N', RECOVERY, CHECKSUM, STATS = 10;';
+DECLARE @restoreSql nvarchar(max) = N'RESTORE DATABASE $staging FROM DISK = N''' +
+    REPLACE(@backup, N'''', N'''''') + N''' WITH ' + @moves + N', RECOVERY, CHECKSUM, STATS = 10;';
 EXEC sys.sp_executesql @restoreSql;
 SELECT name AS DatabaseName, state_desc FROM sys.databases WHERE name = $stagingText;
 "@
