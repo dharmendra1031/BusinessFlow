@@ -360,7 +360,7 @@ export function LeadsPage({ token, user, permissions, newLeadRequest, onNewLeadO
                   (status.id === 5 || status.id === 6 ? canRequestStatus : canStatus))
                   .map(status => <option key={status.id} value={status.id}>{status.name}</option>)}</select>
                 : <span>{lead.status}</span>}</td>
-              <td>{canAssign ? <select className="inline-select" aria-label={'Assign ' + lead.name}
+              <td><div className="lead-assignment-actions">{canAssign ? <select className="inline-select" aria-label={'Assign ' + lead.name}
                 value={lead.assignedToId ?? ''} onChange={event => void assignLead(lead, Number(event.target.value))}>
                 <option value="" disabled>Unassigned</option>
                 {employees?.filter(employee => employee.isActive).map(employee => <option key={employee.id} value={employee.id}>{employee.fullName}</option>)}
@@ -372,7 +372,7 @@ export function LeadsPage({ token, user, permissions, newLeadRequest, onNewLeadO
                     setAssigningLead(lead);
                     setAssignmentId(lead.assignedToId?.toString() ?? '');
                     setAssignmentName(lead.assignedTo ?? '');
-                  }}>Find employee</button>}</td>
+                  }}>Find employee</button>}</div></td>
               <td><button className="icon-button row-edit" aria-label={(canEdit ? 'Edit ' : 'View ') + lead.name}
                 onClick={() => setSelectedLead(lead)}><Icon name="chevron" size={19} /></button></td>
             </tr>)}</tbody></table>
