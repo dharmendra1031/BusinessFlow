@@ -79,3 +79,51 @@ test('Employee with a custom employees.view grant can open Team directory', asyn
   await expect(page.getByRole('row').filter({ hasText: employee.email })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Add employee' })).toHaveCount(0);
 });
+
+test('Restricted project member sees tasks without denied activity or status controls', async ({ page, request }) => {
+  const employee = await createEmployee(request);
+  const projectTitle = 'Scoped Task Project ' + unique();
+  const lead = await request.post(apiUrl + '/api/leads', {
+    headers: headers(), data: { name: projectTitle, phone: '+96555501234', sourceId: 1 },
+  });
+  expect(lead.status()).toBe(201);
+  const leadId = (await lead.json()).id as number;
+  const won = await request.patch(apiUrl + '/api/leads/' + leadId + '/status', {
+    headers: headers(), data: { statusId: 5 },
+  });
+  expect(won.status()).toBe(204);
+  const project = await request.post(apiUrl + '/api/projects', {
+    headers: headers(), data: {
+      leadId, title: projectTitle, ownerId: JSON.parse(process.env.E2E_ADMIN_USER!).id,
+    },
+  });
+  expect(project.status()).toBe(201);
+  const projectId = (await project.json()).id as number;
+  const task = await request.post(apiUrl + '/api/projects/' + projectId + '/tasks', {
+    headers: headers(), data: {
+      title: 'Developer assigned task', priority: 'Medium', assignedToId: employee.id,
+    },
+  });
+  expect(task.status()).toBe(201);
+
+  for (const permission of ['tasks.status', 'bugs.view', 'bugs.create', 'worklogs.view',
+    'worklogs.post', 'planning.view']) {
+    const response = await request.put(apiUrl + '/api/admin/roles/employees/' +
+      employee.id + '/restrictions/' + permission, {
+      headers: headers(), data: { denied: true },
+    });
+    expect(response.status(), permission).toBe(200);
+  }
+
+  await signIn(page, employee.email);
+  await page.getByRole('button', { name: 'Development projects' }).click();
+  await page.getByRole('row').filter({ hasText: projectTitle })
+    .getByRole('button', { name: 'View project' }).click();
+  const details = page.getByRole('dialog', { name: 'Project ' + projectTitle });
+  await expect(details.getByText('Developer assigned task')).toBeVisible();
+  await expect(details.getByRole('combobox', { name: 'Status for Developer assigned task' })).toHaveCount(0);
+  await expect(details.getByRole('region', { name: 'Project bugs' })).toHaveCount(0);
+  await expect(details.getByRole('region', { name: 'Daily developer worklogs' })).toHaveCount(0);
+  await expect(details.getByRole('region', { name: 'Sprint and milestone planning' })).toHaveCount(0);
+  await expect(details.getByText("Log today's work")).toHaveCount(0);
+});
