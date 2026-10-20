@@ -26,6 +26,7 @@ jobs:
       CRM_ADMIN_EMAIL: "admin-ui@example.test"
       CRM_ADMIN_PASSWORD: "AdminUiPassword123!"
       ASPNETCORE_ENVIRONMENT: Development
+      CRM_RESTORE_TEST: "1"
       RateLimiting__LoginRequestsPerMinute: "30"
     steps:
       - uses: actions/checkout@v4
