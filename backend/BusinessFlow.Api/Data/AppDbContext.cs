@@ -9,6 +9,11 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
     : IdentityDbContext<ApplicationUser, IdentityRole<long>, long>(options)
 {
     public DbSet<Lead> Leads => Set<Lead>();
+    public DbSet<Department> Departments => Set<Department>();
+    public DbSet<RolePermissionGrant> RolePermissionGrants => Set<RolePermissionGrant>();
+    public DbSet<UserPermissionRestriction> UserPermissionRestrictions => Set<UserPermissionRestriction>();
+    public DbSet<Team> Teams => Set<Team>();
+    public DbSet<TeamMembership> TeamMemberships => Set<TeamMembership>();
     public DbSet<LeadSource> LeadSources => Set<LeadSource>();
     public DbSet<LeadStatus> LeadStatuses => Set<LeadStatus>();
     public DbSet<LeadAssignment> LeadAssignments => Set<LeadAssignment>();
@@ -26,6 +31,42 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
+
+        modelBuilder.Entity<RolePermissionGrant>(entity =>
+        {
+            entity.Property(x => x.Permission).HasMaxLength(80).IsRequired();
+            entity.HasIndex(x => new { x.RoleId, x.Permission }).IsUnique();
+            entity.HasOne<IdentityRole<long>>().WithMany().HasForeignKey(x => x.RoleId).OnDelete(DeleteBehavior.NoAction);
+            entity.ToTable(t => t.HasCheckConstraint("CK_RolePermissionGrants_Scope", "[Scope] BETWEEN 0 AND 5"));
+        });
+        modelBuilder.Entity<UserPermissionRestriction>(entity =>
+        {
+            entity.Property(x => x.Permission).HasMaxLength(80).IsRequired();
+            entity.HasIndex(x => new { x.UserId, x.Permission }).IsUnique();
+            entity.HasOne<ApplicationUser>().WithMany().HasForeignKey(x => x.UserId).OnDelete(DeleteBehavior.NoAction);
+        });
+
+        modelBuilder.Entity<Department>(entity =>
+        {
+            entity.Property(x => x.Name).HasMaxLength(150).IsRequired();
+            entity.HasIndex(x => x.Name).IsUnique();
+        });
+        modelBuilder.Entity<Team>(entity =>
+        {
+            entity.Property(x => x.Name).HasMaxLength(150).IsRequired();
+            entity.HasIndex(x => new { x.DepartmentId, x.Name }).IsUnique();
+            entity.HasOne<Department>().WithMany().HasForeignKey(x => x.DepartmentId)
+                .OnDelete(DeleteBehavior.NoAction);
+        });
+        modelBuilder.Entity<TeamMembership>(entity =>
+        {
+            entity.HasIndex(x => new { x.TeamId, x.UserId }).IsUnique();
+            entity.HasIndex(x => x.UserId);
+            entity.HasOne<Team>().WithMany().HasForeignKey(x => x.TeamId).OnDelete(DeleteBehavior.NoAction);
+            entity.HasOne<ApplicationUser>().WithMany().HasForeignKey(x => x.UserId).OnDelete(DeleteBehavior.NoAction);
+        });
+        modelBuilder.Entity<ApplicationUser>().HasOne<Department>().WithMany()
+            .HasForeignKey(x => x.DepartmentId).OnDelete(DeleteBehavior.NoAction);
 
         modelBuilder.Entity<ApplicationUser>()
             .HasOne<ApplicationUser>()

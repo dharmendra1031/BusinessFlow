@@ -11,31 +11,18 @@ namespace BusinessFlow.Api.Controllers;
 [ApiController]
 [Authorize]
 [Route("api/projects/{projectId:long}/planning")]
-public sealed class ProjectPlanningController(AppDbContext db) : ControllerBase
+public sealed class ProjectPlanningController(AppDbContext db, RecordAccessService records) : ControllerBase
 {
+    private string Action => RolePermissionService.ForRequest(Request) ?? "planning.view";
     private static readonly string[] Statuses = ["Planned", "InProgress", "Completed"];
 
-    private IQueryable<DevelopmentProject> Visible()
-    {
-        var projects = db.DevelopmentProjects.AsQueryable();
-        if (User.IsInRole("Admin")) return projects;
-        var id = LeadAccess.UserId(User);
-        if (User.IsInRole("Manager"))
-            return projects.Where(p => p.CreatedById == id || p.OwnerId == id ||
-                p.Owner.ManagerId == id || p.Tasks.Any(t => t.AssignedToId == id) ||
-                db.ProjectBugs.Any(b => b.ProjectId == p.Id && b.AssignedToId == id));
-        return projects.Where(p => p.OwnerId == id || p.Tasks.Any(t => t.AssignedToId == id) ||
-            db.ProjectBugs.Any(b => b.ProjectId == p.Id && b.AssignedToId == id));
-    }
+    private Task<IQueryable<DevelopmentProject>> Visible() => records.ProjectsAsync(User, Action);
 
-    private bool CanManage(DevelopmentProject p) =>
-        User.IsInRole("Admin") || (User.IsInRole("Manager") &&
-            (p.OwnerId == LeadAccess.UserId(User) ||
-             p.CreatedById == LeadAccess.UserId(User) ||
-             p.Owner.ManagerId == LeadAccess.UserId(User)));
+    private async Task<bool> CanManage(DevelopmentProject project) =>
+        await (await records.ManagedProjectsAsync(User, Action)).AnyAsync(x => x.Id == project.Id);
 
     private async Task<DevelopmentProject?> Project(long id) =>
-        await Visible().Include(p => p.Owner).FirstOrDefaultAsync(p => p.Id == id);
+        await (await Visible()).Include(p => p.Owner).FirstOrDefaultAsync(p => p.Id == id);
 
     private void Audit(string action, string table, long id) =>
         db.AuditLogs.Add(new AuditLog
@@ -45,9 +32,10 @@ public sealed class ProjectPlanningController(AppDbContext db) : ControllerBase
         });
 
     [HttpGet]
+    [RequirePermission("planning.view")]
     public async Task<IActionResult> Get(long projectId)
     {
-        if (!await Visible().AnyAsync(p => p.Id == projectId)) return NotFound();
+        if (!await (await Visible()).AnyAsync(p => p.Id == projectId)) return NotFound();
         var milestones = await db.ProjectMilestones.AsNoTracking()
             .Where(m => m.ProjectId == projectId).OrderBy(m => m.DueDate).ThenBy(m => m.Id)
             .Select(m => new
@@ -68,12 +56,12 @@ public sealed class ProjectPlanningController(AppDbContext db) : ControllerBase
     }
 
     [HttpPost("milestones")]
-    [Authorize(Roles = "Admin,Manager")]
+    [RequirePermission("planning.manage")]
     public async Task<IActionResult> AddMilestone(long projectId, SaveMilestoneRequest request)
     {
         var project = await Project(projectId);
         if (project is null) return NotFound();
-        if (!CanManage(project)) return Forbid();
+        if (!await CanManage(project)) return Forbid();
         if (project.Status == "Completed") return BadRequest(new { message = "Reopen the project first." });
         if (InvalidMilestone(request, project) || request.Status == "Completed")
             return BadRequest(new { message = "Invalid milestone details or initial status." });
@@ -92,12 +80,12 @@ public sealed class ProjectPlanningController(AppDbContext db) : ControllerBase
     }
 
     [HttpPut("milestones/{id:long}")]
-    [Authorize(Roles = "Admin,Manager")]
+    [RequirePermission("planning.manage")]
     public async Task<IActionResult> UpdateMilestone(long projectId, long id, SaveMilestoneRequest request)
     {
         var project = await Project(projectId);
         if (project is null) return NotFound();
-        if (!CanManage(project)) return Forbid();
+        if (!await CanManage(project)) return Forbid();
         if (project.Status == "Completed") return BadRequest(new { message = "Reopen the project first." });
         var milestone = await db.ProjectMilestones.FirstOrDefaultAsync(m => m.Id == id && m.ProjectId == projectId);
         if (milestone is null) return NotFound();
@@ -117,12 +105,12 @@ public sealed class ProjectPlanningController(AppDbContext db) : ControllerBase
     }
 
     [HttpPost("sprints")]
-    [Authorize(Roles = "Admin,Manager")]
+    [RequirePermission("planning.manage")]
     public async Task<IActionResult> AddSprint(long projectId, SaveSprintRequest request)
     {
         var project = await Project(projectId);
         if (project is null) return NotFound();
-        if (!CanManage(project)) return Forbid();
+        if (!await CanManage(project)) return Forbid();
         if (project.Status == "Completed") return BadRequest(new { message = "Reopen the project first." });
         if (InvalidSprint(request, project) || request.Status == "Completed")
             return BadRequest(new { message = "Invalid sprint details or initial status." });
@@ -140,12 +128,12 @@ public sealed class ProjectPlanningController(AppDbContext db) : ControllerBase
     }
 
     [HttpPut("sprints/{id:long}")]
-    [Authorize(Roles = "Admin,Manager")]
+    [RequirePermission("planning.manage")]
     public async Task<IActionResult> UpdateSprint(long projectId, long id, SaveSprintRequest request)
     {
         var project = await Project(projectId);
         if (project is null) return NotFound();
-        if (!CanManage(project)) return Forbid();
+        if (!await CanManage(project)) return Forbid();
         if (project.Status == "Completed") return BadRequest(new { message = "Reopen the project first." });
         var sprint = await db.ProjectSprints.FirstOrDefaultAsync(s => s.Id == id && s.ProjectId == projectId);
         if (sprint is null) return NotFound();

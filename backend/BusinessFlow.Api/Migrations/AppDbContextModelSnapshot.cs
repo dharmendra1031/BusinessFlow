@@ -17,7 +17,7 @@ namespace BusinessFlow.Api.Migrations
         {
 #pragma warning disable 612, 618
             modelBuilder
-                .HasAnnotation("ProductVersion", "10.0.0")
+                .HasAnnotation("ProductVersion", "10.0.13")
                 .HasAnnotation("Relational:MaxIdentifierLength", 128);
 
             SqlServerModelBuilderExtensions.UseIdentityColumns(modelBuilder);
@@ -36,6 +36,9 @@ namespace BusinessFlow.Api.Migrations
                     b.Property<string>("ConcurrencyStamp")
                         .IsConcurrencyToken()
                         .HasColumnType("nvarchar(max)");
+
+                    b.Property<long?>("DepartmentId")
+                        .HasColumnType("bigint");
 
                     b.Property<string>("Email")
                         .HasMaxLength(256)
@@ -89,6 +92,8 @@ namespace BusinessFlow.Api.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("DepartmentId");
+
                     b.HasIndex("ManagerId");
 
                     b.HasIndex("NormalizedEmail")
@@ -138,6 +143,192 @@ namespace BusinessFlow.Api.Migrations
                     b.HasIndex("TableName", "RecordId");
 
                     b.ToTable("AuditLogs");
+                });
+
+            modelBuilder.Entity("BusinessFlow.Api.Models.Department", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Name")
+                        .IsUnique();
+
+                    b.ToTable("Departments");
+                });
+
+            modelBuilder.Entity("BusinessFlow.Api.Models.DeveloperWorklog", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<decimal>("Hours")
+                        .HasPrecision(5, 2)
+                        .HasColumnType("decimal(5,2)");
+
+                    b.Property<long>("ProjectId")
+                        .HasColumnType("bigint");
+
+                    b.Property<long?>("TaskId")
+                        .HasColumnType("bigint");
+
+                    b.Property<long>("UserId")
+                        .HasColumnType("bigint");
+
+                    b.Property<DateOnly>("WorkDate")
+                        .HasColumnType("date");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TaskId");
+
+                    b.HasIndex("ProjectId", "WorkDate");
+
+                    b.HasIndex("UserId", "WorkDate");
+
+                    b.ToTable("DeveloperWorklogs");
+                });
+
+            modelBuilder.Entity("BusinessFlow.Api.Models.DevelopmentProject", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<long>("CreatedById")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)");
+
+                    b.Property<DateOnly?>("DueDate")
+                        .HasColumnType("date");
+
+                    b.Property<long>("LeadId")
+                        .HasColumnType("bigint");
+
+                    b.Property<long>("OwnerId")
+                        .HasColumnType("bigint");
+
+                    b.Property<DateOnly?>("StartDate")
+                        .HasColumnType("date");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
+                    b.Property<DateTime>("UpdatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CreatedById");
+
+                    b.HasIndex("LeadId")
+                        .IsUnique();
+
+                    b.HasIndex("OwnerId", "Status");
+
+                    b.ToTable("DevelopmentProjects");
+                });
+
+            modelBuilder.Entity("BusinessFlow.Api.Models.DevelopmentTask", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<long?>("AssignedToId")
+                        .HasColumnType("bigint");
+
+                    b.Property<DateTime?>("CompletedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)");
+
+                    b.Property<DateOnly?>("DueDate")
+                        .HasColumnType("date");
+
+                    b.Property<long?>("MilestoneId")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("Priority")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .HasColumnType("nvarchar(10)");
+
+                    b.Property<long>("ProjectId")
+                        .HasColumnType("bigint");
+
+                    b.Property<long?>("SprintId")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
+                    b.Property<DateTime>("UpdatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("MilestoneId");
+
+                    b.HasIndex("SprintId");
+
+                    b.HasIndex("AssignedToId", "DueDate");
+
+                    b.HasIndex("ProjectId", "Status");
+
+                    b.ToTable("DevelopmentTasks");
                 });
 
             modelBuilder.Entity("BusinessFlow.Api.Models.Lead", b =>
@@ -455,6 +646,280 @@ namespace BusinessFlow.Api.Migrations
                     b.ToTable("LeadStatusChanges");
                 });
 
+            modelBuilder.Entity("BusinessFlow.Api.Models.ProjectBug", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<long?>("AssignedToId")
+                        .HasColumnType("bigint");
+
+                    b.Property<DateTime?>("ClosedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)");
+
+                    b.Property<long>("ProjectId")
+                        .HasColumnType("bigint");
+
+                    b.Property<long>("ReportedById")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("Severity")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .HasColumnType("nvarchar(10)");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<long?>("TaskId")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
+                    b.Property<DateTime>("UpdatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AssignedToId");
+
+                    b.HasIndex("ReportedById");
+
+                    b.HasIndex("TaskId");
+
+                    b.HasIndex("ProjectId", "Status");
+
+                    b.ToTable("ProjectBugs");
+                });
+
+            modelBuilder.Entity("BusinessFlow.Api.Models.ProjectMilestone", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<DateOnly?>("DueDate")
+                        .HasColumnType("date");
+
+                    b.Property<long>("ProjectId")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ProjectId", "DueDate");
+
+                    b.ToTable("ProjectMilestones");
+                });
+
+            modelBuilder.Entity("BusinessFlow.Api.Models.ProjectSprint", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateOnly>("DueDate")
+                        .HasColumnType("date");
+
+                    b.Property<string>("Goal")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<long>("ProjectId")
+                        .HasColumnType("bigint");
+
+                    b.Property<DateOnly>("StartDate")
+                        .HasColumnType("date");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ProjectId", "StartDate");
+
+                    b.ToTable("ProjectSprints");
+                });
+
+            modelBuilder.Entity("BusinessFlow.Api.Models.RolePermissionGrant", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<string>("Permission")
+                        .IsRequired()
+                        .HasMaxLength(80)
+                        .HasColumnType("nvarchar(80)");
+
+                    b.Property<long>("RoleId")
+                        .HasColumnType("bigint");
+
+                    b.Property<int>("Scope")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("RoleId", "Permission")
+                        .IsUnique();
+
+                    b.ToTable("RolePermissionGrants", t =>
+                        {
+                            t.HasCheckConstraint("CK_RolePermissionGrants_Scope", "[Scope] BETWEEN 0 AND 5");
+                        });
+                });
+
+            modelBuilder.Entity("BusinessFlow.Api.Models.RolePermissionOverride", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<bool>("Enabled")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Permission")
+                        .IsRequired()
+                        .HasMaxLength(60)
+                        .HasColumnType("nvarchar(60)");
+
+                    b.Property<string>("RoleName")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("RoleName", "Permission")
+                        .IsUnique();
+
+                    b.ToTable("RolePermissionOverrides");
+                });
+
+            modelBuilder.Entity("BusinessFlow.Api.Models.Team", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<long>("DepartmentId")
+                        .HasColumnType("bigint");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DepartmentId", "Name")
+                        .IsUnique();
+
+                    b.ToTable("Teams");
+                });
+
+            modelBuilder.Entity("BusinessFlow.Api.Models.TeamMembership", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<long>("TeamId")
+                        .HasColumnType("bigint");
+
+                    b.Property<long>("UserId")
+                        .HasColumnType("bigint");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserId");
+
+                    b.HasIndex("TeamId", "UserId")
+                        .IsUnique();
+
+                    b.ToTable("TeamMemberships");
+                });
+
+            modelBuilder.Entity("BusinessFlow.Api.Models.UserPermissionRestriction", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<string>("Permission")
+                        .IsRequired()
+                        .HasMaxLength(80)
+                        .HasColumnType("nvarchar(80)");
+
+                    b.Property<long>("UserId")
+                        .HasColumnType("bigint");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserId", "Permission")
+                        .IsUnique();
+
+                    b.ToTable("UserPermissionRestrictions");
+                });
+
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityRole<long>", b =>
                 {
                     b.Property<long>("Id")
@@ -590,10 +1055,98 @@ namespace BusinessFlow.Api.Migrations
 
             modelBuilder.Entity("BusinessFlow.Api.Models.ApplicationUser", b =>
                 {
+                    b.HasOne("BusinessFlow.Api.Models.Department", null)
+                        .WithMany()
+                        .HasForeignKey("DepartmentId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
                     b.HasOne("BusinessFlow.Api.Models.ApplicationUser", null)
                         .WithMany()
                         .HasForeignKey("ManagerId")
                         .OnDelete(DeleteBehavior.NoAction);
+                });
+
+            modelBuilder.Entity("BusinessFlow.Api.Models.DeveloperWorklog", b =>
+                {
+                    b.HasOne("BusinessFlow.Api.Models.DevelopmentProject", "Project")
+                        .WithMany()
+                        .HasForeignKey("ProjectId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("BusinessFlow.Api.Models.DevelopmentTask", "Task")
+                        .WithMany()
+                        .HasForeignKey("TaskId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
+                    b.HasOne("BusinessFlow.Api.Models.ApplicationUser", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.Navigation("Project");
+
+                    b.Navigation("Task");
+
+                    b.Navigation("User");
+                });
+
+            modelBuilder.Entity("BusinessFlow.Api.Models.DevelopmentProject", b =>
+                {
+                    b.HasOne("BusinessFlow.Api.Models.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("CreatedById")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.HasOne("BusinessFlow.Api.Models.Lead", "Lead")
+                        .WithMany()
+                        .HasForeignKey("LeadId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.HasOne("BusinessFlow.Api.Models.ApplicationUser", "Owner")
+                        .WithMany()
+                        .HasForeignKey("OwnerId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.Navigation("Lead");
+
+                    b.Navigation("Owner");
+                });
+
+            modelBuilder.Entity("BusinessFlow.Api.Models.DevelopmentTask", b =>
+                {
+                    b.HasOne("BusinessFlow.Api.Models.ApplicationUser", "AssignedTo")
+                        .WithMany()
+                        .HasForeignKey("AssignedToId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
+                    b.HasOne("BusinessFlow.Api.Models.ProjectMilestone", "Milestone")
+                        .WithMany()
+                        .HasForeignKey("MilestoneId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
+                    b.HasOne("BusinessFlow.Api.Models.DevelopmentProject", "Project")
+                        .WithMany("Tasks")
+                        .HasForeignKey("ProjectId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("BusinessFlow.Api.Models.ProjectSprint", "Sprint")
+                        .WithMany()
+                        .HasForeignKey("SprintId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
+                    b.Navigation("AssignedTo");
+
+                    b.Navigation("Milestone");
+
+                    b.Navigation("Project");
+
+                    b.Navigation("Sprint");
                 });
 
             modelBuilder.Entity("BusinessFlow.Api.Models.Lead", b =>
@@ -674,6 +1227,103 @@ namespace BusinessFlow.Api.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("BusinessFlow.Api.Models.ProjectBug", b =>
+                {
+                    b.HasOne("BusinessFlow.Api.Models.ApplicationUser", "AssignedTo")
+                        .WithMany()
+                        .HasForeignKey("AssignedToId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
+                    b.HasOne("BusinessFlow.Api.Models.DevelopmentProject", "Project")
+                        .WithMany()
+                        .HasForeignKey("ProjectId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("BusinessFlow.Api.Models.ApplicationUser", "ReportedBy")
+                        .WithMany()
+                        .HasForeignKey("ReportedById")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.HasOne("BusinessFlow.Api.Models.DevelopmentTask", "Task")
+                        .WithMany()
+                        .HasForeignKey("TaskId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
+                    b.Navigation("AssignedTo");
+
+                    b.Navigation("Project");
+
+                    b.Navigation("ReportedBy");
+
+                    b.Navigation("Task");
+                });
+
+            modelBuilder.Entity("BusinessFlow.Api.Models.ProjectMilestone", b =>
+                {
+                    b.HasOne("BusinessFlow.Api.Models.DevelopmentProject", "Project")
+                        .WithMany()
+                        .HasForeignKey("ProjectId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Project");
+                });
+
+            modelBuilder.Entity("BusinessFlow.Api.Models.ProjectSprint", b =>
+                {
+                    b.HasOne("BusinessFlow.Api.Models.DevelopmentProject", "Project")
+                        .WithMany()
+                        .HasForeignKey("ProjectId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Project");
+                });
+
+            modelBuilder.Entity("BusinessFlow.Api.Models.RolePermissionGrant", b =>
+                {
+                    b.HasOne("Microsoft.AspNetCore.Identity.IdentityRole<long>", null)
+                        .WithMany()
+                        .HasForeignKey("RoleId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("BusinessFlow.Api.Models.Team", b =>
+                {
+                    b.HasOne("BusinessFlow.Api.Models.Department", null)
+                        .WithMany()
+                        .HasForeignKey("DepartmentId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("BusinessFlow.Api.Models.TeamMembership", b =>
+                {
+                    b.HasOne("BusinessFlow.Api.Models.Team", null)
+                        .WithMany()
+                        .HasForeignKey("TeamId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.HasOne("BusinessFlow.Api.Models.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("BusinessFlow.Api.Models.UserPermissionRestriction", b =>
+                {
+                    b.HasOne("BusinessFlow.Api.Models.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityRoleClaim<long>", b =>
                 {
                     b.HasOne("Microsoft.AspNetCore.Identity.IdentityRole<long>", null)
@@ -723,205 +1373,6 @@ namespace BusinessFlow.Api.Migrations
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
-                });
-            modelBuilder.Entity("BusinessFlow.Api.Models.DevelopmentProject", b =>
-                {
-                    b.Property<long>("Id").ValueGeneratedOnAdd().HasColumnType("bigint");
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
-                    b.Property<long>("LeadId").HasColumnType("bigint");
-                    b.Property<string>("Title").IsRequired().HasMaxLength(150).HasColumnType("nvarchar(150)");
-                    b.Property<string>("Description").HasMaxLength(2000).HasColumnType("nvarchar(2000)");
-                    b.Property<string>("Status").IsRequired().HasMaxLength(20).HasColumnType("nvarchar(20)");
-                    b.Property<long>("OwnerId").HasColumnType("bigint");
-                    b.Property<long>("CreatedById").HasColumnType("bigint");
-                    b.Property<DateOnly?>("StartDate").HasColumnType("date");
-                    b.Property<DateOnly?>("DueDate").HasColumnType("date");
-                    b.Property<DateTime>("CreatedAtUtc").HasColumnType("datetime2");
-                    b.Property<DateTime>("UpdatedAtUtc").HasColumnType("datetime2");
-                    b.HasKey("Id");
-                    b.HasIndex("CreatedById");
-                    b.HasIndex("LeadId").IsUnique();
-                    b.HasIndex("OwnerId", "Status");
-                    b.ToTable("DevelopmentProjects", (string)null);
-                });
-
-            modelBuilder.Entity("BusinessFlow.Api.Models.DevelopmentTask", b =>
-                {
-                    b.Property<long>("Id").ValueGeneratedOnAdd().HasColumnType("bigint");
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
-                    b.Property<long>("ProjectId").HasColumnType("bigint");
-                    b.Property<string>("Title").IsRequired().HasMaxLength(150).HasColumnType("nvarchar(150)");
-                    b.Property<string>("Description").HasMaxLength(2000).HasColumnType("nvarchar(2000)");
-                    b.Property<string>("Status").IsRequired().HasMaxLength(20).HasColumnType("nvarchar(20)");
-                    b.Property<string>("Priority").IsRequired().HasMaxLength(10).HasColumnType("nvarchar(10)");
-                    b.Property<long?>("AssignedToId").HasColumnType("bigint");
-                    b.Property<long?>("MilestoneId").HasColumnType("bigint");
-                    b.Property<long?>("SprintId").HasColumnType("bigint");
-                    b.Property<DateOnly?>("DueDate").HasColumnType("date");
-                    b.Property<DateTime?>("CompletedAtUtc").HasColumnType("datetime2");
-                    b.Property<DateTime>("CreatedAtUtc").HasColumnType("datetime2");
-                    b.Property<DateTime>("UpdatedAtUtc").HasColumnType("datetime2");
-                    b.HasKey("Id");
-                    b.HasIndex("AssignedToId", "DueDate");
-                    b.HasIndex("MilestoneId");
-                    b.HasIndex("SprintId");
-                    b.HasIndex("ProjectId", "Status");
-                    b.ToTable("DevelopmentTasks", (string)null);
-                });
-
-            modelBuilder.Entity("BusinessFlow.Api.Models.ProjectBug", b =>
-                {
-                    b.Property<long>("Id").ValueGeneratedOnAdd().HasColumnType("bigint");
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
-                    b.Property<long>("ProjectId").HasColumnType("bigint");
-                    b.Property<long?>("TaskId").HasColumnType("bigint");
-                    b.Property<string>("Title").IsRequired().HasMaxLength(150).HasColumnType("nvarchar(150)");
-                    b.Property<string>("Description").HasMaxLength(2000).HasColumnType("nvarchar(2000)");
-                    b.Property<string>("Severity").IsRequired().HasMaxLength(10).HasColumnType("nvarchar(10)");
-                    b.Property<string>("Status").IsRequired().HasMaxLength(20).HasColumnType("nvarchar(20)");
-                    b.Property<long?>("AssignedToId").HasColumnType("bigint");
-                    b.Property<long>("ReportedById").HasColumnType("bigint");
-                    b.Property<DateTime>("CreatedAtUtc").HasColumnType("datetime2");
-                    b.Property<DateTime>("UpdatedAtUtc").HasColumnType("datetime2");
-                    b.Property<DateTime?>("ClosedAtUtc").HasColumnType("datetime2");
-                    b.HasKey("Id");
-                    b.HasIndex("ProjectId", "Status");
-                    b.HasIndex("TaskId");
-                    b.HasIndex("AssignedToId");
-                    b.HasIndex("ReportedById");
-                    b.ToTable("ProjectBugs", (string)null);
-                });
-
-            modelBuilder.Entity("BusinessFlow.Api.Models.DeveloperWorklog", b =>
-                {
-                    b.Property<long>("Id").ValueGeneratedOnAdd().HasColumnType("bigint");
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
-                    b.Property<long>("ProjectId").HasColumnType("bigint");
-                    b.Property<long?>("TaskId").HasColumnType("bigint");
-                    b.Property<long>("UserId").HasColumnType("bigint");
-                    b.Property<DateOnly>("WorkDate").HasColumnType("date");
-                    b.Property<decimal>("Hours").HasPrecision(5, 2).HasColumnType("decimal(5,2)");
-                    b.Property<string>("Description").IsRequired().HasMaxLength(1000).HasColumnType("nvarchar(1000)");
-                    b.Property<DateTime>("CreatedAtUtc").HasColumnType("datetime2");
-                    b.HasKey("Id");
-                    b.HasIndex("ProjectId", "WorkDate");
-                    b.HasIndex("TaskId");
-                    b.HasIndex("UserId", "WorkDate");
-                    b.ToTable("DeveloperWorklogs", (string)null);
-                });
-
-            modelBuilder.Entity("BusinessFlow.Api.Models.RolePermissionOverride", b =>
-                {
-                    b.Property<long>("Id").ValueGeneratedOnAdd().HasColumnType("bigint");
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
-                    b.Property<string>("RoleName").IsRequired().HasMaxLength(20).HasColumnType("nvarchar(20)");
-                    b.Property<string>("Permission").IsRequired().HasMaxLength(60).HasColumnType("nvarchar(60)");
-                    b.Property<bool>("Enabled").HasColumnType("bit");
-                    b.HasKey("Id");
-                    b.HasIndex("RoleName", "Permission").IsUnique();
-                    b.ToTable("RolePermissionOverrides", (string)null);
-                });
-
-            modelBuilder.Entity("BusinessFlow.Api.Models.ProjectMilestone", b =>
-                {
-                    b.Property<long>("Id").ValueGeneratedOnAdd().HasColumnType("bigint");
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
-                    b.Property<long>("ProjectId").HasColumnType("bigint");
-                    b.Property<string>("Title").IsRequired().HasMaxLength(150).HasColumnType("nvarchar(150)");
-                    b.Property<string>("Description").HasMaxLength(1000).HasColumnType("nvarchar(1000)");
-                    b.Property<string>("Status").IsRequired().HasMaxLength(20).HasColumnType("nvarchar(20)");
-                    b.Property<DateOnly?>("DueDate").HasColumnType("date");
-                    b.Property<DateTime>("CreatedAtUtc").HasColumnType("datetime2");
-                    b.HasKey("Id");
-                    b.HasIndex("ProjectId", "DueDate");
-                    b.ToTable("ProjectMilestones", (string)null);
-                });
-
-            modelBuilder.Entity("BusinessFlow.Api.Models.ProjectSprint", b =>
-                {
-                    b.Property<long>("Id").ValueGeneratedOnAdd().HasColumnType("bigint");
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
-                    b.Property<long>("ProjectId").HasColumnType("bigint");
-                    b.Property<string>("Title").IsRequired().HasMaxLength(150).HasColumnType("nvarchar(150)");
-                    b.Property<string>("Goal").HasMaxLength(1000).HasColumnType("nvarchar(1000)");
-                    b.Property<string>("Status").IsRequired().HasMaxLength(20).HasColumnType("nvarchar(20)");
-                    b.Property<DateOnly>("StartDate").HasColumnType("date");
-                    b.Property<DateOnly>("DueDate").HasColumnType("date");
-                    b.Property<DateTime>("CreatedAtUtc").HasColumnType("datetime2");
-                    b.HasKey("Id");
-                    b.HasIndex("ProjectId", "StartDate");
-                    b.ToTable("ProjectSprints", (string)null);
-                });
-
-            modelBuilder.Entity("BusinessFlow.Api.Models.DevelopmentProject", b =>
-                {
-                    b.HasOne("BusinessFlow.Api.Models.Lead", "Lead")
-                        .WithMany().HasForeignKey("LeadId").OnDelete(DeleteBehavior.NoAction).IsRequired();
-                    b.HasOne("BusinessFlow.Api.Models.ApplicationUser", "Owner")
-                        .WithMany().HasForeignKey("OwnerId").OnDelete(DeleteBehavior.NoAction).IsRequired();
-                    b.HasOne("BusinessFlow.Api.Models.ApplicationUser", null)
-                        .WithMany().HasForeignKey("CreatedById").OnDelete(DeleteBehavior.NoAction).IsRequired();
-                    b.Navigation("Lead");
-                    b.Navigation("Owner");
-                });
-
-            modelBuilder.Entity("BusinessFlow.Api.Models.DevelopmentTask", b =>
-                {
-                    b.HasOne("BusinessFlow.Api.Models.DevelopmentProject", "Project")
-                        .WithMany("Tasks").HasForeignKey("ProjectId").OnDelete(DeleteBehavior.Cascade).IsRequired();
-                    b.HasOne("BusinessFlow.Api.Models.ApplicationUser", "AssignedTo")
-                        .WithMany().HasForeignKey("AssignedToId").OnDelete(DeleteBehavior.NoAction);
-                    b.HasOne("BusinessFlow.Api.Models.ProjectMilestone", "Milestone")
-                        .WithMany().HasForeignKey("MilestoneId").OnDelete(DeleteBehavior.NoAction);
-                    b.HasOne("BusinessFlow.Api.Models.ProjectSprint", "Sprint")
-                        .WithMany().HasForeignKey("SprintId").OnDelete(DeleteBehavior.NoAction);
-                    b.Navigation("Project");
-                    b.Navigation("AssignedTo");
-                    b.Navigation("Milestone");
-                    b.Navigation("Sprint");
-                });
-
-            modelBuilder.Entity("BusinessFlow.Api.Models.ProjectBug", b =>
-                {
-                    b.HasOne("BusinessFlow.Api.Models.DevelopmentProject", "Project")
-                        .WithMany().HasForeignKey("ProjectId").OnDelete(DeleteBehavior.Cascade).IsRequired();
-                    b.HasOne("BusinessFlow.Api.Models.DevelopmentTask", "Task")
-                        .WithMany().HasForeignKey("TaskId").OnDelete(DeleteBehavior.NoAction);
-                    b.HasOne("BusinessFlow.Api.Models.ApplicationUser", "AssignedTo")
-                        .WithMany().HasForeignKey("AssignedToId").OnDelete(DeleteBehavior.NoAction);
-                    b.HasOne("BusinessFlow.Api.Models.ApplicationUser", "ReportedBy")
-                        .WithMany().HasForeignKey("ReportedById").OnDelete(DeleteBehavior.NoAction).IsRequired();
-                    b.Navigation("Project");
-                    b.Navigation("Task");
-                    b.Navigation("AssignedTo");
-                    b.Navigation("ReportedBy");
-                });
-
-            modelBuilder.Entity("BusinessFlow.Api.Models.DeveloperWorklog", b =>
-                {
-                    b.HasOne("BusinessFlow.Api.Models.DevelopmentProject", "Project")
-                        .WithMany().HasForeignKey("ProjectId").OnDelete(DeleteBehavior.Cascade).IsRequired();
-                    b.HasOne("BusinessFlow.Api.Models.DevelopmentTask", "Task")
-                        .WithMany().HasForeignKey("TaskId").OnDelete(DeleteBehavior.NoAction);
-                    b.HasOne("BusinessFlow.Api.Models.ApplicationUser", "User")
-                        .WithMany().HasForeignKey("UserId").OnDelete(DeleteBehavior.NoAction).IsRequired();
-                    b.Navigation("Project");
-                    b.Navigation("Task");
-                    b.Navigation("User");
-                });
-
-            modelBuilder.Entity("BusinessFlow.Api.Models.ProjectMilestone", b =>
-                {
-                    b.HasOne("BusinessFlow.Api.Models.DevelopmentProject", "Project")
-                        .WithMany().HasForeignKey("ProjectId").OnDelete(DeleteBehavior.Cascade).IsRequired();
-                    b.Navigation("Project");
-                });
-
-            modelBuilder.Entity("BusinessFlow.Api.Models.ProjectSprint", b =>
-                {
-                    b.HasOne("BusinessFlow.Api.Models.DevelopmentProject", "Project")
-                        .WithMany().HasForeignKey("ProjectId").OnDelete(DeleteBehavior.Cascade).IsRequired();
-                    b.Navigation("Project");
                 });
 
             modelBuilder.Entity("BusinessFlow.Api.Models.DevelopmentProject", b =>

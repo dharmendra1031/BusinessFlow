@@ -1,3 +1,4 @@
+using BusinessFlow.Api.Services;
 using BusinessFlow.Api.Contracts;
 using BusinessFlow.Api.Data;
 using BusinessFlow.Api.Models;
@@ -11,21 +12,17 @@ namespace BusinessFlow.Api.Controllers;
 [ApiController]
 [Authorize]
 [Route("api/employees")]
-public sealed class EmployeesController(AppDbContext db, UserManager<ApplicationUser> users) : ControllerBase
+public sealed class EmployeesController(AppDbContext db, UserManager<ApplicationUser> users, RecordAccessService records) : ControllerBase
 {
+    private string Action => RolePermissionService.ForRequest(Request) ?? "employees.view";
     [HttpGet]
+    [RequirePermission("employees.view")]
     public async Task<IActionResult> List()
     {
-        var query = db.Users.AsNoTracking().AsQueryable();
-        if (!User.IsInRole("Admin"))
-        {
-            if (!User.IsInRole("Manager")) return Forbid();
-            var managerId = Services.LeadAccess.UserId(User);
-            query = query.Where(u => u.IsActive && (u.ManagerId == managerId || u.Id == managerId));
-        }
+        var query = (await records.EmployeesAsync(User, Action)).AsNoTracking();
 
         var employees = await query.OrderBy(u => u.FullName)
-            .Select(u => new { u.Id, u.FullName, u.Email, u.PhoneNumber, u.IsActive, u.ManagerId }).ToListAsync();
+            .Select(u => new { u.Id, u.FullName, u.Email, u.PhoneNumber, u.IsActive, u.ManagerId, u.DepartmentId }).ToListAsync();
 
         var ids = employees.Select(u => u.Id).ToArray();
         var roles = await (from userRole in db.UserRoles
@@ -35,13 +32,14 @@ public sealed class EmployeesController(AppDbContext db, UserManager<Application
 
         return Ok(employees.Select(u => new
         {
-            u.Id, u.FullName, u.Email, u.PhoneNumber, u.IsActive, u.ManagerId,
+            u.Id, u.FullName, u.Email, u.PhoneNumber, u.IsActive, u.ManagerId, u.DepartmentId,
             roles = roles.Where(r => r.UserId == u.Id).Select(r => r.Name).ToArray()
         }));
     }
 
     [Authorize(Roles = "Admin")]
     [HttpPost]
+    [RequirePermission("employees.create")]
     public async Task<IActionResult> Create(CreateEmployeeRequest request)
     {
         if (string.IsNullOrWhiteSpace(request.FullName) || request.FullName.Trim().Length < 2)

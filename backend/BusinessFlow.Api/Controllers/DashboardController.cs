@@ -9,14 +9,16 @@ namespace BusinessFlow.Api.Controllers;
 [ApiController]
 [Authorize]
 [Route("api/dashboard")]
-public sealed class DashboardController(AppDbContext db) : ControllerBase
+public sealed class DashboardController(AppDbContext db, RecordAccessService records) : ControllerBase
 {
+    private string Action => RolePermissionService.ForRequest(Request) ?? "dashboard.view";
     [HttpGet]
+    [RequirePermission("dashboard.view")]
     public async Task<IActionResult> Get(DateTime? from = null, DateTime? to = null)
     {
         if (from.HasValue && to.HasValue && from.Value.Date > to.Value.Date)
             return BadRequest(new { message = "Invalid date range." });
-        var visibleLeads = LeadAccess.VisibleTo(db.Leads.AsNoTracking(), User);
+        var visibleLeads = (await records.LeadsAsync(User, Action)).AsNoTracking();
         var leads = visibleLeads;
         if (from.HasValue) leads = leads.Where(l => l.CreatedAtUtc >= from.Value.Date);
         if (to.HasValue) leads = leads.Where(l => l.CreatedAtUtc < to.Value.Date.AddDays(1));

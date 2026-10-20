@@ -62,6 +62,9 @@ builder.Services.AddIdentityCore<ApplicationUser>(options =>
 
 builder.Services.AddScoped<TokenService>();
 builder.Services.AddScoped<RolePermissionService>();
+builder.Services.AddScoped<OrganizationService>();
+builder.Services.AddScoped<RoleAdministrationService>();
+builder.Services.AddScoped<RecordAccessService>();
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
     {
@@ -206,3 +209,5 @@ app.MapFallback(async context =>
 });
 await DbInitializer.SeedAdminAsync(app.Services, app.Configuration);
 app.Run();
+
+public partial class Program { }

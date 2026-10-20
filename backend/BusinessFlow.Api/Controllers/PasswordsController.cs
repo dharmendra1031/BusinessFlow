@@ -36,6 +36,7 @@ public sealed class PasswordsController(UserManager<ApplicationUser> users, AppD
 
     [Authorize(Roles = "Admin")]
     [HttpPost("reset/{id:long}")]
+    [RequirePermission("employees.reset-password")]
     public async Task<IActionResult> Reset(long id, ResetEmployeePasswordRequest request)
     {
         var user = await users.FindByIdAsync(id.ToString());

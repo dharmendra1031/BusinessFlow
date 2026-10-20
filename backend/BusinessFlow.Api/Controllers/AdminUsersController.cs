@@ -12,9 +12,10 @@ namespace BusinessFlow.Api.Controllers;
 [ApiController]
 [Authorize(Roles = "Admin")]
 [Route("api/admin/users")]
-public sealed class AdminUsersController(AppDbContext db, UserManager<ApplicationUser> users) : ControllerBase
+public sealed class AdminUsersController(AppDbContext db, UserManager<ApplicationUser> users, OrganizationService organization) : ControllerBase
 {
     [HttpPut("{id:long}")]
+    [RequirePermission("employees.edit")]
     public async Task<IActionResult> Update(long id, UpdateEmployeeRequest request)
     {
         var employee = await users.FindByIdAsync(id.ToString());
@@ -33,7 +34,9 @@ public sealed class AdminUsersController(AppDbContext db, UserManager<Applicatio
         if (await users.IsInRoleAsync(employee, "Admin") && request.Role is not null)
             return BadRequest(new { message = "Cannot modify admin role." });
 
-        await using var transaction = await db.Database.BeginTransactionAsync();
+        await using var transaction = await db.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable);
+        try { await organization.ValidateManagerAsync(id, request.ManagerId); }
+        catch (InvalidOperationException e) { return BadRequest(new { message = e.Message }); }
         employee.FullName = request.FullName.Trim();
         employee.PhoneNumber = request.PhoneNumber?.Trim();
         employee.ManagerId = request.ManagerId;
@@ -42,7 +45,7 @@ public sealed class AdminUsersController(AppDbContext db, UserManager<Applicatio
         if (request.Role is not null && !await users.IsInRoleAsync(employee, request.Role))
         {
             var current = await users.GetRolesAsync(employee);
-            result = await users.RemoveFromRolesAsync(employee, current);
+            result = await users.RemoveFromRolesAsync(employee, current.Where(x => x is "Manager" or "Employee"));
             if (!result.Succeeded) return BadRequest(new { errors = result.Errors.Select(e => e.Description) });
             result = await users.AddToRoleAsync(employee, request.Role);
             if (!result.Succeeded) return BadRequest(new { errors = result.Errors.Select(e => e.Description) });
@@ -59,12 +62,34 @@ public sealed class AdminUsersController(AppDbContext db, UserManager<Applicatio
     }
 
     [HttpPatch("{id:long}/status")]
+    [RequirePermission("employees.disable")]
     public async Task<IActionResult> Status(long id, [FromBody] bool isActive)
+    {
+        try { return await SetStatus(id, isActive); }
+        catch (Exception e) when (SqlConflicts.IsRetryable(e))
+        { return Conflict(new { message = "Employee access changed concurrently. Reload and retry." }); }
+    }
+
+    private async Task<IActionResult> SetStatus(long id, bool isActive)
     {
         if (id == LeadAccess.UserId(User))
             return BadRequest(new { message = "You cannot deactivate your own account." });
+        await using var transaction = await db.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable);
         var employee = await users.FindByIdAsync(id.ToString());
         if (employee is null) return NotFound();
+
+        if (!isActive && await users.IsInRoleAsync(employee, "Admin"))
+        {
+            var remaining = await (from person in db.Users
+                join membership in db.UserRoles on person.Id equals membership.UserId
+                join role in db.Roles on membership.RoleId equals role.Id
+                where person.IsActive && person.Id != id && role.Name == "Admin"
+                select person.Id).AnyAsync();
+            if (!remaining) return BadRequest(new { message = "At least one active administrator must remain." });
+        }
+        if (isActive && employee.DepartmentId.HasValue &&
+            !await db.Departments.AnyAsync(x => x.Id == employee.DepartmentId && x.IsActive))
+            return BadRequest(new { message = "Activate the employee's department first." });
 
         employee.IsActive = isActive;
         var result = await users.UpdateAsync(employee);
@@ -76,10 +101,12 @@ public sealed class AdminUsersController(AppDbContext db, UserManager<Applicatio
             TableName = "Users", RecordId = id
         });
         await db.SaveChangesAsync();
+        await transaction.CommitAsync();
         return NoContent();
     }
 
     [HttpGet("{id:long}/summary")]
+    [RequirePermission("employees.view")]
     public async Task<IActionResult> Summary(long id)
     {
         if (!await db.Users.AnyAsync(u => u.Id == id)) return NotFound();

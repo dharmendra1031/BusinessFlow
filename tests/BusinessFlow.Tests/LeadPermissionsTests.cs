@@ -18,16 +18,8 @@ public sealed class LeadPermissionsTests
     [Fact]
     public async Task Roles_and_assignments_are_enforced_in_sql_server()
     {
-        var connection = Environment.GetEnvironmentVariable("CRM_TEST_CONNECTION")
-            ?? throw new InvalidOperationException("CRM_TEST_CONNECTION is required.");
-
-        Assert.StartsWith("LeadManagement_CITests",
-            new SqlConnectionStringBuilder(connection).InitialCatalog, StringComparison.Ordinal);
-
-        var options = new DbContextOptionsBuilder<AppDbContext>()
-            .UseSqlServer(connection).Options;
-        await using var db = new AppDbContext(options);
-        await db.Database.MigrateAsync();
+        await using var fixture = await Phase1TestDatabase.CreateAsync();
+        await using var db = fixture.CreateContext();
 
         var admin = new ApplicationUser { FullName = "Admin", UserName = "admin@test.local" };
         var manager = new ApplicationUser { FullName = "Manager", UserName = "manager@test.local" };
@@ -101,7 +93,7 @@ public sealed class LeadPermissionsTests
         Assert.Equal(15000.500m, createdLead.ProjectAmount);
         Assert.Equal(7, createdLead.StatusId);
 
-        var reports = new ReportsController(db, new ConfigurationBuilder().Build())
+        var reports = new ReportsController(db, new ConfigurationBuilder().Build(), new RecordAccessService(db, new RolePermissionService(db)))
         {
             ControllerContext = new ControllerContext
             {
@@ -113,7 +105,7 @@ public sealed class LeadPermissionsTests
         Assert.Contains("New SRS customer", json);
         Assert.DoesNotContain("Outside lead", json);
 
-        var followUps = new FollowUpsController(db)
+        var followUps = new FollowUpsController(db, new RecordAccessService(db, new RolePermissionService(db)))
         {
             ControllerContext = new ControllerContext
             {
@@ -125,7 +117,7 @@ public sealed class LeadPermissionsTests
     }
 
     private static LeadsController Controller(AppDbContext db, long userId, string role) =>
-        new(db)
+        new(db, new RecordAccessService(db, new RolePermissionService(db)))
         {
             ControllerContext = new ControllerContext
             {

@@ -11,9 +11,11 @@ namespace BusinessFlow.Api.Controllers;
 [ApiController]
 [Authorize]
 [Route("api/leads")]
-public sealed class LeadsController(AppDbContext db) : ControllerBase
+public sealed class LeadsController(AppDbContext db, RecordAccessService records) : ControllerBase
 {
+    private string Action => RolePermissionService.ForRequest(Request) ?? "leads.view";
     [HttpGet]
+    [RequirePermission("leads.view")]
     public async Task<IActionResult> List(string? search, long? statusId, int page = 1, int pageSize = 20,
         long? userId = null, string? leadGivenBy = null, DateTime? from = null, DateTime? to = null)
     {
@@ -22,7 +24,7 @@ public sealed class LeadsController(AppDbContext db) : ControllerBase
             return BadRequest(new { message = "Search filters must not exceed 150 characters." });
         if (from.HasValue && to.HasValue && from.Value.Date > to.Value.Date)
             return BadRequest(new { message = "Invalid date range." });
-        var query = LeadAccess.VisibleTo(db.Leads.AsNoTracking(), User);
+        var query = (await records.LeadsAsync(User, Action)).AsNoTracking();
         if (!string.IsNullOrWhiteSpace(search))
         {
             var term = search.Trim();
@@ -49,9 +51,10 @@ public sealed class LeadsController(AppDbContext db) : ControllerBase
     }
 
     [HttpGet("{id:long}")]
+    [RequirePermission("leads.view")]
     public async Task<IActionResult> Get(long id)
     {
-        var lead = await LeadAccess.VisibleTo(db.Leads.AsNoTracking(), User)
+        var lead = await (await records.LeadsAsync(User, Action)).AsNoTracking()
             .Where(l => l.Id == id)
             .Select(l => new { l.Id, l.CustomerCode, l.Name, l.Phone, l.Email, l.CompanyName, l.Address,
                 l.LeadGivenBy, l.ProjectAmount, l.LastFollowUpDate, l.NextFollowUpDate, l.Requirement,
@@ -61,6 +64,7 @@ public sealed class LeadsController(AppDbContext db) : ControllerBase
     }
 
     [HttpPost]
+    [RequirePermission("leads.create")]
     public async Task<IActionResult> Create(LeadRequest request)
     {
         if (!await db.LeadSources.AnyAsync(s => s.Id == request.SourceId))
@@ -100,9 +104,10 @@ public sealed class LeadsController(AppDbContext db) : ControllerBase
     }
 
     [HttpPut("{id:long}")]
+    [RequirePermission("leads.edit")]
     public async Task<IActionResult> Update(long id, LeadRequest request)
     {
-        var lead = await LeadAccess.VisibleTo(db.Leads, User).FirstOrDefaultAsync(l => l.Id == id);
+        var lead = await (await records.LeadsAsync(User, Action)).FirstOrDefaultAsync(l => l.Id == id);
         if (lead is null) return NotFound();
         if (!await db.LeadSources.AnyAsync(s => s.Id == request.SourceId))
             return BadRequest(new { message = "Invalid source." });
@@ -129,16 +134,16 @@ public sealed class LeadsController(AppDbContext db) : ControllerBase
         return NoContent();
     }
 
-    [Authorize(Roles = "Admin,Manager")]
     [HttpPost("{id:long}/assign")]
+    [RequirePermission("leads.assign")]
     public async Task<IActionResult> Assign(long id, AssignLeadRequest request)
     {
-        var lead = await LeadAccess.VisibleTo(db.Leads, User).FirstOrDefaultAsync(l => l.Id == id);
+        var lead = await (await records.LeadsAsync(User, Action)).FirstOrDefaultAsync(l => l.Id == id);
         if (lead is null) return NotFound();
         var userId = LeadAccess.UserId(User);
         var assignee = await db.Users.FirstOrDefaultAsync(u => u.Id == request.UserId && u.IsActive);
         if (assignee is null) return BadRequest(new { message = "Employee not found." });
-        if (!User.IsInRole("Admin") && assignee.ManagerId != userId && assignee.Id != userId)
+        if (!await (await records.EmployeesAsync(User, Action)).AnyAsync(x => x.Id == assignee.Id))
             return Forbid();
         if (lead.AssignedToId == request.UserId) return NoContent();
 
@@ -163,9 +168,10 @@ public sealed class LeadsController(AppDbContext db) : ControllerBase
     }
 
     [HttpPatch("{id:long}/status")]
+    [RequirePermission("leads.status")]
     public async Task<IActionResult> ChangeStatus(long id, ChangeLeadStatusRequest request)
     {
-        var lead = await LeadAccess.VisibleTo(db.Leads, User).FirstOrDefaultAsync(l => l.Id == id);
+        var lead = await (await records.LeadsAsync(User, Action)).FirstOrDefaultAsync(l => l.Id == id);
         if (lead is null) return NotFound();
         if (!await db.LeadStatuses.AnyAsync(s => s.Id == request.StatusId))
             return BadRequest(new { message = "Invalid status." });
@@ -187,9 +193,10 @@ public sealed class LeadsController(AppDbContext db) : ControllerBase
     }
 
     [HttpGet("{id:long}/history")]
+    [RequirePermission("leads.view")]
     public async Task<IActionResult> History(long id)
     {
-        if (!await LeadAccess.VisibleTo(db.Leads, User).AnyAsync(l => l.Id == id))
+        if (!await (await records.LeadsAsync(User, Action)).AnyAsync(l => l.Id == id))
             return NotFound();
         return Ok(new
         {

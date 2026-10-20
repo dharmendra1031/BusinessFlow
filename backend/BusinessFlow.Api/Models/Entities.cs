@@ -7,6 +7,7 @@ public sealed class ApplicationUser : IdentityUser<long>
     public string FullName { get; set; } = string.Empty;
     public bool IsActive { get; set; } = true;
     public long? ManagerId { get; set; }
+    public long? DepartmentId { get; set; }
 }
 
 public sealed class LeadSource

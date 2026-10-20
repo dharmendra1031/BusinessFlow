@@ -12,42 +12,20 @@ namespace BusinessFlow.Api.Controllers;
 [ApiController]
 [Authorize]
 [Route("api/projects")]
-public sealed class ProjectsController(AppDbContext db) : ControllerBase
+public sealed class ProjectsController(AppDbContext db, RecordAccessService records) : ControllerBase
 {
+    private string Action => RolePermissionService.ForRequest(Request) ?? "projects.view";
     private static readonly string[] ProjectStatuses = ["Planning", "InProgress", "OnHold", "Completed"];
     private static readonly string[] TaskStatuses = ["Todo", "InProgress", "Blocked", "Done"];
     private static readonly string[] Priorities = ["Low", "Medium", "High", "Urgent"];
 
-    private IQueryable<DevelopmentProject> VisibleProjects()
-    {
-        var projects = db.DevelopmentProjects.AsQueryable();
-        if (User.IsInRole("Admin")) return projects;
-        var id = LeadAccess.UserId(User);
-        if (User.IsInRole("Manager"))
-            return projects.Where(p => p.CreatedById == id || p.OwnerId == id ||
-                p.Owner.ManagerId == id || p.Tasks.Any(t => t.AssignedToId == id) ||
-                db.ProjectBugs.Any(b => b.ProjectId == p.Id && b.AssignedToId == id));
-        return projects.Where(p => p.OwnerId == id || p.Tasks.Any(t => t.AssignedToId == id) ||
-            db.ProjectBugs.Any(b => b.ProjectId == p.Id && b.AssignedToId == id));
-    }
+    private Task<IQueryable<DevelopmentProject>> VisibleProjects() => records.ProjectsAsync(User, Action);
 
-    private bool CanManage(DevelopmentProject project)
-    {
-        if (User.IsInRole("Admin")) return true;
-        if (!User.IsInRole("Manager")) return false;
-        var id = LeadAccess.UserId(User);
-        return project.CreatedById == id || project.OwnerId == id || project.Owner.ManagerId == id;
-    }
+    private async Task<bool> CanManage(DevelopmentProject project) =>
+        await (await records.ManagedProjectsAsync(User, Action)).AnyAsync(x => x.Id == project.Id);
 
-    private async Task<bool> ValidAssignee(long? id)
-    {
-        if (id is null) return true;
-        var user = await db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == id && u.IsActive);
-        if (user is null) return false;
-        var current = LeadAccess.UserId(User);
-        return User.IsInRole("Admin") ||
-            (User.IsInRole("Manager") && (user.Id == current || user.ManagerId == current));
-    }
+    private async Task<bool> ValidAssignee(long? id) => id is null ||
+        await (await records.EmployeesAsync(User, Action)).AnyAsync(x => x.Id == id && x.IsActive);
 
     private static bool InvalidDates(DateOnly? start, DateOnly? due) =>
         start.HasValue && due.HasValue && due.Value < start.Value;
@@ -60,13 +38,14 @@ public sealed class ProjectsController(AppDbContext db) : ControllerBase
         });
 
     [HttpGet]
+    [RequirePermission("projects.view")]
     public async Task<IActionResult> List(string? status = null, int page = 1, int pageSize = 50)
     {
         if (page < 1 || pageSize is < 1 or > 200 || (long)(page - 1) * pageSize > int.MaxValue)
             return BadRequest(new { message = "Invalid pagination." });
         if (status is not null && !ProjectStatuses.Contains(status))
             return BadRequest(new { message = "Invalid project status." });
-        var projects = VisibleProjects().AsNoTracking();
+        var projects = (await VisibleProjects()).AsNoTracking();
         if (status is not null) projects = projects.Where(p => p.Status == status);
         var total = await projects.CountAsync();
         var items = await projects.OrderByDescending(p => p.UpdatedAtUtc).ThenByDescending(p => p.Id)
@@ -81,13 +60,13 @@ public sealed class ProjectsController(AppDbContext db) : ControllerBase
         return Ok(new { total, page, pageSize, items });
     }
 
-    [Authorize(Roles = "Admin,Manager")]
     [HttpGet("eligible-leads")]
+    [RequirePermission("projects.create")]
     public async Task<IActionResult> EligibleLeads(string? search = null, int page = 1, int pageSize = 50)
     {
         if (page < 1 || pageSize is < 1 or > 200 || (long)(page - 1) * pageSize > int.MaxValue || search?.Length > 150)
             return BadRequest(new { message = "Invalid eligible lead filters or pagination." });
-        var query = LeadAccess.VisibleTo(db.Leads.AsNoTracking(), User)
+        var query = (await records.LeadsAsync(User, Action)).AsNoTracking()
             .Where(l => l.StatusId == 5 &&
                 !db.DevelopmentProjects.Any(p => p.LeadId == l.Id));
         if (!string.IsNullOrWhiteSpace(search)) query = query.Where(l => l.Name.Contains(search.Trim()) || l.CustomerCode!.Contains(search.Trim()));
@@ -100,9 +79,10 @@ public sealed class ProjectsController(AppDbContext db) : ControllerBase
     }
 
     [HttpGet("{id:long}")]
+    [RequirePermission("projects.view")]
     public async Task<IActionResult> Get(long id)
     {
-        var project = await VisibleProjects().AsNoTracking().Where(p => p.Id == id)
+        var project = await (await VisibleProjects()).AsNoTracking().Where(p => p.Id == id)
             .Select(p => new
             {
                 p.Id, p.LeadId, p.CreatedById, p.Title, p.Description, p.Status, p.StartDate, p.DueDate,
@@ -118,8 +98,8 @@ public sealed class ProjectsController(AppDbContext db) : ControllerBase
         return project is null ? NotFound() : Ok(project);
     }
 
-    [Authorize(Roles = "Admin,Manager")]
     [HttpPost]
+    [RequirePermission("projects.create")]
     public async Task<IActionResult> Create(CreateProjectRequest request)
     {
         if (string.IsNullOrWhiteSpace(request.Title) || request.Title.Trim().Length < 2)
@@ -129,7 +109,7 @@ public sealed class ProjectsController(AppDbContext db) : ControllerBase
         if (!await ValidAssignee(request.OwnerId))
             return BadRequest(new { message = "Choose an active owner from your team." });
 
-        var lead = await LeadAccess.VisibleTo(db.Leads.AsNoTracking(), User)
+        var lead = await (await records.LeadsAsync(User, Action)).AsNoTracking()
             .Where(l => l.Id == request.LeadId).Select(l => new { l.Id, l.StatusId })
             .FirstOrDefaultAsync();
         if (lead is null) return NotFound();
@@ -156,14 +136,14 @@ public sealed class ProjectsController(AppDbContext db) : ControllerBase
         return CreatedAtAction(nameof(Get), new { id = project.Id }, new { project.Id });
     }
 
-    [Authorize(Roles = "Admin,Manager")]
     [HttpPut("{id:long}")]
+    [RequirePermission("projects.edit")]
     public async Task<IActionResult> Update(long id, UpdateProjectRequest request)
     {
-        var project = await VisibleProjects().Include(p => p.Owner).Include(p => p.Tasks)
+        var project = await (await VisibleProjects()).Include(p => p.Owner).Include(p => p.Tasks)
             .FirstOrDefaultAsync(p => p.Id == id);
         if (project is null) return NotFound();
-        if (!CanManage(project)) return Forbid();
+        if (!await CanManage(project)) return Forbid();
         if (string.IsNullOrWhiteSpace(request.Title) || request.Title.Trim().Length < 2 ||
             !ProjectStatuses.Contains(request.Status))
             return BadRequest(new { message = "Enter a valid project title and status." });
@@ -201,13 +181,13 @@ public sealed class ProjectsController(AppDbContext db) : ControllerBase
         return NoContent();
     }
 
-    [Authorize(Roles = "Admin,Manager")]
     [HttpPost("{id:long}/tasks")]
+    [RequirePermission("tasks.create")]
     public async Task<IActionResult> AddTask(long id, CreateDevelopmentTaskRequest request)
     {
-        var project = await VisibleProjects().Include(p => p.Owner).FirstOrDefaultAsync(p => p.Id == id);
+        var project = await (await VisibleProjects()).Include(p => p.Owner).FirstOrDefaultAsync(p => p.Id == id);
         if (project is null) return NotFound();
-        if (!CanManage(project)) return Forbid();
+        if (!await CanManage(project)) return Forbid();
         if (project.Status == "Completed")
             return BadRequest(new { message = "Reopen the project before adding tasks." });
         var error = await TaskError(request.Title, request.Priority, request.AssignedToId,
@@ -228,13 +208,13 @@ public sealed class ProjectsController(AppDbContext db) : ControllerBase
         return Created("/api/projects/" + id, new { task.Id });
     }
 
-    [Authorize(Roles = "Admin,Manager")]
     [HttpPut("{id:long}/tasks/{taskId:long}")]
+    [RequirePermission("tasks.edit")]
     public async Task<IActionResult> UpdateTask(long id, long taskId, UpdateDevelopmentTaskRequest request)
     {
-        var project = await VisibleProjects().Include(p => p.Owner).FirstOrDefaultAsync(p => p.Id == id);
+        var project = await (await VisibleProjects()).Include(p => p.Owner).FirstOrDefaultAsync(p => p.Id == id);
         if (project is null) return NotFound();
-        if (!CanManage(project)) return Forbid();
+        if (!await CanManage(project)) return Forbid();
         if (project.Status == "Completed")
             return BadRequest(new { message = "Reopen the project before editing tasks." });
         var task = await db.DevelopmentTasks.FirstOrDefaultAsync(t => t.Id == taskId && t.ProjectId == id);
@@ -258,17 +238,18 @@ public sealed class ProjectsController(AppDbContext db) : ControllerBase
     }
 
     [HttpPatch("{id:long}/tasks/{taskId:long}/status")]
+    [RequirePermission("tasks.status")]
     public async Task<IActionResult> ChangeTaskStatus(long id, long taskId, UpdateDevelopmentTaskStatusRequest request)
     {
         if (!TaskStatuses.Contains(request.Status))
             return BadRequest(new { message = "Invalid task status." });
-        var project = await VisibleProjects().Include(p => p.Owner).FirstOrDefaultAsync(p => p.Id == id);
+        var project = await (await VisibleProjects()).Include(p => p.Owner).FirstOrDefaultAsync(p => p.Id == id);
         if (project is null) return NotFound();
         if (project.Status == "Completed")
             return BadRequest(new { message = "Reopen the project before updating tasks." });
         var task = await db.DevelopmentTasks.FirstOrDefaultAsync(t => t.Id == taskId && t.ProjectId == id);
         if (task is null) return NotFound();
-        if (!CanManage(project) && task.AssignedToId != LeadAccess.UserId(User)) return Forbid();
+        if (!await CanManage(project) && task.AssignedToId != LeadAccess.UserId(User)) return Forbid();
         if (task.Status == request.Status) return NoContent();
 
         task.Status = request.Status;

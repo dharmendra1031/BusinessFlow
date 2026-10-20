@@ -12,8 +12,9 @@ namespace BusinessFlow.Api.Controllers;
 [ApiController]
 [Authorize]
 [Route("api/reports")]
-public sealed class ReportsController(AppDbContext db, IConfiguration configuration) : ControllerBase
+public sealed class ReportsController(AppDbContext db, IConfiguration configuration, RecordAccessService records) : ControllerBase
 {
+    private string Action => RolePermissionService.ForRequest(Request) ?? "reports.view";
     private static readonly string[] ReportTypes =
     [
         "customers", "user-customers", "active", "closed", "not-interested",
@@ -21,6 +22,7 @@ public sealed class ReportsController(AppDbContext db, IConfiguration configurat
     ];
 
     [HttpGet("pdf")]
+    [RequirePermission("reports.pdf")]
     public async Task<IActionResult> Pdf(string type = "customers", DateTime? from = null,
         DateTime? to = null, long? userId = null, long? statusId = null, string? leadGivenBy = null)
     {
@@ -84,6 +86,7 @@ public sealed class ReportsController(AppDbContext db, IConfiguration configurat
     }
 
     [HttpGet("export")]
+    [RequirePermission("reports.export")]
     public async Task<IActionResult> Export(string type = "customers", DateTime? from = null,
         DateTime? to = null, long? userId = null, long? statusId = null, string? leadGivenBy = null)
     {
@@ -136,6 +139,7 @@ public sealed class ReportsController(AppDbContext db, IConfiguration configurat
     }
 
     [HttpGet]
+    [RequirePermission("reports.view")]
     public async Task<IActionResult> Get(string type = "customers", DateTime? from = null,
         DateTime? to = null, long? userId = null, long? statusId = null, string? leadGivenBy = null,
         int page = 1, int pageSize = 50)
@@ -148,7 +152,7 @@ public sealed class ReportsController(AppDbContext db, IConfiguration configurat
         if (from.HasValue && to.HasValue && from.Value.Date > to.Value.Date)
             return BadRequest(new { message = "Invalid date range." });
 
-        var leads = LeadAccess.VisibleTo(db.Leads.AsNoTracking(), User);
+        var leads = (await records.LeadsAsync(User, Action)).AsNoTracking();
         if (userId.HasValue) leads = leads.Where(l => l.AssignedToId == userId);
         if (statusId.HasValue) leads = leads.Where(l => l.StatusId == statusId);
         if (!string.IsNullOrWhiteSpace(leadGivenBy))

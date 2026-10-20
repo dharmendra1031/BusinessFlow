@@ -9,11 +9,13 @@ import AuditPage from './AuditPage';
 import PermissionsPage from './PermissionsPage';
 import ProjectsPage from './ProjectsPage';
 import PasswordSettings from './PasswordSettings';
+import OrganizationPage from './OrganizationPage';
+import RolesPage from './RolesPage';
 import type { User } from './types';
 
 type Session = { token: string; user: User };
 type CurrentSession = User & { csrfToken: string };
-type Screen = 'dashboard' | 'leads' | 'projects' | 'followups' | 'employees' | 'reports' | 'audit' | 'permissions' | 'settings';
+type Screen = 'dashboard' | 'leads' | 'projects' | 'followups' | 'employees' | 'reports' | 'audit' | 'permissions' | 'roles' | 'organization' | 'settings';
 
 const navigation = [
   { id: 'dashboard', label: 'Dashboard', icon: 'grid' },
@@ -24,6 +26,8 @@ const navigation = [
   { id: 'reports', label: 'Reports', icon: 'clipboard' },
   { id: 'audit', label: 'Audit history', icon: 'clipboard' },
   { id: 'permissions', label: 'Role permissions', icon: 'lock' },
+  { id: 'organization', label: 'Organization', icon: 'users' },
+  { id: 'roles', label: 'Custom roles', icon: 'lock' },
   { id: 'settings', label: 'Change password', icon: 'lock' },
 ] as const;
 
@@ -107,9 +111,9 @@ function Workspace() {
   };
   const items = navigation.filter(item =>
     (item.id !== 'employees' || canSeeTeam) &&
-    (item.id !== 'audit' && item.id !== 'permissions' || user.roles.includes('Admin')) &&
+    (item.id !== 'audit' && item.id !== 'permissions' && item.id !== 'organization' && item.id !== 'roles' || user.roles.includes('Admin')) &&
     (allowed?.[moduleAccess[item.id] || ''] !== false));
-  const pageTitle = { dashboard: 'Dashboard', leads: 'All leads', projects: 'Development projects', followups: 'Follow-ups', employees: 'Team', reports: 'Reports', audit: 'Audit history', permissions: 'Role permissions', settings: 'Change password' }[screen];
+  const pageTitle = { dashboard: 'Dashboard', leads: 'All leads', projects: 'Development projects', followups: 'Follow-ups', employees: 'Team', reports: 'Reports', audit: 'Audit history', permissions: 'Role permissions', roles: 'Custom roles', organization: 'Organization', settings: 'Change password' }[screen];
 
   return <div className="app-shell">
     <a className="skip-link" href="#main-content">Skip to main content</a>
@@ -164,6 +168,8 @@ function Workspace() {
         {screen === 'audit' && user.roles.includes('Admin') && <AuditPage token={session.token} />}
         {screen === 'permissions' && user.roles.includes('Admin') && <PermissionsPage token={session.token} />}
         {screen === 'settings' && <PasswordSettings token={session.token} onChanged={passwordChanged} />}
+        {screen === 'organization' && user.roles.includes('Admin') && <OrganizationPage token={session.token} />}
+        {screen === 'roles' && user.roles.includes('Admin') && <RolesPage token={session.token} />}
       </main>
     </div>
   </div>;

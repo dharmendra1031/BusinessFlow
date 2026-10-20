@@ -11,15 +11,17 @@ namespace BusinessFlow.Api.Controllers;
 [ApiController]
 [Authorize]
 [Route("api/followups")]
-public sealed class FollowUpsController(AppDbContext db) : ControllerBase
+public sealed class FollowUpsController(AppDbContext db, RecordAccessService records) : ControllerBase
 {
+    private string Action => RolePermissionService.ForRequest(Request) ?? "followups.view";
     [HttpGet]
+    [RequirePermission("followups.view")]
     public async Task<IActionResult> List(bool overdueOnly = false, string view = "pending", int page = 1, int pageSize = 50)
     {
         if (page < 1 || pageSize is < 1 or > 200 || (long)(page - 1) * pageSize > int.MaxValue ||
             view is not ("pending" or "overdue" or "completed" or "all"))
             return BadRequest(new { message = "Invalid follow-up filters or pagination." });
-        var leadIds = LeadAccess.VisibleTo(db.Leads, User).Select(l => l.Id);
+        var leadIds = (await records.LeadsAsync(User, Action)).Select(l => l.Id);
         var query = db.LeadFollowUps.AsNoTracking().Where(f => leadIds.Contains(f.LeadId));
         if (overdueOnly || view == "overdue")
             query = query.Where(f => f.CompletedAtUtc == null && f.DueAtUtc < DateTime.UtcNow);
@@ -35,9 +37,10 @@ public sealed class FollowUpsController(AppDbContext db) : ControllerBase
     }
 
     [HttpPost("/api/leads/{leadId:long}/followups")]
+    [RequirePermission("followups.manage")]
     public async Task<IActionResult> Create(long leadId, CreateFollowUpRequest request)
     {
-        var lead = await LeadAccess.VisibleTo(db.Leads, User)
+        var lead = await (await records.LeadsAsync(User, Action))
             .FirstOrDefaultAsync(l => l.Id == leadId);
         if (lead is null) return NotFound();
         if (string.IsNullOrWhiteSpace(request.Notes))
@@ -66,9 +69,10 @@ public sealed class FollowUpsController(AppDbContext db) : ControllerBase
     }
 
     [HttpPatch("{id:long}/complete")]
+    [RequirePermission("followups.manage")]
     public async Task<IActionResult> Complete(long id)
     {
-        var leadIds = LeadAccess.VisibleTo(db.Leads, User).Select(l => l.Id);
+        var leadIds = (await records.LeadsAsync(User, Action)).Select(l => l.Id);
         var followUp = await db.LeadFollowUps.FirstOrDefaultAsync(f => f.Id == id && leadIds.Contains(f.LeadId));
         if (followUp is null) return NotFound();
         if (followUp.CompletedAtUtc is not null) return NoContent();
@@ -88,9 +92,10 @@ public sealed class FollowUpsController(AppDbContext db) : ControllerBase
     }
 
     [HttpPut("{id:long}")]
+    [RequirePermission("followups.manage")]
     public async Task<IActionResult> Update(long id, UpdateFollowUpRequest request)
     {
-        var leadIds = LeadAccess.VisibleTo(db.Leads, User).Select(l => l.Id);
+        var leadIds = (await records.LeadsAsync(User, Action)).Select(l => l.Id);
         var followUp = await db.LeadFollowUps
             .FirstOrDefaultAsync(f => f.Id == id && leadIds.Contains(f.LeadId));
         if (followUp is null) return NotFound();
@@ -117,9 +122,10 @@ public sealed class FollowUpsController(AppDbContext db) : ControllerBase
     }
 
     [HttpGet("/api/leads/{leadId:long}/followups")]
+    [RequirePermission("followups.view")]
     public async Task<IActionResult> History(long leadId)
     {
-        if (!await LeadAccess.VisibleTo(db.Leads, User).AnyAsync(l => l.Id == leadId))
+        if (!await (await records.LeadsAsync(User, Action)).AnyAsync(l => l.Id == leadId))
             return NotFound();
         var followUps = await db.LeadFollowUps.AsNoTracking()
             .Where(f => f.LeadId == leadId)
