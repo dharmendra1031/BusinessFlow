@@ -103,7 +103,11 @@ public sealed class Phase1BackupRestoreTests
             await using var original = database.CreateContext();
             Assert.DoesNotContain("20261020060037_AddDomainRowVersions",
                 await original.Database.GetAppliedMigrationsAsync());
-            Assert.Equal("Restored lead", (await original.Leads.SingleAsync()).Name);
+            // The old catalog lacks RowVersion, so use SQL instead of the current EF entity mapping.
+            await using var originalConnection = new SqlConnection(database.ConnectionString);
+            await originalConnection.OpenAsync();
+            await using var sourceCheck = new SqlCommand("SELECT TOP (1) [Name] FROM [Leads]", originalConnection);
+            Assert.Equal("Restored lead", (string?)await sourceCheck.ExecuteScalarAsync());
         }
         finally
         {
