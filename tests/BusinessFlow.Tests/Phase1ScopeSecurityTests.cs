@@ -44,8 +44,7 @@ public sealed class Phase1ScopeSecurityTests
         Assert.False(item.TryGetProperty("departmentId", out _));
         Assert.False(item.TryGetProperty("managerId", out _));
 
-        var directory = await session.GetFromJsonAsync<JsonElement>("/api/employees");
-        Assert.Equal(1, directory.GetProperty("total").GetInt32());
+        Assert.Equal(HttpStatusCode.Forbidden, (await session.GetAsync("/api/employees")).StatusCode);
         var directoryLookup = await session.GetFromJsonAsync<JsonElement>("/api/employees/lookup?action=employees.view");
         Assert.Equal(1, directoryLookup.GetProperty("total").GetInt32());
         var assignLookup = await session.GetFromJsonAsync<JsonElement>("/api/employees/lookup?action=leads.assign");
