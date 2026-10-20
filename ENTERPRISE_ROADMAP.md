@@ -76,11 +76,11 @@ Source evidence: `backend/BusinessFlow.Api/`, `frontend/src/`, `tests/BusinessFl
 | Login throttling | Shared office-IP scenarios tested; abuse and lockout controls retained | Verified |
 | Optimistic concurrency | Row-version checks for lead, project and task changes with clear HTTP conflict behavior | Verified |
 | Worklog posting safety | Parallel requests cannot exceed daily time limit; test transaction isolation | Verified |
-| Employee directory scale | Server-side search/filter/pagination; UI uses returned totals | In progress |
+| Employee directory scale | Server-side search/filter/pagination; UI uses returned totals | Verified |
 
-**Checkpoint (20 October 2026):** Source implementation covers all ten work areas. Seven items passed targeted SQL/API and browser CI checks, hierarchy/data scope is implemented, and full action-based UI controls plus large directory/lookup UX remain in progress. No item is production-accepted.
+**Checkpoint (20 October 2026):** Source implementation covers all ten work areas. Eight items passed targeted SQL/API and browser CI checks, hierarchy/data scope is implemented, and full action-based UI and scope review remains in progress. No item is production-accepted.
 
-**Phase gate:** Role matrix and cross-department negative-access tests; migrations and existing data upgrade; concurrency tests; existing CRM and project regression tests. Remaining: full project-task/bug/worklog UI permission capability review, assignment lookup pagination for larger teams, final code review, staging migration and release acceptance. No unauthorized data access.
+**Phase gate:** Role matrix and cross-department negative-access tests; migrations and existing data upgrade; concurrency tests; existing CRM and project regression tests. Remaining: exact per-record capabilities for complex custom-role scopes, final code/security review, staging migration, backup/restore and release acceptance. No unauthorized data access.
 
 ## Phase 2 — Enterprise CRM
 

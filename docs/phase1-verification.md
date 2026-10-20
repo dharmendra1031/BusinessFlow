@@ -57,3 +57,13 @@ Phase 1 remains in progress. Full action-capability UI, additional directory/loo
 - The GitHub [SQL/API and Chromium workflow for `e557250`](https://github.com/dharmendra1031/BusinessFlow/actions/runs/39394296117) completed successfully: **36/36 SQL/API tests** and **35/35 Chromium tests**, frontend production build and dependency audit passed.
 - The corresponding [Windows IIS package workflow](https://github.com/dharmendra1031/BusinessFlow/actions/runs/39394296035) completed successfully.
 - **Remaining:** searchable/paginated employee assignment selectors beyond the initial 200 results, exact per-record UI capabilities for nondefault custom-role scopes, final security review, staging migration and backup/restore acceptance. No 100–200 simultaneous-user capacity claim or live deployment acceptance is made.
+
+## Searchable assignment controls — 20 October 2026
+
+- Reusable `EmployeeSearchSelect` uses existing `/api/employees/lookup` with action-scoped server-side name/email search and **20 results per page**. It supports next/previous pagination and retains the selected employee when searching or moving between pages. No database schema changes were made.
+- Added employee search to Lead assignment (alongside the legacy inline dropdown), project owner create/edit, task assignee and bug assignee. Existing API permission and record-scope enforcement remains authoritative.
+- Browser regressions cover (1) **real SQL-backed** email search and confirmed Lead assignment and (2) employee pagination/selection for a **mocked 240-employee response**. The mock exercises UI behavior, not a 240-employee database load test.
+- First browser run for `956dd82` passed 36/37 but failed to click the new Lead search button because the adjacent Edit button overlapped it. Fixed the table-cell layout in commits `6f6f837` and `5c6ee43`.
+- GitHub [CRM verification run 39435978029](https://github.com/dharmendra1031/BusinessFlow/actions/runs/39435978029) for `5c6ee43` passed **36/36 SQL/API** and **37/37 Playwright Chromium tests**, EF migration snapshot, dependency audit and frontend production build.
+- GitHub [Windows IIS package run 39435978354](https://github.com/dharmendra1031/BusinessFlow/actions/runs/39435978354) for `5c6ee43` passed.
+- Remaining enterprise acceptance: exact action and record-scope capability UI for complex custom roles, final security review, staging database migration/recovery, and actual concurrent-user load testing. CI is not production sign-off.
