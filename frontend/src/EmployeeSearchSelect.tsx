@@ -40,7 +40,7 @@ export default function EmployeeSearchSelect({
   }, [token, action, search, page]);
 
   const options = result?.items ?? [];
-  const current = options.find(employee => String(employee.id) === value);
+  const current = options.find(employee => employee.isActive && String(employee.id) === value);
   const retained = selected?.id === Number(value) ? selected.fullName : selectedName;
 
   return <>
