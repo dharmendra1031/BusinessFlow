@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
+import EmployeeSearchSelect from './EmployeeSearchSelect';
 import { api } from './api';
 import { useFeedback } from './Feedback';
 import { clearFieldError, handleFormKeyDown, validateForm } from './formUtils';
-import type { DevelopmentProject, Employee, Paged, User } from './types';
+import type { DevelopmentProject, Paged, User } from './types';
 
 type Bug = {
   id: number; taskId: number | null; title: string; description: string | null;
@@ -20,9 +21,9 @@ const severities = ['Low', 'Medium', 'High', 'Critical'];
 const statuses = ['Open', 'InProgress', 'Resolved', 'Closed'];
 const label = (value: string) => value.replace(/([a-z])([A-Z])/g, '$1 $2');
 
-export default function ProjectActivity({ project, user, token, canManage, permissions, employees }: {
+export default function ProjectActivity({ project, user, token, canManage, permissions }: {
   project: DevelopmentProject; user: User; token: string;
-  canManage: boolean; permissions: Record<string, boolean>; employees: Employee[];
+  canManage: boolean; permissions: Record<string, boolean>;
 }) {
   const { notify } = useFeedback();
   const canViewBugs = permissions['bugs.view'] === true;
@@ -77,9 +78,7 @@ export default function ProjectActivity({ project, user, token, canManage, permi
 
   useEffect(() => { void refresh(); }, [refresh]);
 
-  const availableMembers = employees.filter(member => member.isActive &&
-    (user.roles.includes('Admin') || member.id === user.id || member.managerId === user.id));
-  const tasks = project.tasks || [];
+   const tasks = project.tasks || [];
   const myTasks = tasks.filter(task => task.assignedToId === user.id || project.ownerId === user.id);
 
   function resetBug() {
@@ -195,12 +194,10 @@ export default function ProjectActivity({ project, user, token, canManage, permi
           <option value="">General project issue</option>
           {tasks.map(task => <option key={task.id} value={task.id}>{task.title}</option>)}
         </select></label>
-        {canManage && <label>Assign developer<select value={bugAssignee}
-          onChange={event => setBugAssignee(event.target.value)}>
-          <option value="">Unassigned</option>
-          {availableMembers.map(member =>
-            <option key={member.id} value={member.id}>{member.fullName}</option>)}
-        </select></label>}
+        {canManage && <EmployeeSearchSelect token={token}
+          action={editingBugId ? 'bugs.edit' : 'bugs.create'} label="Assign developer"
+          value={bugAssignee} onChange={setBugAssignee}
+          selectedName={bugs.find(bug => bug.id === editingBugId)?.assignedTo ?? undefined} />}
         {editingBugId && canEditBug && <label>Bug status<select value={bugStatus}
           onChange={event => setBugStatus(event.target.value)}>
           {statuses.filter(status => status !== 'Closed' || canCloseBug || status === bugStatus)
