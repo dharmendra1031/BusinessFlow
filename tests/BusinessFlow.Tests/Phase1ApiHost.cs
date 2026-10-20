@@ -21,6 +21,9 @@ internal sealed class Phase1ApiHost(Phase1TestDatabase database) : WebApplicatio
         builder.ConfigureAppConfiguration((_, config) => config.AddInMemoryCollection(new Dictionary<string, string?>
         {
             ["ConnectionStrings:DefaultConnection"] = database.ConnectionString,
+            // Keep API security tests independent of CI/browser login-rate settings.
+            ["RateLimiting:LoginAccountRequestsPerMinute"] = "5",
+            ["RateLimiting:LoginIpRequestsPerMinute"] = "300",
             ["CRM_ADMIN_EMAIL"] = "", ["CRM_ADMIN_PASSWORD"] = ""
         }));
         builder.ConfigureServices(services =>
