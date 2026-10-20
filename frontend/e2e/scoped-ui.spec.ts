@@ -127,3 +127,68 @@ test('Restricted project member sees tasks without denied activity or status con
   await expect(details.getByRole('region', { name: 'Sprint and milestone planning' })).toHaveCount(0);
   await expect(details.getByText("Log today's work")).toHaveCount(0);
 });
+
+test('Lead assignment finds an eligible employee by email beyond the initial dropdown', async ({ page, request }) => {
+  const employee = await createEmployee(request);
+  const name = 'Searchable Lead ' + unique();
+  const response = await request.post(apiUrl + '/api/leads', {
+    headers: headers(), data: { name, phone: '+96555501234', sourceId: 1 },
+  });
+  expect(response.status()).toBe(201);
+
+  await page.addInitScript(session => sessionStorage.setItem('crmSession', JSON.stringify(session)), {
+    token: process.env.E2E_ADMIN_TOKEN!, user: JSON.parse(process.env.E2E_ADMIN_USER!),
+  });
+  await page.goto('/');
+  await page.getByRole('button', { name: 'All leads', exact: true }).click();
+  await page.getByRole('button', { name: 'Find assignee for ' + name }).click();
+
+  const dialog = page.getByRole('dialog', { name: 'Assign lead ' + name });
+  await dialog.getByRole('textbox', { name: 'Search employees' }).fill(employee.email);
+  const selector = dialog.getByRole('combobox', { name: 'Assign to' });
+  await expect(selector.locator('option[value="' + employee.id + '"]')).toBeAttached();
+  await selector.selectOption(String(employee.id));
+  await dialog.getByRole('button', { name: 'Assign lead' }).click();
+  await page.getByRole('alertdialog').getByRole('button', { name: 'Assign lead' }).click();
+  await expect(page.getByRole('row').filter({ hasText: name })).toContainText('Scoped UI Employee');
+});
+
+test('Project owner selector searches and paginates beyond 200 scoped employees', async ({ page }) => {
+  await page.route('**/api/employees/lookup?**', async route => {
+    const url = new URL(route.request().url());
+    if (url.searchParams.get('action') !== 'projects.create') {
+      await route.continue();
+      return;
+    }
+    const pageNumber = Number(url.searchParams.get('page') || 1);
+    const search = url.searchParams.get('search') || '';
+    const people = search ? [{ id: 10239, fullName: 'Employee 239',
+      email: 'employee239@test.local', phoneNumber: null, isActive: true, managerId: null }] :
+      Array.from({ length: 20 }, (_, index) => {
+        const number = (pageNumber - 1) * 20 + index + 1;
+        return { id: 10000 + number, fullName: 'Employee ' + number,
+          email: 'employee' + number + '@test.local',
+          phoneNumber: null, isActive: true, managerId: null };
+      });
+    await route.fulfill({ status: 200, contentType: 'application/json',
+      body: JSON.stringify({ total: search ? 1 : 240, page: pageNumber, pageSize: 20, items: people }) });
+  });
+
+  await page.addInitScript(session => sessionStorage.setItem('crmSession', JSON.stringify(session)), {
+    token: process.env.E2E_ADMIN_TOKEN!, user: JSON.parse(process.env.E2E_ADMIN_USER!),
+  });
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Development projects' }).click();
+  await page.getByRole('button', { name: 'New project' }).click();
+
+  const dialog = page.getByRole('dialog', { name: 'New development project' });
+  await expect(dialog.getByText('Page 1 · 240 employees')).toBeVisible();
+  await dialog.getByRole('button', { name: 'Next employees' }).click();
+  await expect(dialog.getByText('Page 2 · 240 employees')).toBeVisible();
+  const owner = dialog.getByRole('combobox', { name: 'Project owner' });
+  await owner.selectOption('10021');
+  await dialog.getByRole('textbox', { name: 'Search employees' }).fill('employee239@test.local');
+  await expect(owner.locator('option[value="10239"]')).toBeAttached();
+  await owner.selectOption('10239');
+  await expect(owner).toHaveValue('10239');
+});
