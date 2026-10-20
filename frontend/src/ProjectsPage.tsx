@@ -1,4 +1,5 @@
 import { employeeLookup } from './employeeLookup';
+import EmployeeSearchSelect from './EmployeeSearchSelect';
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { api, ApiError } from './api';
 import { Icon } from './Icon';
@@ -86,7 +87,6 @@ export default function ProjectsPage({ token, user, permissions }: {
         .catch(() => notify('error', 'Unable to load team'));
   }, [load, loadEligible, canCreateProject, canEditProject, canCreateTask, canEditTask, token, notify, permissions]);
 
-  const availableOwners = employees.filter(member => member.isActive);
   // The API still enforces the actual per-record scope for every operation.
   const mayManage = (project: DevelopmentProject) =>
     user.roles.includes('Admin') || project.ownerId === user.id || project.createdById === user.id ||
@@ -287,7 +287,8 @@ export default function ProjectsPage({ token, user, permissions }: {
             <button type="button" disabled={leadPage * 50 >= leadTotal} onClick={() => setLeadPage(leadPage + 1)}>Next</button>
           </div>
           <ProjectFields {...{ name, setName, description, setDescription, ownerId, setOwnerId,
-            startDate, setStartDate, dueDate, setDueDate, availableOwners }} />
+            startDate, setStartDate, dueDate, setDueDate }} token={token}
+            action="projects.create" selectedName={user.fullName} />
           <div className="drawer-actions"><button type="button" onClick={() => setShowCreate(false)}>Cancel</button>
             <button className="primary" disabled={working}>Create project</button></div>
         </form>
@@ -320,7 +321,8 @@ export default function ProjectsPage({ token, user, permissions }: {
           <summary onClick={() => startEdit(selected)}>Edit project details</summary>
           <form className="drawer-form" onSubmit={saveProject} onInput={clearFieldError} onKeyDown={handleFormKeyDown}>
             <ProjectFields {...{ name, setName, description, setDescription, ownerId, setOwnerId,
-              startDate, setStartDate, dueDate, setDueDate, availableOwners }} />
+              startDate, setStartDate, dueDate, setDueDate }} token={token}
+              action="projects.edit" selectedName={selected.ownerName} />
             <label>Status<select aria-label="Project status" value={projectStatus} onChange={event => setProjectStatus(event.target.value)}>
               {projectStatuses.map(status => <option key={status} value={status}>{label(status)}</option>)}
             </select></label>
@@ -345,7 +347,7 @@ export default function ProjectsPage({ token, user, permissions }: {
             </div>)}</div> : <p className="field-help">No tasks yet.</p>}
         </div>
         <ProjectActivity project={selected} token={token} user={user}
-          canManage={mayManage(selected)} permissions={permissions} employees={employees} />
+          canManage={mayManage(selected)} permissions={permissions} />
         {(editingTask ? canEditTask : canCreateTask) && mayManage(selected) && selected.status !== 'Completed' &&
           <details className="project-section" open={editingTask !== null ? true : undefined}>
           <summary>{editingTask ? 'Edit development task' : 'Add development task'}</summary>
@@ -357,10 +359,9 @@ export default function ProjectsPage({ token, user, permissions }: {
             <label>Priority<select value={taskPriority} onChange={event => setTaskPriority(event.target.value)}>
               {["Low", "Medium", "High", "Urgent"].map(value => <option key={value}>{value}</option>)}
             </select></label>
-            <label>Assign to<select value={assigneeId} onChange={event => setAssigneeId(event.target.value)}>
-              <option value="">Unassigned</option>
-              {availableOwners.map(member => <option key={member.id} value={member.id}>{member.fullName}</option>)}
-            </select></label>
+            <EmployeeSearchSelect token={token} action={editingTask ? 'tasks.edit' : 'tasks.create'}
+              label="Assign to" value={assigneeId} onChange={setAssigneeId}
+              selectedName={selected.tasks?.find(task => task.id === editingTask)?.assignedTo ?? undefined} />
             <label>Milestone<select aria-label="Milestone" value={taskMilestone} onChange={event => setTaskMilestone(event.target.value)}>
               <option value="">No milestone</option>
               {planning.milestones.filter(item => item.status !== 'Completed' ||
@@ -396,21 +397,19 @@ type ProjectFieldsProps = {
   ownerId: string; setOwnerId: (value: string) => void;
   startDate: string; setStartDate: (value: string) => void;
   dueDate: string; setDueDate: (value: string) => void;
-  availableOwners: Employee[];
+  token: string; action: string; selectedName?: string;
 };
 
 function ProjectFields(props: ProjectFieldsProps) {
   const { name, setName, description, setDescription, ownerId, setOwnerId,
-    startDate, setStartDate, dueDate, setDueDate, availableOwners } = props;
+    startDate, setStartDate, dueDate, setDueDate, token, action, selectedName } = props;
   return <>
     <label>Project name *<input required minLength={2} maxLength={150} value={name}
       onChange={event => setName(event.target.value)} /></label>
     <label>Description<textarea maxLength={2000} value={description}
       onChange={event => setDescription(event.target.value)} /></label>
-    <label>Project owner *<select required value={ownerId} onChange={event => setOwnerId(event.target.value)}>
-      <option value="">Choose owner</option>
-      {availableOwners.map(member => <option key={member.id} value={member.id}>{member.fullName}</option>)}
-    </select></label>
+    <EmployeeSearchSelect token={token} action={action} label="Project owner" required
+      value={ownerId} onChange={setOwnerId} selectedName={selectedName} />
     <label>Start date<input type="date" value={startDate} max={dueDate || undefined}
       onChange={event => setStartDate(event.target.value)} /></label>
     <label>Due date<input type="date" value={dueDate} min={startDate || undefined}
