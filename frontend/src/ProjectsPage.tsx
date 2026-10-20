@@ -13,9 +13,17 @@ const projectStatuses = ['Planning', 'InProgress', 'OnHold', 'Completed'];
 const taskStatuses = ['Todo', 'InProgress', 'Blocked', 'Done'];
 const label = (value: string) => value.replace(/([a-z])([A-Z])/g, '$1 $2');
 
-export default function ProjectsPage({ token, user }: { token: string; user: User }) {
+export default function ProjectsPage({ token, user, permissions }: {
+  token: string; user: User; permissions: Record<string, boolean>;
+}) {
   const { notify } = useFeedback();
-  const canManage = user.roles.includes('Admin') || user.roles.includes('Manager');
+  const allowed = (code: string) => permissions[code] === true;
+  const canCreateProject = allowed('projects.create');
+  const canEditProject = allowed('projects.edit');
+  const canCreateTask = allowed('tasks.create');
+  const canEditTask = allowed('tasks.edit');
+  const canChangeTask = allowed('tasks.status');
+  const canManagePlanning = allowed('planning.manage');
   const [projects, setProjects] = useState<DevelopmentProject[]>([]);
   const [projectPage, setProjectPage] = useState(1);
   const [projectTotal, setProjectTotal] = useState(0);
@@ -69,18 +77,20 @@ export default function ProjectsPage({ token, user }: { token: string; user: Use
 
   useEffect(() => {
     void load();
-    if (!canManage) return;
-    void loadEligible()
+    if (canCreateProject) void loadEligible()
       .catch(() => notify('error', 'Unable to load won leads'));
-    void employeeLookup(token, 'projects.create').then(setEmployees)
-      .catch(() => notify('error', 'Unable to load team'));
-  }, [load, loadEligible, canManage, token, notify]);
+    if (canCreateProject || canEditProject || canCreateTask || canEditTask || allowed('bugs.edit'))
+      void employeeLookup(token, canCreateProject ? 'projects.create' :
+        canEditProject ? 'projects.edit' : canCreateTask ? 'tasks.create' :
+          canEditTask ? 'tasks.edit' : 'bugs.edit').then(setEmployees)
+        .catch(() => notify('error', 'Unable to load team'));
+  }, [load, loadEligible, canCreateProject, canEditProject, canCreateTask, canEditTask, token, notify, permissions]);
 
-  const availableOwners = employees.filter(member => member.isActive &&
-    (user.roles.includes('Admin') || member.id === user.id || member.managerId === user.id));
-  const mayManage = (project: DevelopmentProject) => canManage && (
+  const availableOwners = employees.filter(member => member.isActive);
+  // The API still enforces the actual per-record scope for every operation.
+  const mayManage = (project: DevelopmentProject) =>
     user.roles.includes('Admin') || project.ownerId === user.id || project.createdById === user.id ||
-    employees.some(member => member.id === project.ownerId && member.managerId === user.id));
+    employees.some(member => member.id === project.ownerId && member.managerId === user.id);
   const progress = (project: DevelopmentProject) => project.taskCount
     ? Math.round(project.doneCount / project.taskCount * 100) : 0;
 
@@ -89,7 +99,8 @@ export default function ProjectsPage({ token, user }: { token: string; user: Use
     try {
       const [project, plan] = await Promise.all([
         api<DevelopmentProject>('/api/projects/' + id, token),
-        api<ProjectPlan>('/api/projects/' + id + '/planning', token),
+        allowed('planning.view') ? api<ProjectPlan>('/api/projects/' + id + '/planning', token)
+          : Promise.resolve({ milestones: [], sprints: [] }),
       ]);
       setSelected(project);
       setPlanning(plan);
@@ -170,7 +181,7 @@ export default function ProjectsPage({ token, user }: { token: string; user: Use
 
   async function saveTask(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!selected || !validateForm(event.currentTarget) || working) return;
+    if (!selected || !(editingTask ? canEditTask : canCreateTask) || !validateForm(event.currentTarget) || working) return;
     setWorking(true);
     try {
       await api('/api/projects/' + selected.id + '/tasks' +
@@ -204,7 +215,7 @@ export default function ProjectsPage({ token, user }: { token: string; user: Use
   }
 
   async function changeTask(task: DevelopmentTask, status: string) {
-    if (!selected || task.status === status || taskSaving) return;
+    if (!selected || !canChangeTask || task.status === status || taskSaving) return;
     setTaskSaving(true);
     try {
       await api('/api/projects/' + selected.id + '/tasks/' + task.id + '/status', token, {
@@ -224,7 +235,7 @@ export default function ProjectsPage({ token, user }: { token: string; user: Use
       <div><span className="section-kicker">DELIVERY WORKSPACE</span>
         <h1>Development projects</h1>
         <p>Take won leads into delivery, assign work and track progress.</p></div>
-      {canManage && <button className="primary" onClick={createNew}>
+      {canCreateProject && <button className="primary" onClick={createNew}>
         <Icon name="plus" size={18} /> New project</button>}
     </header>
     {error && <div className="error-state" role="alert">{error}
@@ -246,7 +257,7 @@ export default function ProjectsPage({ token, user }: { token: string; user: Use
             View project</button></td>
         </tr>)}</tbody></table></div> :
         <div className="empty-state"><h3>No development projects yet</h3>
-          <p>{canManage ? 'Mark a lead as Won, then create your first project.' :
+          <p>{canCreateProject ? 'Mark a lead as Won, then create your first project.' :
             'Projects assigned to you will appear here.'}</p></div>}
     </section>
 
@@ -305,7 +316,7 @@ export default function ProjectsPage({ token, user }: { token: string; user: Use
       })()}>Reload latest project</button></div>}
         <p className="field-help">Owner: {selected.ownerName} ·
           {selected.tasks?.filter(task => task.status === 'Done').length || 0}/{selected.tasks?.length || 0} tasks done</p>
-        {mayManage(selected) && <details className="project-section">
+        {canEditProject && mayManage(selected) && <details className="project-section">
           <summary onClick={() => startEdit(selected)}>Edit project details</summary>
           <form className="drawer-form" onSubmit={saveProject} onInput={clearFieldError} onKeyDown={handleFormKeyDown}>
             <ProjectFields {...{ name, setName, description, setDescription, ownerId, setOwnerId,
@@ -316,26 +327,27 @@ export default function ProjectsPage({ token, user }: { token: string; user: Use
             <button className="primary" disabled={working}>Save project</button>
           </form>
         </details>}
-        <ProjectPlanning project={selected} token={token} planning={planning}
-          canManage={mayManage(selected)} onSaved={() => openProject(selected.id)} />
+        {allowed('planning.view') && <ProjectPlanning project={selected} token={token} planning={planning}
+          canManage={canManagePlanning && mayManage(selected)} onSaved={() => openProject(selected.id)} />}
         <div className="project-section"><h3>Development tasks</h3>
           {selected.tasks?.length ? <div className="project-tasks">{selected.tasks.map(task =>
             <div className="project-task" key={task.id}>
               <div><strong>{task.title}</strong><p>{task.description || 'No description'}</p>
                 <small>{task.assignedTo || 'Unassigned'} · {task.priority} · {task.dueDate?.slice(0, 10) || 'No deadline'}</small>
               </div>
-              <select aria-label={'Status for ' + task.title} value={task.status}
+              {canChangeTask ? <select aria-label={'Status for ' + task.title} value={task.status}
                 disabled={taskSaving || selected.status === 'Completed' || (!mayManage(selected) && task.assignedToId !== user.id)}
                 onChange={event => void changeTask(task, event.target.value)}>
                 {taskStatuses.map(status => <option key={status} value={status}>{label(status)}</option>)}
-              </select>
-              {mayManage(selected) && selected.status !== 'Completed' &&
+              </select> : <span className="status-badge">{label(task.status)}</span>}
+              {canEditTask && mayManage(selected) && selected.status !== 'Completed' &&
                 <button type="button" className="text-action" onClick={() => startEditTask(task)}>Edit task</button>}
             </div>)}</div> : <p className="field-help">No tasks yet.</p>}
         </div>
         <ProjectActivity project={selected} token={token} user={user}
-          canManage={mayManage(selected)} employees={employees} />
-        {mayManage(selected) && selected.status !== 'Completed' && <details className="project-section" open={editingTask !== null ? true : undefined}>
+          canManage={mayManage(selected)} permissions={permissions} employees={employees} />
+        {(editingTask ? canEditTask : canCreateTask) && mayManage(selected) && selected.status !== 'Completed' &&
+          <details className="project-section" open={editingTask !== null ? true : undefined}>
           <summary>{editingTask ? 'Edit development task' : 'Add development task'}</summary>
           <form className="drawer-form" onSubmit={saveTask} onInput={clearFieldError} onKeyDown={handleFormKeyDown}>
             <label>Task title *<input required minLength={2} maxLength={150} value={taskTitle}

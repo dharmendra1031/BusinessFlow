@@ -164,7 +164,7 @@ function Workspace() {
         {screen === 'dashboard' && <DashboardPage token={session.token} onNavigate={navigate} />}
         {screen === 'leads' && <LeadsPage token={session.token} user={user} permissions={allowed ?? {}}
           newLeadRequest={newLeadRequest} onNewLeadOpened={() => setNewLeadRequest(0)} />}
-        {screen === 'projects' && <ProjectsPage token={session.token} user={user} />}
+        {screen === 'projects' && <ProjectsPage token={session.token} user={user} permissions={allowed ?? {}} />}
         {screen === 'followups' && <FollowUpsPage token={session.token} />}
         {screen === 'employees' && canSeeTeam && <EmployeesPage token={session.token} user={user} />}
         {screen === 'reports' && <ReportsPage token={session.token} user={user} />}
