@@ -20,11 +20,18 @@ const severities = ['Low', 'Medium', 'High', 'Critical'];
 const statuses = ['Open', 'InProgress', 'Resolved', 'Closed'];
 const label = (value: string) => value.replace(/([a-z])([A-Z])/g, '$1 $2');
 
-export default function ProjectActivity({ project, user, token, canManage, employees }: {
+export default function ProjectActivity({ project, user, token, canManage, permissions, employees }: {
   project: DevelopmentProject; user: User; token: string;
-  canManage: boolean; employees: Employee[];
+  canManage: boolean; permissions: Record<string, boolean>; employees: Employee[];
 }) {
   const { notify } = useFeedback();
+  const canViewBugs = permissions['bugs.view'] === true;
+  const canCreateBug = permissions['bugs.create'] === true;
+  const canEditBug = canManage && permissions['bugs.edit'] === true;
+  const canChangeBug = permissions['bugs.status'] === true;
+  const canCloseBug = canManage && permissions['bugs.close'] === true;
+  const canViewWorklogs = permissions['worklogs.view'] === true;
+  const canPostWorklog = permissions['worklogs.post'] === true;
   const base = '/api/projects/' + project.id;
   const [bugs, setBugs] = useState<Bug[]>([]);
   const [bugPage, setBugPage] = useState(1);
@@ -51,20 +58,22 @@ export default function ProjectActivity({ project, user, token, canManage, emplo
   const refresh = useCallback(async () => {
     try {
       const [foundBugs, foundLogs] = await Promise.all([
-        api<BugsResult>(base + '/bugs?page=' + bugPage, token),
-        api<WorklogsResult>(base + '/worklogs?page=' + worklogPage, token)
+        canViewBugs ? api<BugsResult>(base + '/bugs?page=' + bugPage, token) : Promise.resolve(null),
+        canViewWorklogs ? api<WorklogsResult>(base + '/worklogs?page=' + worklogPage, token) : Promise.resolve(null),
       ]);
-      setBugs(foundBugs.items);
-      setBugTotal(foundBugs.total);
-      setOpenCount(foundBugs.openCount);
-      setWorklogs(foundLogs);
+      if (foundBugs) {
+        setBugs(foundBugs.items);
+        setBugTotal(foundBugs.total);
+        setOpenCount(foundBugs.openCount);
+      }
+      if (foundLogs) setWorklogs(foundLogs);
       setError('');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unable to load project activity.');
     } finally {
       setLoading(false);
     }
-  }, [base, token, bugPage, worklogPage]);
+  }, [base, token, bugPage, worklogPage, canViewBugs, canViewWorklogs]);
 
   useEffect(() => { void refresh(); }, [refresh]);
 
@@ -87,7 +96,7 @@ export default function ProjectActivity({ project, user, token, canManage, emplo
 
   async function saveBug(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!validateForm(event.currentTarget) || working) return;
+    if (!(editingBugId ? canEditBug : canCreateBug) || !validateForm(event.currentTarget) || working) return;
     setWorking(true);
     try {
       const payload = {
@@ -108,7 +117,7 @@ export default function ProjectActivity({ project, user, token, canManage, emplo
   }
 
   async function changeStatus(bug: Bug, status: string) {
-    if (bug.status === status || updatingBug) return;
+    if (!canChangeBug || (status === 'Closed' && !canCloseBug) || bug.status === status || updatingBug) return;
     setUpdatingBug(bug.id);
     try {
       await api(base + '/bugs/' + bug.id + '/status', token, {
@@ -123,7 +132,7 @@ export default function ProjectActivity({ project, user, token, canManage, emplo
 
   async function addWorklog(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!validateForm(event.currentTarget) || working) return;
+    if (!canPostWorklog || !validateForm(event.currentTarget) || working) return;
     setWorking(true);
     try {
       await api(base + '/worklogs', token, {
@@ -142,7 +151,7 @@ export default function ProjectActivity({ project, user, token, canManage, emplo
   }
 
   return <>
-    <section className="project-section" aria-label="Project bugs">
+    {canViewBugs && <section className="project-section" aria-label="Project bugs">
       <h3>Bug tracking ({openCount} open)</h3>
       {error && <p role="alert">{error} <button onClick={() => void refresh()}>Retry</button></p>}
       {loading ? <p>Loading bugs and worklogs…</p> :
@@ -153,15 +162,16 @@ export default function ProjectActivity({ project, user, token, canManage, emplo
               <small>{bug.severity} severity · {bug.assignedTo || 'Unassigned'} · Reported by {bug.reporter}</small>
             </div>
             <div className="project-activity-actions">
-              <select aria-label={'Bug status for ' + bug.title} value={bug.status}
+              {canChangeBug ? <select aria-label={'Bug status for ' + bug.title} value={bug.status}
                 disabled={updatingBug !== null || (!canManage && (bug.assignedToId !== user.id || bug.status === "Closed" || project.status === "Completed"))}
                 onChange={event => void changeStatus(bug, event.target.value)}>
-                {(canManage ? statuses : ['InProgress', 'Resolved']).map(status =>
+                {(canManage ? statuses.filter(status => status !== 'Closed' || canCloseBug) : ['InProgress', 'Resolved'])
+                  .filter(status => status !== bug.status || canChangeBug).map(status =>
                   <option key={status} value={status}>{label(status)}</option>)}
-                {!canManage && !['InProgress', 'Resolved'].includes(bug.status) &&
+                {!((canManage ? statuses.filter(status => status !== 'Closed' || canCloseBug) : ['InProgress', 'Resolved']).includes(bug.status)) &&
                   <option value={bug.status} disabled>{label(bug.status)}</option>}
-              </select>
-              {canManage && <button type="button" className="text-action" onClick={() => editBug(bug)}>
+              </select> : <span className="status-badge">{label(bug.status)}</span>}
+              {canEditBug && <button type="button" className="text-action" onClick={() => editBug(bug)}>
                 Edit bug</button>}
             </div>
           </article>)}</div> : <p className="field-help">No bugs reported for this project.</p>}
@@ -169,9 +179,9 @@ export default function ProjectActivity({ project, user, token, canManage, emplo
         <button type="button" disabled={bugPage <= 1} onClick={() => setBugPage(bugPage - 1)}>Previous</button>
         <button type="button" disabled={bugPage * 50 >= bugTotal} onClick={() => setBugPage(bugPage + 1)}>Next</button>
       </div>
-    </section>
+    </section>}
 
-    <details className="project-section" open={editingBugId !== null ? true : undefined}>
+    {(canCreateBug || (canEditBug && editingBugId !== null)) && <details className="project-section" open={editingBugId !== null ? true : undefined}>
       <summary>{editingBugId ? 'Edit reported bug' : 'Report a bug'}</summary>
       <form className="drawer-form" onInput={clearFieldError} onKeyDown={handleFormKeyDown} onSubmit={saveBug}>
         <label>Bug title *<input required minLength={2} maxLength={150}
@@ -191,9 +201,10 @@ export default function ProjectActivity({ project, user, token, canManage, emplo
           {availableMembers.map(member =>
             <option key={member.id} value={member.id}>{member.fullName}</option>)}
         </select></label>}
-        {editingBugId && canManage && <label>Bug status<select value={bugStatus}
+        {editingBugId && canEditBug && <label>Bug status<select value={bugStatus}
           onChange={event => setBugStatus(event.target.value)}>
-          {statuses.map(status => <option key={status} value={status}>{label(status)}</option>)}
+          {statuses.filter(status => status !== 'Closed' || canCloseBug || status === bugStatus)
+            .map(status => <option key={status} value={status}>{label(status)}</option>)}
         </select></label>}
         <div className="drawer-actions">
           {editingBugId && <button type="button" onClick={resetBug}>Cancel edit</button>}
@@ -202,7 +213,7 @@ export default function ProjectActivity({ project, user, token, canManage, emplo
       </form>
     </details>
 
-    <section className="project-section" aria-label="Daily developer worklogs">
+    {canViewWorklogs && <section className="project-section" aria-label="Daily developer worklogs">
       <h3>Daily worklogs · {worklogs.totalHours.toFixed(2)} hours shown</h3>
       {worklogs.items.length ? <div className="project-tasks">{worklogs.items.map(log =>
         <article className="project-task" key={log.id}>
@@ -216,8 +227,8 @@ export default function ProjectActivity({ project, user, token, canManage, emplo
         <button type="button" disabled={worklogPage <= 1} onClick={() => setWorklogPage(worklogPage - 1)}>Previous</button>
         <button type="button" disabled={worklogPage * 50 >= worklogs.total} onClick={() => setWorklogPage(worklogPage + 1)}>Next</button>
       </div>
-    </section>
-    {project.status !== 'Completed' && <details className="project-section">
+    </section>}
+    {canPostWorklog && project.status !== 'Completed' && <details className="project-section">
       <summary>Log today's work</summary>
       <form className="drawer-form" onInput={clearFieldError} onKeyDown={handleFormKeyDown} onSubmit={addWorklog}>
         <label>Work date *<input type="date" required min={new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10)} max={new Date().toISOString().slice(0, 10)}
