@@ -76,3 +76,12 @@ Phase 1 remains in progress. Full action-capability UI, additional directory/loo
 - [IIS package 39449608325](https://github.com/dharmendra1031/BusinessFlow/actions/runs/39449608325): passed.
 - Detailed findings and remaining risks: [phase1-security-review.md](phase1-security-review.md). Still **not production accepted**.
 
+## Isolated SQL recovery checkpoint — 21 October 2026
+
+- Added `Phase1BackupRestoreTests` enabled by `CRM_RESTORE_TEST=1` on the disposable SQL Server service in `.github/workflows/verify-development-ui.yml`.
+- Rehearsal creates a legacy Phase 1 test database, inserts existing Identity, Lead, Project, Task and RolePermissionOverride rows, takes `COPY_ONLY` + `CHECKSUM` backup, runs `RESTORE VERIFYONLY`, restores to a new randomized SQL database, applies EF migrations, validates unchanged numeric IDs/lead status/rowversion and role restriction, and confirms source catalog stayed at the previous migration. Only the restored random catalog is dropped.
+- Initial CI run failed because the test attempted to query the **old schema** using a **new EF model** that expected `RowVersion`. Commit `0f2d243` replaced the source check with SQL compatible with the old schema; no customer data or deployment was involved.
+- [CI run 39478020929](https://github.com/dharmendra1031/BusinessFlow/actions/runs/39478020929) passed **39/39 SQL/API tests**, **37/37 Playwright Chromium tests**, migration snapshot, .NET audit and frontend release build.
+- [IIS packaging run 39478020925](https://github.com/dharmendra1031/BusinessFlow/actions/runs/39478020925) passed.
+- [Staging recovery runbook](phase1-staging-recovery.md) details the **still-pending** actual staging restore, `DBCC CHECKDB`, HTTPS and rollback acceptance. The CI SQL container and its data are disposable; this is **not** proof of an existing VPS or production backup.
+

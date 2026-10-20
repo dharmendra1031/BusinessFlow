@@ -80,6 +80,8 @@ Source evidence: `backend/BusinessFlow.Api/`, `frontend/src/`, `tests/BusinessFl
 
 **Checkpoint (20 October 2026):** Source implementation covers all ten work areas. Eight items passed targeted SQL/API and browser CI checks, hierarchy/data scope is implemented, and full action-based UI and scope review remains in progress. No item is production-accepted.
 
+**Recovery checkpoint (21 October 2026):** GitHub's disposable SQL Server backup/restore test restored a pre-Phase-1 schema into a separate randomized catalog, applied current migrations, preserved sample data/IDs and verified the original catalog remained unchanged. [39/39 SQL/API and 37/37 Playwright CI](https://github.com/dharmendra1031/BusinessFlow/actions/runs/39478020929); [Windows IIS package PASS](https://github.com/dharmendra1031/BusinessFlow/actions/runs/39478020925). **Actual VPS/customer staging backup and restore are still pending.** See [staging recovery runbook](docs/phase1-staging-recovery.md).
+
 **Phase gate:** Role matrix and cross-department negative-access tests; migrations and existing data upgrade; concurrency tests; existing CRM and project regression tests. Remaining: exact per-record capabilities for complex custom-role scopes, final code/security review, staging migration, backup/restore and release acceptance. No unauthorized data access.
 
 ## Phase 2 — Enterprise CRM
