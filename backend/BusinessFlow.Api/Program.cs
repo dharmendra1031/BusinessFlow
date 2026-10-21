@@ -9,6 +9,14 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 
 var builder = WebApplication.CreateBuilder(args);
+if (builder.Environment.IsDevelopment())
+{
+    // Visual Studio can register the Windows Event Log provider even when the
+    // current user cannot write to it, masking the original startup error.
+    builder.Logging.ClearProviders();
+    builder.Logging.AddConsole();
+    builder.Logging.AddDebug();
+}
 var secret = builder.Configuration["Jwt:Key"];
 if (string.IsNullOrWhiteSpace(secret) || Encoding.UTF8.GetByteCount(secret) < 32)
     throw new InvalidOperationException("Configure Jwt:Key with at least 32 UTF-8 bytes.");
