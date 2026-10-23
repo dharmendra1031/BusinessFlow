@@ -94,6 +94,9 @@ public sealed class ProjectPlanningController(AppDbContext db, RecordAccessServi
         if (request.Status == "Completed" &&
             !await HasOnlyDoneTasks(t => t.MilestoneId == id))
             return BadRequest(new { message = "Finish the milestone's tasks before completing it." });
+        if (request.DueDate.HasValue &&
+            await db.DevelopmentTasks.AnyAsync(t => t.MilestoneId == id && t.DueDate > request.DueDate.Value))
+            return BadRequest(new { message = "Milestone deadline cannot precede linked task deadlines." });
         milestone.Title = request.Title.Trim();
         milestone.Description = request.Description?.Trim();
         milestone.Status = request.Status;
@@ -142,6 +145,8 @@ public sealed class ProjectPlanningController(AppDbContext db, RecordAccessServi
         if (request.Status == "Completed" &&
             !await HasOnlyDoneTasks(t => t.SprintId == id))
             return BadRequest(new { message = "Finish sprint tasks before completing it." });
+        if (await db.DevelopmentTasks.AnyAsync(t => t.SprintId == id && t.DueDate > request.DueDate))
+            return BadRequest(new { message = "Sprint deadline cannot precede linked task deadlines." });
         sprint.Title = request.Title.Trim();
         sprint.Goal = request.Goal?.Trim();
         sprint.Status = request.Status;
