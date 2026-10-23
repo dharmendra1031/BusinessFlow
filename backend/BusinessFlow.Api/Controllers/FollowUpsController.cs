@@ -11,28 +11,46 @@ namespace BusinessFlow.Api.Controllers;
 [ApiController]
 [Authorize]
 [Route("api/followups")]
-public sealed class FollowUpsController(AppDbContext db, RecordAccessService records) : ControllerBase
+public sealed class FollowUpsController(AppDbContext db, RecordAccessService records, TimeProvider clock) : ControllerBase
 {
     private string Action => RolePermissionService.ForRequest(Request) ?? "followups.view";
     [HttpGet]
     [RequirePermission("followups.view")]
-    public async Task<IActionResult> List(bool overdueOnly = false, string view = "pending", int page = 1, int pageSize = 50)
+    public async Task<IActionResult> List(bool overdueOnly = false, string view = "pending",
+        bool mine = false, int page = 1, int pageSize = 50, CancellationToken ct = default)
     {
         if (page < 1 || pageSize is < 1 or > 200 || (long)(page - 1) * pageSize > int.MaxValue ||
-            view is not ("pending" or "overdue" or "completed" or "all"))
+            view is not ("pending" or "dueSoon" or "overdue" or "completed" or "all"))
             return BadRequest(new { message = "Invalid follow-up filters or pagination." });
-        var leadIds = (await records.LeadsAsync(User, Action)).Select(l => l.Id);
+
+        // Scope the lead query first: a reminder never grants access to another employee's lead.
+        var leadIds = (await records.LeadsAsync(User, Action, ct)).Select(l => l.Id);
         var query = db.LeadFollowUps.AsNoTracking().Where(f => leadIds.Contains(f.LeadId));
+        if (mine) query = query.Where(f => f.AssignedToId == LeadAccess.UserId(User));
+
+        var now = clock.GetUtcNow().UtcDateTime;
         if (overdueOnly || view == "overdue")
-            query = query.Where(f => f.CompletedAtUtc == null && f.DueAtUtc < DateTime.UtcNow);
+            query = query.Where(f => f.CompletedAtUtc == null && f.DueAtUtc < now);
+        else if (view == "dueSoon")
+        {
+            var limit = now.AddHours(24);
+            query = query.Where(f => f.CompletedAtUtc == null &&
+                f.DueAtUtc >= now && f.DueAtUtc < limit);
+        }
         else if (view == "pending") query = query.Where(f => f.CompletedAtUtc == null);
         else if (view == "completed") query = query.Where(f => f.CompletedAtUtc != null);
-        var total = await query.CountAsync();
+
+        var total = await query.CountAsync(ct);
         var results = await query.OrderBy(f => f.CompletedAtUtc != null)
             .ThenBy(f => f.DueAtUtc).ThenBy(f => f.Id)
             .Skip((page - 1) * pageSize).Take(pageSize)
-            .Select(f => new { f.Id, f.LeadId, LeadName = f.Lead.Name, f.Notes,
-                f.DueAtUtc, f.CompletedAtUtc }).ToListAsync();
+            .Select(f => new
+            {
+                f.Id, f.LeadId, LeadName = f.Lead.Name, f.Notes,
+                f.DueAtUtc, f.CompletedAtUtc, f.AssignedToId,
+                AssignedTo = db.Users.Where(u => u.Id == f.AssignedToId)
+                    .Select(u => u.FullName).FirstOrDefault()
+            }).ToListAsync(ct);
         return Ok(new { total, page, pageSize, items = results });
     }
 
