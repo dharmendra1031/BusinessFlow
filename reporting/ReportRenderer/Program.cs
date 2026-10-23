@@ -22,9 +22,25 @@ internal static class Program
                 File.ReadAllText(Path.Combine(directory, "definitions.json")));
             if (!definitions.TryGetValue(args[0], out var definition)) return 2;
             var rows = serializer.Deserialize<List<Dictionary<string, object>>>(Console.In.ReadToEnd());
-            var table = new DataTable("Items");
-            foreach (var column in definition.Columns)
-                table.Columns.Add(column.Key, ColumnType(column.Value));
+            DataTable table;
+            if (args[0] == "source-wise")
+            {
+                // The dataset schema is versioned with the RDLC and checked at runtime.
+                var dataSet = new DataSet();
+                dataSet.ReadXmlSchema(Path.Combine(directory, "source-wise.xsd"));
+                table = dataSet.Tables["Items"] ??
+                    throw new InvalidDataException("Typed dataset Items table not found.");
+                foreach (var column in definition.Columns)
+                    if (table.Columns[column.Key] == null ||
+                        table.Columns[column.Key].DataType != ColumnType(column.Value))
+                        throw new InvalidDataException("Dataset column mismatch: " + column.Key);
+            }
+            else
+            {
+                table = new DataTable("Items");
+                foreach (var column in definition.Columns)
+                    table.Columns.Add(column.Key, ColumnType(column.Value));
+            }
             foreach (var row in rows)
             {
                 var values = definition.Columns.Select(column =>

@@ -107,6 +107,31 @@ def make_report(report_type, definition):
     ET.indent(root)
     ET.ElementTree(root).write(ROOT / f"{report_type}.rdlc", encoding="utf-8", xml_declaration=True)
 
+    if report_type == "source-wise":
+        # Versioned, strongly typed ADO.NET DataSet for the Source Summary.
+        msdata = "urn:schemas-microsoft-com:xml-msdata"
+        ET.register_namespace("msdata", msdata)
+        schema = ET.Element(f"{{{XS}}}schema", {"id": "SourceReportDataSet"})
+        root_element = ET.SubElement(schema, f"{{{XS}}}element",
+                                     {"name": "SourceReportDataSet",
+                                      f"{{{msdata}}}IsDataSet": "true",
+                                      f"{{{msdata}}}UseCurrentLocale": "true"})
+        choice = ET.SubElement(ET.SubElement(root_element, f"{{{XS}}}complexType"),
+                               f"{{{XS}}}choice", {"minOccurs": "0", "maxOccurs": "unbounded"})
+        items = ET.SubElement(choice, f"{{{XS}}}element", {"name": "Items"})
+        sequence = ET.SubElement(ET.SubElement(items, f"{{{XS}}}complexType"),
+                                 f"{{{XS}}}sequence")
+        xsd_types = {"string": "string", "long": "long",
+                     "decimal": "decimal", "date": "dateTime"}
+        for name, kind in columns.items():
+            ET.SubElement(sequence, f"{{{XS}}}element",
+                          {"name": name, "type": f"xs:{xsd_types[kind]}",
+                           "minOccurs": "0"})
+        ET.indent(schema)
+        ET.ElementTree(schema).write(ROOT / f"{report_type}.xsd",
+                                    encoding="utf-8", xml_declaration=True)
+        return
+
     schema = ET.Element(f"{{{XS}}}schema", {"id": "Items"})
     element = ET.SubElement(schema, f"{{{XS}}}element", {"name": "Items"})
     complex_type = ET.SubElement(element, f"{{{XS}}}complexType")
