@@ -58,4 +58,11 @@ PDF/CSV invoke the existing report query under the caller's API permissions and 
 
 ## Rule for all future BusinessFlow reports
 
-**Every report requiring print/PDF output must have an explicit field contract, versioned typed `.xsd` DataSet, `.rdlc` layout and a SQL-side scoped/filterable dataset query.** Build typed values and calculations on the server; do not calculate business totals solely from React tables. Verify each RDLC on Windows, preserve role/data-scope filtering, avoid raw SQL concatenation, and document pagination/export caps. Existing older XSDs may be upgraded to the fully typed ADO.NET pattern in separate reviewed changes; do not silently redesign existing reports.
+**Every report requiring print/PDF output must have an explicit field contract, versioned typed `.xsd` DataSet, `.rdlc` layout and a SQL-side scoped/filterable dataset query.** Build typed values and calculations on the server; do not calculate business totals solely from React tables. Verify each RDLC on Windows, preserve role/data-scope filtering, avoid raw SQL concatenation, and document pagination/export caps. All ten pre-existing reports have now also been standardized to strongly typed ADO.NET DataSets. Existing RDLC visual layouts remain unchanged.
+
+
+## CI verification
+
+- SQL/API and browser: [CI 39963762958](https://github.com/dharmendra1031/BusinessFlow/actions/runs/39963762958): 51/51 SQL/API and 42/42 Playwright PASS.
+- Windows PDF rendering: [CI 39963948187](https://github.com/dharmendra1031/BusinessFlow/actions/runs/39963948187): all 11 RDLC files rendered to PDFs using their typed .xsd DataSets, PASS.
+- Local SQL migration, IIS staging print review and production acceptance remain pending.
