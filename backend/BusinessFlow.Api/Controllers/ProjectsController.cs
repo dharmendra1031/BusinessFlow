@@ -126,6 +126,7 @@ public sealed class ProjectsController(AppDbContext db, RecordAccessService reco
             CreatedById = LeadAccess.UserId(User)
         };
         db.DevelopmentProjects.Add(project);
+        await using var transaction = await db.Database.BeginTransactionAsync();
         try { await db.SaveChangesAsync(); }
         catch (DbUpdateException ex) when (ex.InnerException is SqlException { Number: 2601 or 2627 })
         {
@@ -133,6 +134,7 @@ public sealed class ProjectsController(AppDbContext db, RecordAccessService reco
         }
         Audit("Create", "DevelopmentProjects", project.Id);
         await db.SaveChangesAsync();
+        await transaction.CommitAsync();
         return CreatedAtAction(nameof(Get), new { id = project.Id }, new { project.Id });
     }
 
@@ -189,6 +191,7 @@ public sealed class ProjectsController(AppDbContext db, RecordAccessService reco
     [RequirePermission("tasks.create")]
     public async Task<IActionResult> AddTask(long id, CreateDevelopmentTaskRequest request)
     {
+        await using var transaction = await db.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable);
         var project = await (await VisibleProjects()).Include(p => p.Owner).FirstOrDefaultAsync(p => p.Id == id);
         if (project is null) return NotFound();
         if (!await CanManage(project)) return Forbid();
@@ -209,6 +212,7 @@ public sealed class ProjectsController(AppDbContext db, RecordAccessService reco
         await db.SaveChangesAsync();
         Audit("Create", "DevelopmentTasks", task.Id);
         await db.SaveChangesAsync();
+        await transaction.CommitAsync();
         return Created("/api/projects/" + id, new { task.Id });
     }
 
