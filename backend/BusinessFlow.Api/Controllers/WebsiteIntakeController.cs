@@ -7,6 +7,7 @@ using BusinessFlow.Api.Data;
 using BusinessFlow.Api.Models;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 
@@ -19,6 +20,7 @@ public sealed record WebsiteLeadRequest(
 /// <summary>Only website backends may call this route. Never put the signing key in browser JavaScript.</summary>
 [ApiController]
 [AllowAnonymous]
+[EnableRateLimiting("website-intake")]
 [Route("api/integrations/website/leads")]
 public sealed class WebsiteIntakeController(AppDbContext db, IConfiguration config, TimeProvider clock) : ControllerBase
 {
