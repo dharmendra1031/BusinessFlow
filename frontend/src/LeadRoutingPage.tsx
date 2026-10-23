@@ -84,7 +84,7 @@ export default function LeadRoutingPage({ token }: { token: string }) {
     } finally { setWorking(false); }
   }
 
-  const availableSources = sources.filter(s => s.isActive || Number(sourceId) === s.id);
+  const availableSources = sources.filter(s => s.id === 2 && (s.isActive || Number(sourceId) === s.id));
   const availableTeams = organization.teams.filter(t =>
     (t.isActive && organization.departments.some(d => d.id === t.departmentId && d.isActive)) ||
     Number(teamId) === t.id);

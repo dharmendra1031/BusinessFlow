@@ -31,6 +31,8 @@ public sealed class LeadRoutingController(AppDbContext db) : ControllerBase
 
     private async Task<IActionResult> Save(long? id, SaveLeadRoutingRequest request, CancellationToken ct)
     {
+        if (request.SourceId != 2)
+            return BadRequest(new { message = "Only signed Website intake currently supports routing." });
         if (request.MaxOpenLeads is < 1 or > 500)
             return BadRequest(new { message = "Maximum open leads must be between 1 and 500." });
         if (!await db.LeadSources.AnyAsync(x => x.Id == request.SourceId &&
