@@ -81,14 +81,28 @@ def make_report(report_type, definition):
         cells = child(row, "TablixCells")
         for index, name in enumerate(columns):
             cell = child(child(cells, "TablixCell"), "CellContents")
-            label = name.replace("AtUtc", " Date").replace("Id", " ID")
-            textbox(cell, f"Cell_{row_index}_{index}", label if row_index == 0 else f"=Fields!{name}.Value",
+            labels = {
+                "sourceId": "Source ID", "sourceName": "Lead Source",
+                "leadCount": "Total Leads", "qualifiedCount": "Qualified",
+                "wonCount": "Won", "conversionRate": "Conversion %",
+                "pipelineAmount": "Pipeline Amount", "wonAmount": "Won Pipeline"
+            }
+            label = labels.get(name, name.replace("AtUtc", " Date").replace("Id", " ID"))
+            expression = f"=Fields!{name}.Value"
+            if report_type == "source-wise" and name == "conversionRate":
+                expression = '=Format(Fields!conversionRate.Value, "N1") & "%"'
+            elif report_type == "source-wise" and name in ("pipelineAmount", "wonAmount"):
+                expression = f'=Format(Fields!{name}.Value, "N3")'
+            textbox(cell, f"Cell_{row_index}_{index}", label if row_index == 0 else expression,
                     bold=row_index == 0)
     hierarchy = child(child(table, "TablixColumnHierarchy"), "TablixMembers")
     for _ in columns:
         child(hierarchy, "TablixMember")
     hierarchy = child(child(table, "TablixRowHierarchy"), "TablixMembers")
-    child(child(hierarchy, "TablixMember"), "KeepWithGroup", "After")
+    header_member = child(hierarchy, "TablixMember")
+    child(header_member, "KeepWithGroup", "After")
+    if report_type == "source-wise":
+        child(header_member, "RepeatOnNewPage", "true")
     child(child(hierarchy, "TablixMember"), "Group", Name="Details")
     child(table, "DataSetName", "Items")
     child(table, "Top", "1.2cm")
