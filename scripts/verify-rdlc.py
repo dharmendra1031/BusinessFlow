@@ -12,8 +12,25 @@ definitions = json.loads((reports / "definitions.json").read_text(encoding="utf-
 samples = {"string": "Sample", "long": 2, "decimal": 25.5, "date": "2026-10-19T00:00:00Z"}
 
 for name, definition in definitions.items():
-    for suffix in ("rdlc", "xsd"):
-        ET.parse(reports / f"{name}.{suffix}")
+    rdlc = ET.parse(reports / f"{name}.rdlc")
+    xsd = ET.parse(reports / f"{name}.xsd")
+    schema = "{http://www.w3.org/2001/XMLSchema}"
+    report = "{http://schemas.microsoft.com/sqlserver/reporting/2016/01/reportdefinition}"
+    designer = "{http://schemas.microsoft.com/SQLServer/reporting/reportdesigner}"
+    xsd_fields = {
+        field.attrib["name"]: field.attrib["type"].removeprefix("xs:")
+        for field in xsd.findall(f".//{schema}sequence/{schema}element")
+    }
+    rdlc_fields = {
+        field.attrib["Name"]: field.findtext(f"{designer}TypeName", "").removeprefix("System.")
+        for field in rdlc.findall(f".//{report}DataSet[@Name='Items']/{report}Fields/{report}Field")
+    }
+    field_types = {"string": ("string", "String"), "long": ("long", "Int64"),
+                   "decimal": ("decimal", "Decimal"), "date": ("dateTime", "DateTime")}
+    expected_xsd = {field: field_types[kind][0] for field, kind in definition["Columns"].items()}
+    expected_rdlc = {field: field_types[kind][1] for field, kind in definition["Columns"].items()}
+    if xsd_fields != expected_xsd or rdlc_fields != expected_rdlc:
+        raise SystemExit(f"RDLC/XSD dataset fields mismatch for {name}: {xsd_fields} / {rdlc_fields}")
     row = {key: samples[kind] for key, kind in definition["Columns"].items()}
     with tempfile.TemporaryDirectory() as directory:
         output = Path(directory) / "result.pdf"

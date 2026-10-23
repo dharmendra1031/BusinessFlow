@@ -117,6 +117,19 @@
       "wonCount": "long",
       "conversionPercent": "decimal",
       "projectAmount": "decimal"
+    },
+    "Labels": {
+      "sourceId": "Source ID",
+      "sourceName": "Lead Source",
+      "leadCount": "Total Leads",
+      "qualifiedCount": "Qualified",
+      "wonCount": "Won",
+      "conversionPercent": "Conversion %",
+      "projectAmount": "Project Amount (KWD)"
+    },
+    "Formats": {
+      "conversionPercent": "=Format(Fields!conversionPercent.Value, \"0.00\") & \"%\"",
+      "projectAmount": "=Format(Fields!projectAmount.Value, \"N3\")"
     }
   },
   "source-details": {
@@ -129,6 +142,19 @@
       "leadStatus": "string",
       "projectAmount": "decimal",
       "createdAtUtc": "date"
+    },
+    "Labels": {
+      "sourceName": "Lead Source",
+      "customerCode": "Customer Code",
+      "customerName": "Customer Name",
+      "assignedUser": "Assigned Employee",
+      "leadStatus": "Lead Status",
+      "projectAmount": "Project Amount (KWD)",
+      "createdAtUtc": "Created At (UTC)"
+    },
+    "Formats": {
+      "projectAmount": "=IIf(IsNothing(Fields!projectAmount.Value), \"\", Format(Fields!projectAmount.Value, \"N3\"))",
+      "createdAtUtc": "=Format(Fields!createdAtUtc.Value, \"dd MMM yyyy\")"
     }
   }
 }

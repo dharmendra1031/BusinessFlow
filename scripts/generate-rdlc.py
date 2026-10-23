@@ -75,6 +75,8 @@ def make_report(report_type, definition):
     for _ in columns:
         child(child(widths, "TablixColumn"), "Width", f"{width:.3f}cm")
     rows = child(table_body, "TablixRows")
+    labels = definition.get("Labels", {})
+    formats = definition.get("Formats", {})
     for row_index in range(2):
         row = child(rows, "TablixRow")
         child(row, "Height", "0.65cm")
@@ -82,7 +84,9 @@ def make_report(report_type, definition):
         for index, name in enumerate(columns):
             cell = child(child(cells, "TablixCell"), "CellContents")
             label = name.replace("AtUtc", " Date").replace("Id", " ID")
-            textbox(cell, f"Cell_{row_index}_{index}", label if row_index == 0 else f"=Fields!{name}.Value",
+            expression = formats.get(name, f"=Fields!{name}.Value")
+            textbox(cell, f"Cell_{row_index}_{index}",
+                    labels.get(name, label) if row_index == 0 else expression,
                     bold=row_index == 0)
     hierarchy = child(child(table, "TablixColumnHierarchy"), "TablixMembers")
     for _ in columns:
