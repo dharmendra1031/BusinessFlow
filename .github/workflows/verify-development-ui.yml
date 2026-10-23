@@ -3,6 +3,8 @@ name: Verify CRM UI
 on:
   push:
     branches: [development, 'fix/**']
+  pull_request:
+    branches: [development]
   workflow_dispatch:
 
 permissions:
