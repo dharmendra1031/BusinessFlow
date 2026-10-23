@@ -1,4 +1,6 @@
 using System.Text;
+using System.Threading.RateLimiting;
+using Microsoft.AspNetCore.RateLimiting;
 using BusinessFlow.Api.Data;
 using BusinessFlow.Api.Models;
 using BusinessFlow.Api.Services;
@@ -35,6 +37,18 @@ builder.Services.AddAntiforgery(options =>
 builder.Services.AddProblemDetails();
 builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddSingleton<LoginAttemptLimiter>();
+builder.Services.AddRateLimiter(options =>
+{
+    options.AddPolicy("website-intake", context =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+            _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 30, Window = TimeSpan.FromMinutes(1),
+                QueueLimit = 0, AutoReplenishment = true
+            }));
+    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+});
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection")
     ?? throw new InvalidOperationException("Configure DefaultConnection.");
 if (builder.Environment.IsProduction() && connectionString.Contains("YOUR_SQL_", StringComparison.Ordinal))
@@ -139,6 +153,7 @@ app.UseHttpsRedirection();
 app.UseDefaultFiles();
 app.UseStaticFiles();
 app.UseRouting();
+app.UseRateLimiter();
 app.UseCors("Frontend");
 app.UseAuthentication();
 app.Use(async (context, next) =>
