@@ -1,60 +1,53 @@
-# Phase 2 — Website Lead Capture Foundation
+# Phase 2 — Signed Website Lead Capture Foundation
 
-**Status:** Implementation on development feature branch; CI verification required. No live provider credentials are configured.
+**Status:** Implemented on `development`. GitHub SQL/API, frontend and Windows IIS checks must pass on the exact code commit. **No live website has been connected and no local SQL migrations have been applied.**
 
-## API contract
+## Purpose and security boundary
 
-A **website backend** (never browser JavaScript) can POST JSON to `/api/integrations/website/leads` over HTTPS. Requests must be signed using HMAC-SHA256 and include a timestamp and unique event reference. This is not a Facebook/Meta/WhatsApp webhook endpoint.
+Use only a trusted **website backend** to forward validated, consented enquiries to the CRM. The public web form never sees an integration secret. Meta/Facebook and WhatsApp webhooks are not supported by this route.
 
-Required headers:
-- `Content-Type: application/json`
-- `X-Website-Timestamp`: Unix UTC timestamp in seconds (max ±5 minutes clock skew)
-- `X-Website-Signature`: `sha256=<64 lowercase/uppercase hexadecimal characters>`
+**Endpoint:** `POST /api/integrations/website/leads` with `Content-Type: application/json`. Include:
 
-HMAC message bytes are exactly: `UTF8(timestamp + ".")` followed by the **raw, unmodified JSON request bytes**. Calculate `HMACSHA256(SigningSecret, messageBytes)`, encode as 64 hexadecimal characters, and prefix with `sha256=`. The timestamp must be synchronized and the request body must be byte-identical between signing and transmission.
+- `X-Website-Timestamp`: Unix epoch seconds (UTC), accepted only within ±5 minutes.
+- `X-Website-Signature`: `sha256=` followed by a 64-character hexadecimal HMAC-SHA256 digest.
+- Body: `eventId` (8–100 ASCII letters, numbers, hyphens or underscores), `name`, `phone`, optional `email`, `companyName`, `requirement`, and `consentAccepted: true`.
 
-JSON example:
-```json
-{
-  "eventId": "website-contact-123456",
-  "name": "Example customer",
-  "phone": "+96512345678",
-  "email": "visitor@example.test",
-  "companyName": "Example company",
-  "requirement": "New website",
-  "consentAccepted": true
-}
+Calculate the signature using the secret bytes as the HMAC key and the exact message bytes:
+
+```text
+UTF8(decimal Unix timestamp + ".") || EXACT RAW UTF8 JSON REQUEST BODY
 ```
 
-`eventId` must be 8–100 ASCII letters/digits/underscore/hyphen and stable across retries. `consentAccepted` must be `true`; collect an appropriate lawful contact-consent signal on the originating website. The API validates name length, phone format and optional email/field lengths; 16 KB request body max.
+Re-serialization or whitespace changes modify the signature. Do not embed the secret in browser JavaScript or transmit it as a query string. Use a cryptographically random event ID for each new enquiry; **retries use the same event ID and identical JSON body**, with a new current timestamp/signature if necessary.
 
-## Private server configuration
+Expected responses: **202** accepted for either a new or identical retried submission; **409** reused event ID with different body; **400** invalid payload/consent; **401** missing, expired or invalid signature; **429** excessive requests; **503** disabled or misconfigured intake. The successful response intentionally omits the internal Lead ID.
 
-**Disabled by default**. Only enable after staging security acceptance and provision these values through ASP.NET Core configuration on the receiving server (environment variable form shown):
+## Server-only settings
+
+Configure using approved environment variables/secret storage **on the CRM server**, never in source control or public website assets:
 
 ```text
 WebsiteIntake__Enabled=true
-WebsiteIntake__SigningSecret=<strong random signing key, 32+ UTF-8 bytes>
-WebsiteIntake__OwnerUserId=<BIGINT ID of active CRM employee>
+WebsiteIntake__SigningSecret=<random secret of at least 32 UTF-8 bytes>
+WebsiteIntake__OwnerUserId=<numeric BIGINT ID of an active designated CRM user>
 ```
 
-Keep the signing secret **only on the website server and CRM server**, not in React/public website frontend, query parameters, Git or appsettings. Rotate through a coordinated key-rollover with the website backend; v1 supports one active key. Require trusted HTTPS and apply reverse-proxy/IP forwarding configuration carefully. Per-instance requests are limited to 30/minute per remote IP by ASP.NET rate limiting; an upstream gateway/WAF or shared limiter is necessary for distributed deployment.
+Settings are off by default. The configured owner receives new Leads with `Website` source (ID 2), `New` status and CRM audit history. An inactive owner or inactive Website source stops intake (503). Rotate/limit secrets and enforce TLS with a trusted certificate.
 
-## Responses and replay handling
+The server includes a 30 requests/minute/IP per-instance rate limiter. Reverse proxies need trusted forwarded-address handling; use shared edge-level throttling in multi-instance environments. The endpoint is deliberately **server-to-server**, not an anonymous browser form.
 
-- **202 Accepted**: valid new submission, or exact retry already ingested (response intentionally does not disclose Lead ID)
-- **400**: invalid JSON or business/consent validation
-- **401**: missing/invalid signature, expired timestamp or invalid signature format
-- **409**: same `eventId` re-sent with a different raw body
-- **429**: rate-limited
-- **503**: integration disabled/unconfigured or configured owner/Website lead source unavailable
+## Database safety and reliability
 
-The SQL table `WebsiteLeadSubmissions` stores SHA256 hashes of `eventId` and raw request bytes, with a **unique submission hash** and FK to the created Lead. Lead creation, customer code, receipt and audit log are one SQL transaction. A replay with the same ID and identical body returns 202 and does not create a second Lead. A different event ID creates a separate Lead—even with matching contact details—and is a candidate for the existing manual Duplicate Review Master, never auto-merged. Created Lead receives source **Website** (ID 2), New status, and configured active owner.
+Migration: `20261023163000_AddWebsiteLeadSubmission`, a new `WebsiteLeadSubmissions` table with BIGINT auto-increment primary key, Lead FK, SHA256 hashed event ID, SHA256 request payload hash, created timestamp, and a unique event hash constraint.
 
-## Testing, staging and limitations
+Each successful first submission creates a Lead/customer code, idempotency receipt and audit event in a single SQL transaction. Concurrent repeated submissions cannot create a second committed Lead for the same event ID. **A distinct event ID represents a separate enquiry**, even if Phone/Email matches; Duplicate Lead Review handles such pairs manually without merging or deleting records.
 
-Automated SQL API tests should cover valid HMAC, replay, payload mismatch, timestamp expiry, consent denial, source inactive and disabled-by-default. The team must verify the exact GitHub CI run before declaring it passed.
+## Deployment and testing gates
 
-This release does **not** provide a public embeddable form, real Facebook/WhatsApp provider integration, live user consent UI, provider secret rotation, distributed throttling, dead-letter monitoring or final production acceptance.
+- Validate signature failures, timestamp expiry, missing consent, disabled settings, duplicate event retries and changed-body conflicts.
+- Use a real website backend with consent collection, privacy notice and retention policy; never include secrets or customer PII in application logs.
+- Protect the source SQL database: earlier local preflight showed five historical EF migrations and 24 Leads. Complete the approved backup → isolated database restore → migration and data-integrity check before touching that database.
+- Verify staging IIS/HTTPS, secure secret provision, owner permissions, browser-to-website form validation, retry/error handling, edge rate limits and monitoring before production.
+- **Not implemented:** Facebook/Meta or WhatsApp provider callbacks and their signature verification, queue/dead-letter infrastructure, distributed idempotent throttling, notifications and automatic lead routing.
 
-**The user's LocalDB `LeadManagement` database was last observed with five migrations and 24 leads. No local migration or staging restore was executed from this task.** Use the isolated backup/restore and migration acceptance checklist before applying Phase 2 migrations anywhere outside the disposable CI SQL Server.
+Phase 2 Website Lead Capture must not be marked production accepted until real staging and website-backend integration tests pass.
