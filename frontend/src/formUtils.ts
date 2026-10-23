@@ -58,7 +58,12 @@ export function handleFormKeyDown(event: KeyboardEvent<HTMLFormElement>) {
   const next = controls[controls.indexOf(field) + 1];
   if (next) {
     event.preventDefault();
-    next.focus();
+    if ((next instanceof HTMLButtonElement || next instanceof HTMLInputElement) &&
+        next.type === 'submit') {
+      event.currentTarget.requestSubmit(next);
+    } else {
+      next.focus();
+    }
   }
 }
 
