@@ -72,6 +72,7 @@ builder.Services.AddScoped<OrganizationService>();
 builder.Services.AddScoped<RoleAdministrationService>();
 builder.Services.AddScoped<RecordAccessService>();
 builder.Services.AddScoped<LeadApprovalService>();
+builder.Services.AddScoped<LeadRoutingService>();
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
     {

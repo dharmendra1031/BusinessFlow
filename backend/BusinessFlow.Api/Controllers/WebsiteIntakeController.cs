@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using System.Data;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
@@ -10,6 +11,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
+using BusinessFlow.Api.Services;
 
 namespace BusinessFlow.Api.Controllers;
 
@@ -22,7 +24,8 @@ public sealed record WebsiteLeadRequest(
 [AllowAnonymous]
 [EnableRateLimiting("website-intake")]
 [Route("api/integrations/website/leads")]
-public sealed class WebsiteIntakeController(AppDbContext db, IConfiguration config, TimeProvider clock) : ControllerBase
+public sealed class WebsiteIntakeController(AppDbContext db, IConfiguration config, TimeProvider clock,
+    LeadRoutingService routing) : ControllerBase
 {
     private static readonly Regex EventPattern = new("^[A-Za-z0-9_-]{8,100}$", RegexOptions.Compiled);
     private static readonly Regex PhonePattern = new(
@@ -92,7 +95,16 @@ public sealed class WebsiteIntakeController(AppDbContext db, IConfiguration conf
             !await db.LeadSources.AnyAsync(x => x.Id == 2 && x.IsActive, ct))
             return StatusCode(503, new { message = "Website intake owner or source is unavailable." });
 
-        await using var transaction = await db.Database.BeginTransactionAsync(ct);
+        // Serializable isolation prevents two simultaneous receipts from exceeding
+        // the same routing capacity while counting and inserting open leads.
+        await using var transaction = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable, ct);
+        long? routedTo;
+        try { routedTo = await routing.SelectAssigneeAsync(2, ct); }
+        catch (InvalidOperationException)
+        {
+            return StatusCode(503, new { message = "Website routing has no eligible employee." });
+        }
+
         var lead = new Lead
         {
             Name = request.Name!.Trim(),
@@ -103,7 +115,7 @@ public sealed class WebsiteIntakeController(AppDbContext db, IConfiguration conf
             LeadGivenBy = "Website",
             SourceId = 2,
             StatusId = 1,
-            AssignedToId = ownerId,
+            AssignedToId = routedTo ?? ownerId,
             CreatedById = ownerId
         };
         db.Leads.Add(lead);
@@ -111,6 +123,19 @@ public sealed class WebsiteIntakeController(AppDbContext db, IConfiguration conf
         {
             await db.SaveChangesAsync(ct);
             lead.CustomerCode = $"CUS-{lead.CreatedAtUtc.Year}-{lead.Id:D6}";
+            if (routedTo.HasValue)
+            {
+                db.LeadAssignments.Add(new LeadAssignment
+                {
+                    LeadId = lead.Id, PreviousUserId = null,
+                    AssignedById = ownerId, AssignedToId = routedTo.Value
+                });
+                db.AuditLogs.Add(new AuditLog
+                {
+                    UserId = ownerId, Action = "Assign", TableName = "Leads",
+                    RecordId = lead.Id, ChangedFields = $"Automatic source routing to employee {routedTo.Value}"
+                });
+            }
             db.WebsiteLeadSubmissions.Add(new WebsiteLeadSubmission
             {
                 LeadId = lead.Id, SubmissionHash = submissionHash, PayloadHash = payloadHash
