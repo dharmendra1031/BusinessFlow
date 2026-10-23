@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:msdata="urn:schemas-microsoft-com:xml-msdata" id="source_detailsReportDataSet">
+  <xs:element name="source_detailsReportDataSet" msdata:IsDataSet="true" msdata:UseCurrentLocale="true">
+    <xs:complexType>
+      <xs:choice minOccurs="0" maxOccurs="unbounded">
+        <xs:element name="Items"><xs:complexType><xs:sequence>
+        <xs:element name="sourceName" type="xs:string" minOccurs="0" />
+        <xs:element name="customerCode" type="xs:string" minOccurs="0" />
+        <xs:element name="customerName" type="xs:string" minOccurs="0" />
+        <xs:element name="assignedUser" type="xs:string" minOccurs="0" />
+        <xs:element name="leadStatus" type="xs:string" minOccurs="0" />
+        <xs:element name="projectAmount" type="xs:decimal" minOccurs="0" />
+        <xs:element name="createdAtUtc" type="xs:dateTime" minOccurs="0" />
+        </xs:sequence></xs:complexType></xs:element>
+      </xs:choice>
+    </xs:complexType>
+  </xs:element>
+</xs:schema>
