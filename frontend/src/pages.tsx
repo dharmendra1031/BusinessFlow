@@ -466,7 +466,7 @@ export function LeadsPage({ token, user, permissions, newLeadRequest, onNewLeadO
 
 export function FollowUpsPage({ token }: { token: string }) {
   const { notify, confirm } = useFeedback();
-  const [tab, setTab] = useState<'pending' | 'overdue' | 'completed' | 'all'>('pending');
+  const [tab, setTab] = useState<'pending' | 'dueSoon' | 'overdue' | 'completed' | 'all'>('pending');
   const [page, setPage] = useState(1);
   const { data, refresh, error, loading } = useResource<Paged<FollowUp>>(
     `/api/followups?view=${tab}&page=${page}&pageSize=50`, token);
@@ -553,9 +553,9 @@ export function FollowUpsPage({ token }: { token: string }) {
     </section>
     <section className="panel followup-panel">
       <div className="tab-list" role="tablist" aria-label="Filter follow-ups">
-        {(['pending', 'overdue', 'completed', 'all'] as const).map(item =>
+        {(['pending', 'dueSoon', 'overdue', 'completed', 'all'] as const).map(item =>
           <button key={item} role="tab" aria-selected={tab === item} className={tab === item ? 'selected' : ''}
-            onClick={() => { setTab(item); setPage(1); }}>{item[0].toUpperCase() + item.slice(1)}</button>)}
+            onClick={() => { setTab(item); setPage(1); }}>{item === 'dueSoon' ? 'Due next 24h' : item[0].toUpperCase() + item.slice(1)}</button>)}
       </div>
       {error && <ErrorState message={error} retry={() => void refresh()} />}
       {loading && !data ? <div className="loading-state">Loading follow-ups…</div> :
@@ -570,7 +570,8 @@ export function FollowUpsPage({ token }: { token: string }) {
             <button disabled={working === item.id} onClick={() => void complete(item)}>
               <Icon name="check" size={16} /> {working === item.id ? 'Saving…' : 'Complete'}</button></>}</div>
         </article>)}</div> : !error && <EmptyState title="All caught up"
-          detail={tab === 'overdue' ? 'No overdue follow-ups in this list.' : 'No follow-ups in this view.'} />}
+          detail={tab === 'overdue' ? 'No overdue follow-ups in this list.' :
+            tab === 'dueSoon' ? 'No follow-ups due in the next 24 hours.' : 'No follow-ups in this view.'} />}
       <div className="pagination"><span>Page {page} · {data?.total ?? 0} follow-ups</span>
         <button disabled={loading || page <= 1} onClick={() => setPage(page - 1)}>Previous</button>
         <button disabled={loading || page * 50 >= (data?.total ?? 0)} onClick={() => setPage(page + 1)}>Next</button>
