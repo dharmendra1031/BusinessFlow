@@ -525,6 +525,9 @@ namespace BusinessFlow.Api.Migrations
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
 
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasMaxLength(60)
@@ -532,27 +535,34 @@ namespace BusinessFlow.Api.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("Name")
+                        .IsUnique();
+
                     b.ToTable("LeadSources");
 
                     b.HasData(
                         new
                         {
                             Id = 1L,
+                            IsActive = true,
                             Name = "Manual"
                         },
                         new
                         {
                             Id = 2L,
+                            IsActive = true,
                             Name = "Website"
                         },
                         new
                         {
                             Id = 3L,
+                            IsActive = true,
                             Name = "Facebook"
                         },
                         new
                         {
                             Id = 4L,
+                            IsActive = true,
                             Name = "WhatsApp"
                         });
                 });

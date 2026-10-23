@@ -14,6 +14,7 @@ public sealed class LeadSource
 {
     public long Id { get; set; }
     public string Name { get; set; } = string.Empty;
+    public bool IsActive { get; set; } = true;
 }
 
 public sealed class LeadStatus

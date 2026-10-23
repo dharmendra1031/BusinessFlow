@@ -69,7 +69,7 @@ public sealed class LeadsController(AppDbContext db, RecordAccessService records
     {
         if (request.StatusId is 5 or 6 && (!User.IsInRole("Admin") || string.IsNullOrWhiteSpace(request.OverrideReason)))
             return BadRequest(new { message = "Create the lead with an open status, then request Won/Lost approval. Admin override requires a reason." });
-        if (!await db.LeadSources.AnyAsync(s => s.Id == request.SourceId))
+        if (!await db.LeadSources.AnyAsync(s => s.Id == request.SourceId && s.IsActive))
             return BadRequest(new { message = "Invalid source." });
         if (string.IsNullOrWhiteSpace(request.Name) || request.Name.Trim().Length < 2 || string.IsNullOrWhiteSpace(request.Phone))
             return BadRequest(new { message = "Enter a name of at least 2 characters and a valid phone number." });
@@ -116,7 +116,7 @@ public sealed class LeadsController(AppDbContext db, RecordAccessService records
             return BadRequest(new { message = "A valid row version is required. Reload this record." });
         if (request.StatusId.HasValue && request.StatusId != lead.StatusId)
             return BadRequest(new { message = "Use the status or approval action to change lead status." });
-        if (!await db.LeadSources.AnyAsync(s => s.Id == request.SourceId))
+        if ((request.SourceId != lead.SourceId && !await db.LeadSources.AnyAsync(s => s.Id == request.SourceId && s.IsActive)))
             return BadRequest(new { message = "Invalid source." });
         if (string.IsNullOrWhiteSpace(request.Name) || request.Name.Trim().Length < 2 || string.IsNullOrWhiteSpace(request.Phone))
             return BadRequest(new { message = "Enter a name of at least 2 characters and a valid phone number." });

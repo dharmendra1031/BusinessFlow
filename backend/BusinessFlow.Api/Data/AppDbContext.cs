@@ -115,13 +115,17 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
                 .OnDelete(DeleteBehavior.NoAction);
         });
 
-        modelBuilder.Entity<LeadSource>().Property(x => x.Name).HasMaxLength(60);
+        modelBuilder.Entity<LeadSource>(entity =>
+        {
+            entity.Property(x => x.Name).HasMaxLength(60);
+            entity.HasIndex(x => x.Name).IsUnique();
+        });
         modelBuilder.Entity<LeadStatus>().Property(x => x.Name).HasMaxLength(60);
         modelBuilder.Entity<LeadSource>().HasData(
-            new LeadSource { Id = 1, Name = "Manual" },
-            new LeadSource { Id = 2, Name = "Website" },
-            new LeadSource { Id = 3, Name = "Facebook" },
-            new LeadSource { Id = 4, Name = "WhatsApp" });
+            new LeadSource { Id = 1, Name = "Manual", IsActive = true },
+            new LeadSource { Id = 2, Name = "Website", IsActive = true },
+            new LeadSource { Id = 3, Name = "Facebook", IsActive = true },
+            new LeadSource { Id = 4, Name = "WhatsApp", IsActive = true });
         modelBuilder.Entity<LeadStatus>().HasData(
             new LeadStatus { Id = 1, Name = "New", SortOrder = 1 },
             new LeadStatus { Id = 2, Name = "Contacted", SortOrder = 2 },
