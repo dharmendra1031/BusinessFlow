@@ -11,7 +11,8 @@ const reportOptions = [
   ['active', 'Active Leads'], ['closed', 'Closed Leads'],
   ['not-interested', 'Not Interested'], ['followups', 'Follow-up Report'],
   ['overdue', 'Overdue Follow-ups'], ['project', 'Project Amount'],
-  ['user-project', 'User-wise Project Amount'], ['created', 'Customer Creation']
+  ['user-project', 'User-wise Project Amount'], ['created', 'Customer Creation'],
+  ['source-wise', 'Lead Source Summary (RDLC)']
 ];
 
 export default function ReportsPage({ token, user }: { token: string; user: User }) {
@@ -22,11 +23,14 @@ export default function ReportsPage({ token, user }: { token: string; user: User
   const [leadGivenBy, setLeadGivenBy] = useState('');
   const [userId, setUserId] = useState('');
   const [statusId, setStatusId] = useState('');
+  const [sourceId, setSourceId] = useState('');
+  const [sources, setSources] = useState<Lookup[]>([]);
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [statuses, setStatuses] = useState<Lookup[]>([]);
 
   useEffect(() => {
     void api<Lookup[]>('/api/masters/lead-statuses', token).then(setStatuses).catch(() => {});
+    void api<Lookup[]>('/api/masters/lead-sources', token).then(setSources).catch(() => {});
     if (user.roles.includes('Admin') || user.roles.includes('Manager'))
       void employeeLookup(token, 'reports.view').then(setEmployees).catch(() => {});
   }, [token, user.roles]);
@@ -43,6 +47,7 @@ export default function ReportsPage({ token, user }: { token: string; user: User
     if (leadGivenBy) params.set('leadGivenBy', leadGivenBy);
     if (userId) params.set('userId', userId);
     if (statusId) params.set('statusId', statusId);
+    if (sourceId) params.set('sourceId', sourceId);
     return params;
   }
 
@@ -124,6 +129,10 @@ export default function ReportsPage({ token, user }: { token: string; user: User
         <label>From <input type="date" max={to || undefined} value={from} onChange={event => setFrom(event.target.value)} /></label>
         <label>To <input type="date" min={from || undefined} value={to} onChange={event => setTo(event.target.value)} /></label>
         <label>Lead given by <input maxLength={150} value={leadGivenBy} onChange={event => setLeadGivenBy(event.target.value)} /></label>
+        <label>Source <select aria-label="Source" value={sourceId} onChange={event => setSourceId(event.target.value)}>
+          <option value="">All sources</option>
+          {sources.map(source => <option key={source.id} value={source.id}>{source.name}</option>)}
+        </select></label>
         <label>Status <select aria-label="Status" value={statusId} onChange={event => setStatusId(event.target.value)}>
           <option value="">All statuses</option>
           {statuses.map(status => <option key={status.id} value={status.id}>{status.name}</option>)}
