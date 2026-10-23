@@ -94,7 +94,7 @@ Source evidence: `backend/BusinessFlow.Api/`, `frontend/src/`, `tests/BusinessFl
 | Integration resilience | Verified signatures, idempotency, bounded retries, failure/audit logs and secure secret storage | Website HMAC, receipt idempotency and rate limit CI Verified; provider retry/monitoring pending |
 | Lead routing | Rules for team capacity, source, territory and manual manager override; assignment history remains accurate | Website source-to-team least-load + capacity CI Verified; territory and advanced routing pending |
 | Follow-up reminders | Scheduled notifications, retries, ownership changes and opt-out/consent | In-app reminders CI Verified (49 SQL/API, 41 Playwright); external delivery/retries/opt-out and staging pending |
-| Source reporting | Lead count, qualification, conversion and attributed value by source and selected period | Not started |
+| Source reporting | Lead count, qualification, conversion and attributed value by source and selected period | CI Verified: typed Source Summary RDLC; local staging pending |
 | Proposals | Versions, approvals, client response and handoff to delivery | Not started |
 
 **Phase gate:** End-to-end lead capture → duplicate review → assignment → follow-up → Won → project; permission and replay tests, provider sandbox evidence where applicable.
