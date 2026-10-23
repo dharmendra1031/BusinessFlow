@@ -71,8 +71,8 @@ public sealed class LeadDuplicatesController(AppDbContext db) : ControllerBase
             return BadRequest(new { message = "A review note of 5 to 500 characters is required." });
 
         var pair = from first in db.Leads.AsNoTracking()
-            join second in db.Leads.AsNoTracking() on first.Id equals firstId
-            where second.Id == secondId &&
+            from second in db.Leads.AsNoTracking()
+            where first.Id == firstId && second.Id == secondId &&
                 ((first.NormalizedPhone.Length >= 7 && first.NormalizedPhone == second.NormalizedPhone) ||
                   (first.NormalizedEmail != null && first.NormalizedEmail == second.NormalizedEmail))
             select first.Id;
