@@ -12,7 +12,8 @@ const reportOptions = [
   ['not-interested', 'Not Interested'], ['followups', 'Follow-up Report'],
   ['overdue', 'Overdue Follow-ups'], ['project', 'Project Amount'],
   ['user-project', 'User-wise Project Amount'], ['created', 'Customer Creation'],
-  ['source-wise', 'Lead Source Summary (RDLC)']
+  ['source-wise', 'Lead Source Summary (RDLC)'],
+  ['source-details', 'Source-wise Lead Details (RDLC)']
 ];
 
 export default function ReportsPage({ token, user }: { token: string; user: User }) {
