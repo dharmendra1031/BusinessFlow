@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
+using BusinessFlow.Api.Models;
 using Xunit;
 
 namespace BusinessFlow.Tests;
@@ -74,9 +75,12 @@ public sealed class Phase2DuplicateLeadTests
     {
         await using var fixture = await Phase1TestDatabase.CreateAsync("20261023090000_AddLeadSourceManagement");
         await using var db = fixture.CreateContext();
-        await db.Database.ExecuteSqlRawAsync("""
+        var owner = new ApplicationUser { FullName = "Migration test owner", UserName = "migration-owner@test.local" };
+        db.Users.Add(owner);
+        await db.SaveChangesAsync();
+        await db.Database.ExecuteSqlRawAsync($"""
             INSERT INTO Leads (Name, Phone, SourceId, StatusId, CreatedById, CreatedAtUtc, UpdatedAtUtc)
-            VALUES (N'Existing customer', N'987-6543210', 1, 1, 1, SYSUTCDATETIME(), SYSUTCDATETIME());
+            VALUES (N'Existing customer', N'987-6543210', 1, 1, {owner.Id}, SYSUTCDATETIME(), SYSUTCDATETIME());
             """);
         var before = await db.Leads.AsNoTracking().Select(x => x.Id).ToArrayAsync();
         await db.Database.MigrateAsync();
