@@ -101,6 +101,28 @@ def make_report(report_type, definition):
     hierarchy = child(child(table, "TablixRowHierarchy"), "TablixMembers")
     header_member = child(hierarchy, "TablixMember")
     child(header_member, "KeepWithGroup", "After")
+    if report_type == "source-wise":
+        child(header_member, "RepeatOnNewPage", "true")
+    child(child(hierarchy, "TablixMember"), "Group", Name="Details")
+    child(table, "DataSetName", "Items")
+    child(table, "Top", "1.2cm")
+    child(table, "Left", "0cm")
+    child(table, "Height", "1.3cm")
+    child(table, "Width", "25cm")
+    child(body, "Height", "3cm")
+    child(section, "Width", "25cm")
+    page = child(section, "Page")
+    for name, value in {"PageHeight": "21cm", "PageWidth": "29.7cm",
+                        "LeftMargin": "2cm", "RightMargin": "2cm",
+                        "TopMargin": "2cm", "BottomMargin": "2cm"}.items():
+        child(page, name, value)
+    parameter = child(child(root, "ReportParameters"), "ReportParameter", Name="Title")
+    child(parameter, "DataType", "String")
+    child(parameter, "Prompt", "Title")
+    ET.indent(root)
+    ET.ElementTree(root).write(ROOT / f"{report_type}.rdlc",
+                               encoding="utf-8", xml_declaration=True)
+
     # Every report has a proper ADO.NET DataSet with a strongly typed Items table.
     msdata = "urn:schemas-microsoft-com:xml-msdata"
     ET.register_namespace("msdata", msdata)
