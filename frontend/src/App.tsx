@@ -14,11 +14,12 @@ import OrganizationPage from './OrganizationPage';
 import RolesPage from './RolesPage';
 import LeadSourcesPage from './LeadSourcesPage';
 import LeadDuplicatesPage from './LeadDuplicatesPage';
+import LeadRoutingPage from './LeadRoutingPage';
 import type { User } from './types';
 
 type Session = { token: string; user: User };
 type CurrentSession = User & { csrfToken: string };
-type Screen = 'dashboard' | 'leads' | 'projects' | 'followups' | 'employees' | 'reports' | 'audit' | 'permissions' | 'roles' | 'organization' | 'approvals' | 'sources' | 'duplicates' | 'settings';
+type Screen = 'dashboard' | 'leads' | 'projects' | 'followups' | 'employees' | 'reports' | 'audit' | 'permissions' | 'roles' | 'organization' | 'approvals' | 'sources' | 'duplicates' | 'routing' | 'settings';
 
 const navigation = [
   { id: 'dashboard', label: 'Dashboard', icon: 'grid' },
@@ -34,6 +35,7 @@ const navigation = [
   { id: 'roles', label: 'Custom roles', icon: 'lock' },
   { id: 'sources', label: 'Lead sources', icon: 'clipboard' },
   { id: 'duplicates', label: 'Duplicate review', icon: 'clipboard' },
+  { id: 'routing', label: 'Lead routing', icon: 'users' },
   { id: 'settings', label: 'Change password', icon: 'lock' },
 ] as const;
 
@@ -118,9 +120,9 @@ function Workspace() {
   const items = navigation.filter(item =>
     (item.id !== 'approvals' || allowed?.['leads.approve'] === true) &&
     (item.id !== 'employees' || canSeeTeam) &&
-    (item.id !== 'audit' && item.id !== 'permissions' && item.id !== 'organization' && item.id !== 'roles' && item.id !== 'sources' && item.id !== 'duplicates' || user.roles.includes('Admin')) &&
+    (item.id !== 'audit' && item.id !== 'permissions' && item.id !== 'organization' && item.id !== 'roles' && item.id !== 'sources' && item.id !== 'duplicates' && item.id !== 'routing' || user.roles.includes('Admin')) &&
     (allowed?.[moduleAccess[item.id] || ''] !== false));
-  const pageTitle = { dashboard: 'Dashboard', leads: 'All leads', projects: 'Development projects', followups: 'Follow-ups', employees: 'Team', reports: 'Reports', audit: 'Audit history', permissions: 'Role permissions', roles: 'Custom roles', organization: 'Organization', sources: 'Lead sources', duplicates: 'Duplicate review', approvals: 'Lead approvals', settings: 'Change password' }[screen];
+  const pageTitle = { dashboard: 'Dashboard', leads: 'All leads', projects: 'Development projects', followups: 'Follow-ups', employees: 'Team', reports: 'Reports', audit: 'Audit history', permissions: 'Role permissions', roles: 'Custom roles', organization: 'Organization', sources: 'Lead sources', duplicates: 'Duplicate review', routing: 'Lead routing', approvals: 'Lead approvals', settings: 'Change password' }[screen];
 
   return <div className="app-shell">
     <a className="skip-link" href="#main-content">Skip to main content</a>
@@ -180,6 +182,7 @@ function Workspace() {
         {screen === 'roles' && user.roles.includes('Admin') && <RolesPage token={session.token} />}
         {screen === 'sources' && user.roles.includes('Admin') && <LeadSourcesPage token={session.token} />}
         {screen === 'duplicates' && user.roles.includes('Admin') && <LeadDuplicatesPage token={session.token} />}
+        {screen === 'routing' && user.roles.includes('Admin') && <LeadRoutingPage token={session.token} />}
       </main>
     </div>
   </div>;
