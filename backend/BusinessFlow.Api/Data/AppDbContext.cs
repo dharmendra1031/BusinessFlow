@@ -18,7 +18,6 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
     public DbSet<UserPermissionRestriction> UserPermissionRestrictions => Set<UserPermissionRestriction>();
     public DbSet<Team> Teams => Set<Team>();
     public DbSet<TeamMembership> TeamMemberships => Set<TeamMembership>();
-    public DbSet<LeadRoutingRule> LeadRoutingRules => Set<LeadRoutingRule>();
     public DbSet<LeadSource> LeadSources => Set<LeadSource>();
     public DbSet<LeadStatus> LeadStatuses => Set<LeadStatus>();
     public DbSet<LeadAssignment> LeadAssignments => Set<LeadAssignment>();
@@ -82,13 +81,6 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
             entity.HasIndex(x => new { x.DepartmentId, x.Name }).IsUnique();
             entity.HasOne<Department>().WithMany().HasForeignKey(x => x.DepartmentId)
                 .OnDelete(DeleteBehavior.NoAction);
-        });
-        modelBuilder.Entity<LeadRoutingRule>(entity =>
-        {
-            entity.HasIndex(x => x.SourceId).IsUnique();
-            entity.HasOne<LeadSource>().WithMany().HasForeignKey(x => x.SourceId).OnDelete(DeleteBehavior.NoAction);
-            entity.HasOne<Team>().WithMany().HasForeignKey(x => x.TeamId).OnDelete(DeleteBehavior.NoAction);
-            entity.ToTable(t => t.HasCheckConstraint("CK_LeadRoutingRules_Capacity", "[MaxOpenLeads] BETWEEN 1 AND 1000"));
         });
         modelBuilder.Entity<TeamMembership>(entity =>
         {
@@ -157,14 +149,11 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
         modelBuilder.Entity<LeadRoutingRule>(entity =>
         {
             entity.HasIndex(x => x.SourceId).IsUnique();
-            entity.HasOne<LeadSource>().WithMany().HasForeignKey(x => x.SourceId)
-                .OnDelete(DeleteBehavior.NoAction);
-            entity.HasOne<Team>().WithMany().HasForeignKey(x => x.TeamId)
-                .OnDelete(DeleteBehavior.NoAction);
+            entity.HasOne<LeadSource>().WithMany().HasForeignKey(x => x.SourceId).OnDelete(DeleteBehavior.NoAction);
+            entity.HasOne<Team>().WithMany().HasForeignKey(x => x.TeamId).OnDelete(DeleteBehavior.NoAction);
             entity.ToTable(t => t.HasCheckConstraint("CK_LeadRoutingRules_Capacity",
                 "[MaxOpenLeads] BETWEEN 1 AND 500"));
         });
-
         modelBuilder.Entity<LeadSource>(entity =>
         {
             entity.Property(x => x.Name).HasMaxLength(60);

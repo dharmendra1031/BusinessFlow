@@ -583,58 +583,19 @@ namespace BusinessFlow.Api.Migrations
 
             modelBuilder.Entity("BusinessFlow.Api.Models.LeadRoutingRule", b =>
                 {
-                    b.Property<long>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("bigint");
-
+                    b.Property<long>("Id").ValueGeneratedOnAdd().HasColumnType("bigint");
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
-
                     b.Property<bool>("IsActive").HasColumnType("bit");
                     b.Property<int>("MaxOpenLeads").HasColumnType("int");
                     b.Property<long>("SourceId").HasColumnType("bigint");
                     b.Property<long>("TeamId").HasColumnType("bigint");
-
                     b.HasKey("Id");
                     b.HasIndex("SourceId").IsUnique();
                     b.HasIndex("TeamId");
-
                     b.ToTable("LeadRoutingRules", t =>
-                        {
-                            t.HasCheckConstraint("CK_LeadRoutingRules_Capacity", "[MaxOpenLeads] BETWEEN 1 AND 1000");
-                        });
-                });
-
-            modelBuilder.Entity("BusinessFlow.Api.Models.LeadRoutingRule", b =>
-                {
-                    b.Property<long>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("bigint");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
-
-                    b.Property<bool>("IsActive")
-                        .HasColumnType("bit");
-
-                    b.Property<int>("MaxOpenLeads")
-                        .HasColumnType("int");
-
-                    b.Property<long>("SourceId")
-                        .HasColumnType("bigint");
-
-                    b.Property<long>("TeamId")
-                        .HasColumnType("bigint");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("SourceId")
-                        .IsUnique();
-
-                    b.HasIndex("TeamId");
-
-                    b.ToTable("LeadRoutingRules", t =>
-                        {
-                            t.HasCheckConstraint("CK_LeadRoutingRules_Capacity", "[MaxOpenLeads] BETWEEN 1 AND 500");
-                        });
+                    {
+                        t.HasCheckConstraint("CK_LeadRoutingRules_Capacity", "[MaxOpenLeads] BETWEEN 1 AND 500");
+                    });
                 });
 
             modelBuilder.Entity("BusinessFlow.Api.Models.LeadSource", b =>
@@ -1481,22 +1442,6 @@ namespace BusinessFlow.Api.Migrations
                         .HasForeignKey("SourceId")
                         .OnDelete(DeleteBehavior.NoAction)
                         .IsRequired();
-
-                    b.HasOne("BusinessFlow.Api.Models.Team", null)
-                        .WithMany()
-                        .HasForeignKey("TeamId")
-                        .OnDelete(DeleteBehavior.NoAction)
-                        .IsRequired();
-                });
-
-            modelBuilder.Entity("BusinessFlow.Api.Models.LeadRoutingRule", b =>
-                {
-                    b.HasOne("BusinessFlow.Api.Models.LeadSource", null)
-                        .WithMany()
-                        .HasForeignKey("SourceId")
-                        .OnDelete(DeleteBehavior.NoAction)
-                        .IsRequired();
-
                     b.HasOne("BusinessFlow.Api.Models.Team", null)
                         .WithMany()
                         .HasForeignKey("TeamId")
