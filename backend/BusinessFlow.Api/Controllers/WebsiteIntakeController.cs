@@ -85,6 +85,30 @@ public sealed class WebsiteIntakeController(AppDbContext db, IConfiguration conf
 
         var submissionHash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(request.EventId!)));
         var payloadHash = Convert.ToHexString(SHA256.HashData(body));
+        const int maxAttempts = 4;
+        for (var attempt = 1; attempt <= maxAttempts; attempt++)
+        {
+            try
+            {
+                return await StoreAsync(request, ownerId, submissionHash, payloadHash, ct);
+            }
+            catch (Exception e) when (SqlConflicts.IsRetryable(e))
+            {
+                // SQL Server may abort the entire serializable transaction on a deadlock.
+                // Re-evaluate the routing capacity and submission ID in a fresh transaction.
+                db.ChangeTracker.Clear();
+                if (attempt == maxAttempts) break;
+                await Task.Delay(TimeSpan.FromMilliseconds(75 * attempt), ct);
+            }
+        }
+
+        Response.Headers["Retry-After"] = "1";
+        return StatusCode(503, new { message = "Website intake is busy. Retry with the same submission ID." });
+    }
+
+    private async Task<IActionResult> StoreAsync(WebsiteLeadRequest request, long ownerId,
+        string submissionHash, string payloadHash, CancellationToken ct)
+    {
         var existing = await db.WebsiteLeadSubmissions.AsNoTracking()
             .Where(x => x.SubmissionHash == submissionHash).Select(x => x.PayloadHash).FirstOrDefaultAsync(ct);
         if (existing is not null)
@@ -95,8 +119,7 @@ public sealed class WebsiteIntakeController(AppDbContext db, IConfiguration conf
             !await db.LeadSources.AnyAsync(x => x.Id == 2 && x.IsActive, ct))
             return StatusCode(503, new { message = "Website intake owner or source is unavailable." });
 
-        // Serializable isolation prevents two simultaneous receipts from exceeding
-        // the same routing capacity while counting and inserting open leads.
+        // Serializable isolation prevents routing capacity oversubscription.
         await using var transaction = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable, ct);
         long? routedTo;
         try { routedTo = await routing.SelectAssigneeAsync(2, ct); }

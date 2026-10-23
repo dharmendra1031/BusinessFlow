@@ -137,4 +137,88 @@ public sealed class Phase2WebsiteIntakeTests
         Assert.Equal(0, await finalDb.WebsiteLeadSubmissions.CountAsync());
         Assert.Equal(0, await finalDb.Leads.CountAsync());
     }
+
+    [Fact]
+    public async Task Concurrent_replays_create_only_one_receipt_and_one_lead()
+    {
+        var (database, ownerId) = await Fixture();
+        await using var fixture = database;
+        await using var host = new Phase1ApiHost(database, new Dictionary<string, string?>
+        {
+            ["WebsiteIntake:Enabled"] = "true",
+            ["WebsiteIntake:SigningSecret"] = Key,
+            ["WebsiteIntake:OwnerUserId"] = ownerId.ToString()
+        });
+        using var client = host.CreateClient(new WebApplicationFactoryClientOptions
+        { BaseAddress = new Uri("https://localhost") });
+        var payload = new { eventId = "parallel-replay-event-1001", name = "Parallel visitor",
+            phone = "9876543210", consentAccepted = true };
+
+        var responses = await Task.WhenAll(Enumerable.Range(0, 8)
+            .Select(_ => client.SendAsync(Signed(payload))));
+        Assert.All(responses, response => Assert.Contains(response.StatusCode,
+            new[] { HttpStatusCode.Accepted, HttpStatusCode.ServiceUnavailable }));
+        // Replaying the same signed event must always be safe after a transient response.
+        Assert.Equal(HttpStatusCode.Accepted, (await client.SendAsync(Signed(payload))).StatusCode);
+
+        await using var db = database.CreateContext();
+        Assert.Equal(1, await db.WebsiteLeadSubmissions.CountAsync());
+        Assert.Equal(1, await db.Leads.CountAsync());
+        Assert.Equal(1, await db.AuditLogs.CountAsync(x =>
+            x.TableName == "Leads" && x.ChangedFields == "Website signed intake"));
+    }
+
+    [Fact]
+    public async Task Concurrent_distinct_events_respect_routing_capacity_without_partial_receipts()
+    {
+        var (database, ownerId) = await Fixture();
+        await using var fixture = database;
+        await using (var db = database.CreateContext())
+        {
+            var department = new Department { Name = "Concurrent intake sales" };
+            db.Departments.Add(department);
+            await db.SaveChangesAsync();
+            var team = new Team { Name = "Concurrent intake team", DepartmentId = department.Id };
+            var agent = new ApplicationUser { FullName = "Website agent",
+                UserName = "parallel-agent@test.local", DepartmentId = department.Id, IsActive = true };
+            db.Teams.Add(team);
+            db.Users.Add(agent);
+            await db.SaveChangesAsync();
+            db.TeamMemberships.Add(new TeamMembership { TeamId = team.Id, UserId = agent.Id });
+            db.LeadRoutingRules.Add(new LeadRoutingRule
+            {
+                SourceId = 2, TeamId = team.Id, MaxOpenLeads = 2, IsActive = true
+            });
+            await db.SaveChangesAsync();
+        }
+        await using var host = new Phase1ApiHost(database, new Dictionary<string, string?>
+        {
+            ["WebsiteIntake:Enabled"] = "true",
+            ["WebsiteIntake:SigningSecret"] = Key,
+            ["WebsiteIntake:OwnerUserId"] = ownerId.ToString()
+        });
+        using var client = host.CreateClient(new WebApplicationFactoryClientOptions
+        { BaseAddress = new Uri("https://localhost") });
+
+        var responses = await Task.WhenAll(Enumerable.Range(0, 8).Select(index =>
+            client.SendAsync(Signed(new
+            {
+                eventId = "concurrent-routing-event-" + index.ToString("D4"),
+                name = "Concurrent visitor", phone = "9876543210", consentAccepted = true
+            }))));
+        Assert.All(responses, response => Assert.Contains(response.StatusCode,
+            new[] { HttpStatusCode.Accepted, HttpStatusCode.ServiceUnavailable }));
+        var accepted = responses.Count(x => x.StatusCode == HttpStatusCode.Accepted);
+
+        await using var verify = database.CreateContext();
+        Assert.InRange(accepted, 1, 2);
+        Assert.Equal(accepted, await verify.Leads.CountAsync());
+        Assert.Equal(accepted, await verify.WebsiteLeadSubmissions.CountAsync());
+        Assert.Equal(accepted, await verify.LeadAssignments.CountAsync());
+        Assert.Equal(accepted, await verify.AuditLogs.CountAsync(x =>
+            x.TableName == "Leads" && x.ChangedFields == "Website signed intake"));
+        Assert.Equal(accepted, await verify.AuditLogs.CountAsync(x =>
+            x.TableName == "Leads" && x.Action == "Assign"));
+    }
+
 }
