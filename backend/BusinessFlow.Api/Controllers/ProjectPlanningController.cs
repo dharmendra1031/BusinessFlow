@@ -59,6 +59,7 @@ public sealed class ProjectPlanningController(AppDbContext db, RecordAccessServi
     [RequirePermission("planning.manage")]
     public async Task<IActionResult> AddMilestone(long projectId, SaveMilestoneRequest request)
     {
+        await using var transaction = await db.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable);
         var project = await Project(projectId);
         if (project is null) return NotFound();
         if (!await CanManage(project)) return Forbid();
@@ -76,6 +77,7 @@ public sealed class ProjectPlanningController(AppDbContext db, RecordAccessServi
         await db.SaveChangesAsync();
         Audit("Create", "ProjectMilestones", milestone.Id);
         await db.SaveChangesAsync();
+        await transaction.CommitAsync();
         return Created("/api/projects/" + projectId + "/planning", new { milestone.Id });
     }
 
@@ -111,6 +113,7 @@ public sealed class ProjectPlanningController(AppDbContext db, RecordAccessServi
     [RequirePermission("planning.manage")]
     public async Task<IActionResult> AddSprint(long projectId, SaveSprintRequest request)
     {
+        await using var transaction = await db.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable);
         var project = await Project(projectId);
         if (project is null) return NotFound();
         if (!await CanManage(project)) return Forbid();
@@ -127,6 +130,7 @@ public sealed class ProjectPlanningController(AppDbContext db, RecordAccessServi
         await db.SaveChangesAsync();
         Audit("Create", "ProjectSprints", sprint.Id);
         await db.SaveChangesAsync();
+        await transaction.CommitAsync();
         return Created("/api/projects/" + projectId + "/planning", new { sprint.Id });
     }
 
