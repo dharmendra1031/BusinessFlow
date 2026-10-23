@@ -13,19 +13,26 @@ using Microsoft.Extensions.Logging;
 
 namespace BusinessFlow.Tests;
 
-internal sealed class Phase1ApiHost(Phase1TestDatabase database) : WebApplicationFactory<Program>
+internal sealed class Phase1ApiHost(
+    Phase1TestDatabase database, IReadOnlyDictionary<string, string?>? configurationOverrides = null) : WebApplicationFactory<Program>
 {
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
         builder.UseEnvironment("Development");
-        builder.ConfigureAppConfiguration((_, config) => config.AddInMemoryCollection(new Dictionary<string, string?>
+        builder.ConfigureAppConfiguration((_, config) =>
         {
-            ["ConnectionStrings:DefaultConnection"] = database.ConnectionString,
-            // Keep API security tests independent of CI/browser login-rate settings.
-            ["RateLimiting:LoginAccountRequestsPerMinute"] = "5",
-            ["RateLimiting:LoginIpRequestsPerMinute"] = "300",
-            ["CRM_ADMIN_EMAIL"] = "", ["CRM_ADMIN_PASSWORD"] = ""
-        }));
+            var values = new Dictionary<string, string?>
+            {
+                ["ConnectionStrings:DefaultConnection"] = database.ConnectionString,
+                // Keep API security tests independent of CI/browser login-rate settings.
+                ["RateLimiting:LoginAccountRequestsPerMinute"] = "5",
+                ["RateLimiting:LoginIpRequestsPerMinute"] = "300",
+                ["CRM_ADMIN_EMAIL"] = "", ["CRM_ADMIN_PASSWORD"] = ""
+            };
+            if (configurationOverrides is not null)
+                foreach (var pair in configurationOverrides) values[pair.Key] = pair.Value;
+            config.AddInMemoryCollection(values);
+        });
         builder.ConfigureServices(services =>
         {
             services.RemoveAll<DbContextOptions<AppDbContext>>();
