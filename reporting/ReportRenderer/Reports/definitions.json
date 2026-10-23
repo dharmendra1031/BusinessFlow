@@ -119,5 +119,17 @@
       "pipelineAmount": "decimal",
       "wonAmount": "decimal"
     }
+  },
+  "source-details": {
+    "Title": "Source-wise Lead Details (Pipeline - Not Revenue)",
+    "Columns": {
+      "sourceName": "string",
+      "customerCode": "string",
+      "customerName": "string",
+      "assignedUser": "string",
+      "leadStatus": "string",
+      "projectAmount": "decimal",
+      "createdAtUtc": "date"
+    }
   }
 }
