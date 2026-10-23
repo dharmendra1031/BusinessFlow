@@ -9,6 +9,7 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
     : IdentityDbContext<ApplicationUser, IdentityRole<long>, long>(options)
 {
     public DbSet<Lead> Leads => Set<Lead>();
+    public DbSet<LeadRoutingRule> LeadRoutingRules => Set<LeadRoutingRule>();
     public DbSet<WebsiteLeadSubmission> WebsiteLeadSubmissions => Set<WebsiteLeadSubmission>();
     public DbSet<LeadDuplicateReview> LeadDuplicateReviews => Set<LeadDuplicateReview>();
     public DbSet<LeadStatusApproval> LeadStatusApprovals => Set<LeadStatusApproval>();
@@ -153,6 +154,17 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
                     "[Decision] IN (N'Confirmed', N'NotDuplicate')");
             });
         });
+        modelBuilder.Entity<LeadRoutingRule>(entity =>
+        {
+            entity.HasIndex(x => x.SourceId).IsUnique();
+            entity.HasOne<LeadSource>().WithMany().HasForeignKey(x => x.SourceId)
+                .OnDelete(DeleteBehavior.NoAction);
+            entity.HasOne<Team>().WithMany().HasForeignKey(x => x.TeamId)
+                .OnDelete(DeleteBehavior.NoAction);
+            entity.ToTable(t => t.HasCheckConstraint("CK_LeadRoutingRules_Capacity",
+                "[MaxOpenLeads] BETWEEN 1 AND 500"));
+        });
+
         modelBuilder.Entity<LeadSource>(entity =>
         {
             entity.Property(x => x.Name).HasMaxLength(60);
