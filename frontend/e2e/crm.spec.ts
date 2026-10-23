@@ -152,7 +152,9 @@ test('Follow-ups: edit, complete and filter tasks', async ({ page, request }) =>
 
   await signIn(page);
   await page.getByRole('button', { name: 'Follow-ups', exact: true }).click();
-  const task = page.locator('.followup-row').filter({ hasText: 'Initial UI reminder' });
+  // The reminder panel can show the same follow-up; edit controls live in the task list.
+  const taskList = page.locator('section.followup-panel').nth(1);
+  const task = taskList.locator('.followup-row').filter({ hasText: 'Initial UI reminder' });
   await expect(task).toBeVisible();
   await task.getByRole('button', { name: 'Edit' }).click();
   const dialog = page.getByRole('dialog');
@@ -160,14 +162,14 @@ test('Follow-ups: edit, complete and filter tasks', async ({ page, request }) =>
     new Date(Date.now() + 3 * 86_400_000).toISOString().slice(0, 16));
   await dialog.getByLabel('Remarks').fill('Updated UI reminder');
   await dialog.getByRole('button', { name: 'Save changes' }).click();
-  const updated = page.locator('.followup-row').filter({ hasText: name }).filter({ hasText: 'Updated UI reminder' });
+  const updated = taskList.locator('.followup-row').filter({ hasText: name }).filter({ hasText: 'Updated UI reminder' });
   await expect(updated).toBeVisible();
   await updated.getByRole('button', { name: 'Complete' }).click();
   await page.getByRole('alertdialog').getByRole('button', { name: 'Mark complete' }).click();
   await page.getByRole('tab', { name: 'Completed' }).click();
-  await expect(page.locator('.followup-row').filter({ hasText: name }).filter({ hasText: 'Updated UI reminder' })).toBeVisible();
+  await expect(taskList.locator('.followup-row').filter({ hasText: name }).filter({ hasText: 'Updated UI reminder' })).toBeVisible();
   await page.getByRole('tab', { name: 'Overdue' }).click();
-  await expect(page.locator('.followup-row').filter({ hasText: name }).filter({ hasText: 'Updated UI reminder' })).toHaveCount(0);
+  await expect(taskList.locator('.followup-row').filter({ hasText: name }).filter({ hasText: 'Updated UI reminder' })).toHaveCount(0);
 });
 
 test('Reports: all ten categories, filters and CSV export', async ({ page, request }) => {
