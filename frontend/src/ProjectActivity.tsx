@@ -162,7 +162,8 @@ export default function ProjectActivity({ project, user, token, canManage, permi
             </div>
             <div className="project-activity-actions">
               {canChangeBug ? <select aria-label={'Bug status for ' + bug.title} value={bug.status}
-                disabled={updatingBug !== null || (!canManage && (bug.assignedToId !== user.id || bug.status === "Closed" || project.status === "Completed"))}
+                disabled={updatingBug !== null || project.status === "Completed" ||
+                  (!canManage && (bug.assignedToId !== user.id || bug.status === "Closed"))}
                 onChange={event => void changeStatus(bug, event.target.value)}>
                 {(canManage ? statuses.filter(status => status !== 'Closed' || canCloseBug) : ['InProgress', 'Resolved'])
                   .filter(status => status !== bug.status || canChangeBug).map(status =>
@@ -170,7 +171,7 @@ export default function ProjectActivity({ project, user, token, canManage, permi
                 {!((canManage ? statuses.filter(status => status !== 'Closed' || canCloseBug) : ['InProgress', 'Resolved']).includes(bug.status)) &&
                   <option value={bug.status} disabled>{label(bug.status)}</option>}
               </select> : <span className="status-badge">{label(bug.status)}</span>}
-              {canEditBug && <button type="button" className="text-action" onClick={() => editBug(bug)}>
+              {canEditBug && project.status !== "Completed" && <button type="button" className="text-action" onClick={() => editBug(bug)}>
                 Edit bug</button>}
             </div>
           </article>)}</div> : <p className="field-help">No bugs reported for this project.</p>}
@@ -180,7 +181,7 @@ export default function ProjectActivity({ project, user, token, canManage, permi
       </div>
     </section>}
 
-    {(canCreateBug || (canEditBug && editingBugId !== null)) && <details className="project-section" open={editingBugId !== null ? true : undefined}>
+    {project.status !== "Completed" && (canCreateBug || (canEditBug && editingBugId !== null)) && <details className="project-section" open={editingBugId !== null ? true : undefined}>
       <summary>{editingBugId ? 'Edit reported bug' : 'Report a bug'}</summary>
       <form className="drawer-form" onInput={clearFieldError} onKeyDown={handleFormKeyDown} onSubmit={saveBug}>
         <label>Bug title *<input required minLength={2} maxLength={150}
