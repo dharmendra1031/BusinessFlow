@@ -18,7 +18,7 @@ public sealed class ReportsController(AppDbContext db, IConfiguration configurat
     private static readonly string[] ReportTypes =
     [
         "customers", "user-customers", "active", "closed", "not-interested",
-        "followups", "overdue", "project", "user-project", "created", "source-wise"
+        "followups", "overdue", "project", "user-project", "created", "source-wise", "source-details"
     ];
 
     [HttpGet("pdf")]
@@ -211,6 +211,26 @@ public sealed class ReportsController(AppDbContext db, IConfiguration configurat
             var total = await summary.CountAsync();
             var rows = await summary.OrderBy(x => x.sourceName).ThenBy(x => x.sourceId)
                 .Skip((page - 1) * pageSize).Take(pageSize).ToListAsync();
+            return Ok(new { type, total, page, pageSize, rows });
+        }
+
+        if (type == "source-details")
+        {
+            // Source-level detail stays within the caller's reports.view data scope.
+            // ProjectAmount is a pipeline estimate, not collected revenue.
+            var total = await leads.CountAsync();
+            var rows = await leads.OrderByDescending(l => l.CreatedAtUtc).ThenByDescending(l => l.Id)
+                .Skip((page - 1) * pageSize).Take(pageSize)
+                .Select(l => new
+                {
+                    sourceName = l.Source.Name,
+                    customerCode = l.CustomerCode,
+                    customerName = l.Name,
+                    assignedUser = l.AssignedTo == null ? "" : l.AssignedTo.FullName,
+                    leadStatus = l.Status.Name,
+                    projectAmount = l.ProjectAmount,
+                    createdAtUtc = l.CreatedAtUtc
+                }).ToListAsync();
             return Ok(new { type, total, page, pageSize, rows });
         }
 
