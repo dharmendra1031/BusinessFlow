@@ -145,7 +145,7 @@ app.Use(async (context, next) =>
         context.Response.Headers["Content-Security-Policy"] =
             "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; " +
             "form-action 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; " +
-            "connect-src 'self'; upgrade-insecure-requests";
+            "connect-src 'self'; frame-src 'self' blob:; upgrade-insecure-requests";
     await next();
 });
 
