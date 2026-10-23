@@ -36,6 +36,33 @@ public sealed class FollowUpsController(AppDbContext db, RecordAccessService rec
         return Ok(new { total, page, pageSize, items = results });
     }
 
+    /// <summary>Reminders for the signed-in employee; lead data scopes still apply.</summary>
+    [HttpGet("reminders")]
+    [RequirePermission("followups.view")]
+    public async Task<IActionResult> Reminders(int withinHours = 24, int page = 1, int pageSize = 10,
+        CancellationToken ct = default)
+    {
+        if (withinHours is < 1 or > 72 || page < 1 || pageSize is < 1 or > 50 ||
+            (long)(page - 1) * pageSize > int.MaxValue)
+            return BadRequest(new { message = "Invalid reminder window or pagination." });
+
+        var now = DateTime.UtcNow;
+        var until = now.AddHours(withinHours);
+        var employeeId = LeadAccess.UserId(User);
+        var authorizedLeadIds = (await records.LeadsAsync(User, Action, ct)).Select(lead => lead.Id);
+        var reminders = db.LeadFollowUps.AsNoTracking()
+            .Where(f => f.AssignedToId == employeeId && f.CompletedAtUtc == null &&
+                f.DueAtUtc <= until && authorizedLeadIds.Contains(f.LeadId));
+
+        var total = await reminders.CountAsync(ct);
+        var overdue = await reminders.CountAsync(f => f.DueAtUtc < now, ct);
+        var items = await reminders.OrderBy(f => f.DueAtUtc).ThenBy(f => f.Id)
+            .Skip((page - 1) * pageSize).Take(pageSize)
+            .Select(f => new { f.Id, f.LeadId, LeadName = f.Lead.Name,
+                f.Notes, f.DueAtUtc, f.AssignedToId }).ToListAsync(ct);
+        return Ok(new { total, overdue, upcoming = total - overdue, page, pageSize, items });
+    }
+
     [HttpPost("/api/leads/{leadId:long}/followups")]
     [RequirePermission("followups.manage")]
     public async Task<IActionResult> Create(long leadId, CreateFollowUpRequest request)
