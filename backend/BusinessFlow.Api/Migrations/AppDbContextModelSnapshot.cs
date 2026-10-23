@@ -372,6 +372,12 @@ namespace BusinessFlow.Api.Migrations
                         .HasMaxLength(30)
                         .HasColumnType("nvarchar(30)");
 
+                    b.Property<string>("NormalizedEmail")
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasMaxLength(256)
+                        .HasColumnType("nvarchar(256)")
+                        .HasComputedColumnSql("NULLIF(LOWER(LTRIM(RTRIM([Email]))), N'')", true);
+
                     b.Property<string>("Email")
                         .HasMaxLength(256)
                         .HasColumnType("nvarchar(256)");
@@ -393,6 +399,13 @@ namespace BusinessFlow.Api.Migrations
 
                     b.Property<DateTime?>("NextFollowUpDate")
                         .HasColumnType("datetime2");
+
+                    b.Property<string>("NormalizedPhone")
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)")
+                        .HasComputedColumnSql("REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE([Phone], N' ', N''), N'-', N''), N'+', N''), N'(', N''), N')', N''), N'.', N''), NCHAR(9), N'')", true);
 
                     b.Property<string>("Phone")
                         .IsRequired()
@@ -434,6 +447,10 @@ namespace BusinessFlow.Api.Migrations
 
                     b.HasIndex("ModifiedByUserId");
 
+                    b.HasIndex("NormalizedPhone");
+
+                    b.HasIndex("NormalizedEmail");
+
                     b.HasIndex("Phone");
 
                     b.HasIndex("SourceId");
@@ -473,6 +490,53 @@ namespace BusinessFlow.Api.Migrations
                     b.HasIndex("LeadId");
 
                     b.ToTable("LeadAssignments");
+                });
+
+            modelBuilder.Entity("BusinessFlow.Api.Models.LeadDuplicateReview", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<string>("Comment")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<string>("Decision")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<long>("LeftLeadId")
+                        .HasColumnType("bigint");
+
+                    b.Property<long>("ReviewedById")
+                        .HasColumnType("bigint");
+
+                    b.Property<DateTime>("ReviewedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<long>("RightLeadId")
+                        .HasColumnType("bigint");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("LeftLeadId", "RightLeadId")
+                        .IsUnique();
+
+                    b.HasIndex("RightLeadId");
+
+                    b.HasIndex("ReviewedById");
+
+                    b.ToTable("LeadDuplicateReviews", t =>
+                        {
+                            t.HasCheckConstraint("CK_LeadDuplicateReviews_Order", "[LeftLeadId] < [RightLeadId]");
+
+                            t.HasCheckConstraint("CK_LeadDuplicateReviews_Decision", "[Decision] IN (N'Confirmed', N'NotDuplicate')");
+                        });
                 });
 
             modelBuilder.Entity("BusinessFlow.Api.Models.LeadFollowUp", b =>
@@ -1284,6 +1348,27 @@ namespace BusinessFlow.Api.Migrations
                         .WithMany()
                         .HasForeignKey("LeadId")
                         .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("BusinessFlow.Api.Models.LeadDuplicateReview", b =>
+                {
+                    b.HasOne("BusinessFlow.Api.Models.Lead", null)
+                        .WithMany()
+                        .HasForeignKey("LeftLeadId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.HasOne("BusinessFlow.Api.Models.Lead", null)
+                        .WithMany()
+                        .HasForeignKey("RightLeadId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.HasOne("BusinessFlow.Api.Models.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("ReviewedById")
+                        .OnDelete(DeleteBehavior.NoAction)
                         .IsRequired();
                 });
 

@@ -9,6 +9,7 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
     : IdentityDbContext<ApplicationUser, IdentityRole<long>, long>(options)
 {
     public DbSet<Lead> Leads => Set<Lead>();
+    public DbSet<LeadDuplicateReview> LeadDuplicateReviews => Set<LeadDuplicateReview>();
     public DbSet<LeadStatusApproval> LeadStatusApprovals => Set<LeadStatusApproval>();
     public DbSet<Department> Departments => Set<Department>();
     public DbSet<RolePermissionGrant> RolePermissionGrants => Set<RolePermissionGrant>();
@@ -92,7 +93,11 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
         {
             entity.Property(x => x.Name).HasMaxLength(150).IsRequired();
             entity.Property(x => x.Phone).HasMaxLength(30).IsRequired();
+            entity.Property(x => x.NormalizedPhone).HasMaxLength(30)
+                .HasComputedColumnSql("REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE([Phone], N' ', N''), N'-', N''), N'+', N''), N'(', N''), N')', N''), N'.', N''), NCHAR(9), N'')", stored: true);
             entity.Property(x => x.Email).HasMaxLength(256);
+            entity.Property(x => x.NormalizedEmail).HasMaxLength(256)
+                .HasComputedColumnSql("NULLIF(LOWER(LTRIM(RTRIM([Email]))), N'')", stored: true);
             entity.Property(x => x.CompanyName).HasMaxLength(200);
             entity.Property(x => x.CustomerCode).HasMaxLength(30);
             entity.Property(x => x.Address).HasMaxLength(500);
@@ -105,6 +110,8 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
             entity.Property(x => x.Requirement).HasMaxLength(2000);
             entity.HasIndex(x => new { x.AssignedToId, x.StatusId, x.CreatedAtUtc });
             entity.HasIndex(x => x.Phone);
+            entity.HasIndex(x => x.NormalizedPhone);
+            entity.HasIndex(x => x.NormalizedEmail);
             entity.HasOne(x => x.AssignedTo).WithMany().HasForeignKey(x => x.AssignedToId)
                 .OnDelete(DeleteBehavior.NoAction);
             entity.HasOne<ApplicationUser>().WithMany().HasForeignKey(x => x.CreatedById)
@@ -115,6 +122,21 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
                 .OnDelete(DeleteBehavior.NoAction);
         });
 
+        modelBuilder.Entity<LeadDuplicateReview>(entity =>
+        {
+            entity.Property(x => x.Decision).HasMaxLength(20).IsRequired();
+            entity.Property(x => x.Comment).HasMaxLength(500).IsRequired();
+            entity.HasIndex(x => new { x.LeftLeadId, x.RightLeadId }).IsUnique();
+            entity.HasOne<Lead>().WithMany().HasForeignKey(x => x.LeftLeadId).OnDelete(DeleteBehavior.NoAction);
+            entity.HasOne<Lead>().WithMany().HasForeignKey(x => x.RightLeadId).OnDelete(DeleteBehavior.NoAction);
+            entity.HasOne<ApplicationUser>().WithMany().HasForeignKey(x => x.ReviewedById).OnDelete(DeleteBehavior.NoAction);
+            entity.ToTable(t =>
+            {
+                t.HasCheckConstraint("CK_LeadDuplicateReviews_Order", "[LeftLeadId] < [RightLeadId]");
+                t.HasCheckConstraint("CK_LeadDuplicateReviews_Decision",
+                    "[Decision] IN (N'Confirmed', N'NotDuplicate')");
+            });
+        });
         modelBuilder.Entity<LeadSource>(entity =>
         {
             entity.Property(x => x.Name).HasMaxLength(60);

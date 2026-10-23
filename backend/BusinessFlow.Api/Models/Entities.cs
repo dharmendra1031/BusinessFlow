@@ -31,7 +31,9 @@ public sealed class Lead
     public long Id { get; set; }
     public string Name { get; set; } = string.Empty;
     public string Phone { get; set; } = string.Empty;
+    public string NormalizedPhone { get; private set; } = string.Empty;
     public string? Email { get; set; }
+    public string? NormalizedEmail { get; private set; }
     public string? CompanyName { get; set; }
     public string? CustomerCode { get; set; }
     public string? Address { get; set; }
@@ -94,4 +96,15 @@ public sealed class AuditLog
     public long RecordId { get; set; }
     public string? ChangedFields { get; set; }
     public DateTime CreatedAtUtc { get; set; } = DateTime.UtcNow;
+}
+
+public sealed class LeadDuplicateReview
+{
+    public long Id { get; set; }
+    public long LeftLeadId { get; set; }
+    public long RightLeadId { get; set; }
+    public string Decision { get; set; } = string.Empty;
+    public string Comment { get; set; } = string.Empty;
+    public long ReviewedById { get; set; }
+    public DateTime ReviewedAtUtc { get; set; } = DateTime.UtcNow;
 }
