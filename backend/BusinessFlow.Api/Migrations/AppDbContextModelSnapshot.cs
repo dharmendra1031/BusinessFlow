@@ -539,6 +539,36 @@ namespace BusinessFlow.Api.Migrations
                         });
                 });
 
+            modelBuilder.Entity("BusinessFlow.Api.Models.FollowUpReminderState", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<DateTime?>("AcknowledgedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<long>("FollowUpId")
+                        .HasColumnType("bigint");
+
+                    b.Property<DateTime?>("SnoozedUntilUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<long>("UserId")
+                        .HasColumnType("bigint");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("FollowUpId", "UserId")
+                        .IsUnique();
+
+                    b.HasIndex("UserId");
+
+                    b.ToTable("FollowUpReminderStates");
+                });
+
             modelBuilder.Entity("BusinessFlow.Api.Models.LeadFollowUp", b =>
                 {
                     b.Property<long>("Id")
@@ -1399,6 +1429,21 @@ namespace BusinessFlow.Api.Migrations
                     b.HasOne("BusinessFlow.Api.Models.ApplicationUser", null)
                         .WithMany()
                         .HasForeignKey("ReviewedById")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("BusinessFlow.Api.Models.FollowUpReminderState", b =>
+                {
+                    b.HasOne("BusinessFlow.Api.Models.LeadFollowUp", null)
+                        .WithMany()
+                        .HasForeignKey("FollowUpId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("BusinessFlow.Api.Models.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.NoAction)
                         .IsRequired();
                 });

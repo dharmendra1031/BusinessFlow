@@ -23,6 +23,7 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
     public DbSet<LeadAssignment> LeadAssignments => Set<LeadAssignment>();
     public DbSet<LeadStatusChange> LeadStatusChanges => Set<LeadStatusChange>();
     public DbSet<LeadFollowUp> LeadFollowUps => Set<LeadFollowUp>();
+    public DbSet<FollowUpReminderState> FollowUpReminderStates => Set<FollowUpReminderState>();
     public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
     public DbSet<DevelopmentProject> DevelopmentProjects => Set<DevelopmentProject>();
     public DbSet<DevelopmentTask> DevelopmentTasks => Set<DevelopmentTask>();
@@ -273,6 +274,14 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
             entity.Property(x => x.RoleName).HasMaxLength(20).IsRequired();
             entity.Property(x => x.Permission).HasMaxLength(60).IsRequired();
             entity.HasIndex(x => new { x.RoleName, x.Permission }).IsUnique();
+        });
+        modelBuilder.Entity<FollowUpReminderState>(entity =>
+        {
+            entity.HasIndex(x => new { x.FollowUpId, x.UserId }).IsUnique();
+            entity.HasOne<LeadFollowUp>().WithMany().HasForeignKey(x => x.FollowUpId)
+                .OnDelete(DeleteBehavior.Cascade);
+            entity.HasOne<ApplicationUser>().WithMany().HasForeignKey(x => x.UserId)
+                .OnDelete(DeleteBehavior.NoAction);
         });
         modelBuilder.Entity<LeadFollowUp>(entity =>
         {
