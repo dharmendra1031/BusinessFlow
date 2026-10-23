@@ -100,6 +100,44 @@ public sealed class Phase2SourceReportTests
             (await session.GetAsync("/api/reports/pdf?type=source-wise")).StatusCode);
     }
 
+
+    [Fact]
+    public async Task Source_details_list_only_authorized_leads_with_source_and_assignee_names()
+    {
+        await using var database = await Phase1TestDatabase.CreateAsync();
+        await using var host = new Phase1ApiHost(database);
+        using var employee = await host.ClientAsync("Employee");
+        using var outsider = await host.ClientAsync("Employee");
+        var mine = (await employee.GetFromJsonAsync<JsonElement>("/api/auth/me")).GetProperty("id").GetInt64();
+        var other = (await outsider.GetFromJsonAsync<JsonElement>("/api/auth/me")).GetProperty("id").GetInt64();
+        await using (var db = database.CreateContext())
+        {
+            db.Leads.AddRange(
+                Lead("My website visitor", 2, 3, mine, 175.25m, 16),
+                Lead("My manual visitor", 1, 1, mine, 75m, 16),
+                Lead("Private website visitor", 2, 5, other, 900m, 16));
+            await db.SaveChangesAsync();
+        }
+
+        var result = await employee.GetFromJsonAsync<JsonElement>(
+            "/api/reports?type=source-details&sourceId=2&from=2026-01-16&to=2026-01-16");
+        Assert.Equal(1, result.GetProperty("total").GetInt32());
+        var row = result.GetProperty("rows")[0];
+        Assert.Equal("Website", row.GetProperty("sourceName").GetString());
+        Assert.Equal("My website visitor", row.GetProperty("customerName").GetString());
+        Assert.False(string.IsNullOrWhiteSpace(row.GetProperty("assignedUser").GetString()));
+        Assert.Equal("Qualified", row.GetProperty("leadStatus").GetString());
+        Assert.Equal(175.25m, row.GetProperty("projectAmount").GetDecimal());
+        Assert.True(row.TryGetProperty("createdAtUtc", out _));
+
+        var csv = await employee.GetStringAsync("/api/reports/export?type=source-details&sourceId=2");
+        Assert.Contains("My website visitor", csv);
+        Assert.DoesNotContain("Private website visitor", csv);
+        Assert.DoesNotContain("900", csv);
+        Assert.Equal(HttpStatusCode.BadRequest,
+            (await employee.GetAsync("/api/reports?type=not-a-source-report")).StatusCode);
+    }
+
     private static Lead Lead(string name, long sourceId, long statusId, long userId, decimal amount, int day) =>
         new()
         {
