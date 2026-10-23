@@ -9,6 +9,7 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
     : IdentityDbContext<ApplicationUser, IdentityRole<long>, long>(options)
 {
     public DbSet<Lead> Leads => Set<Lead>();
+    public DbSet<WebsiteLeadSubmission> WebsiteLeadSubmissions => Set<WebsiteLeadSubmission>();
     public DbSet<LeadDuplicateReview> LeadDuplicateReviews => Set<LeadDuplicateReview>();
     public DbSet<LeadStatusApproval> LeadStatusApprovals => Set<LeadStatusApproval>();
     public DbSet<Department> Departments => Set<Department>();
@@ -34,6 +35,13 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
     {
         base.OnModelCreating(modelBuilder);
 
+        modelBuilder.Entity<WebsiteLeadSubmission>(entity =>
+        {
+            entity.Property(x => x.SubmissionHash).HasMaxLength(64).IsRequired();
+            entity.Property(x => x.PayloadHash).HasMaxLength(64).IsRequired();
+            entity.HasIndex(x => x.SubmissionHash).IsUnique();
+            entity.HasOne<Lead>().WithMany().HasForeignKey(x => x.LeadId).OnDelete(DeleteBehavior.NoAction);
+        });
         modelBuilder.Entity<LeadStatusApproval>(entity =>
         {
             entity.Property(x => x.State).HasMaxLength(20).IsRequired();

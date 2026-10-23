@@ -708,6 +708,20 @@ namespace BusinessFlow.Api.Migrations
                         });
                 });
 
+            modelBuilder.Entity("BusinessFlow.Api.Models.WebsiteLeadSubmission", b =>
+                {
+                    b.Property<long>("Id").ValueGeneratedOnAdd().HasColumnType("bigint");
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
+                    b.Property<DateTime>("CreatedAtUtc").HasColumnType("datetime2");
+                    b.Property<long>("LeadId").HasColumnType("bigint");
+                    b.Property<string>("PayloadHash").IsRequired().HasMaxLength(64).HasColumnType("nvarchar(64)");
+                    b.Property<string>("SubmissionHash").IsRequired().HasMaxLength(64).HasColumnType("nvarchar(64)");
+                    b.HasKey("Id");
+                    b.HasIndex("LeadId");
+                    b.HasIndex("SubmissionHash").IsUnique();
+                    b.ToTable("WebsiteLeadSubmissions");
+                });
+
             modelBuilder.Entity("BusinessFlow.Api.Models.LeadStatusApproval", b =>
                 {
                     b.Property<long>("Id")
@@ -1393,6 +1407,15 @@ namespace BusinessFlow.Api.Migrations
                         .IsRequired();
 
                     b.Navigation("Lead");
+                });
+
+            modelBuilder.Entity("BusinessFlow.Api.Models.WebsiteLeadSubmission", b =>
+                {
+                    b.HasOne("BusinessFlow.Api.Models.Lead", null)
+                        .WithMany()
+                        .HasForeignKey("LeadId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("BusinessFlow.Api.Models.LeadStatusApproval", b =>
