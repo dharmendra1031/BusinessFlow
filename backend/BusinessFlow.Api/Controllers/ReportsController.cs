@@ -18,15 +18,15 @@ public sealed class ReportsController(AppDbContext db, IConfiguration configurat
     private static readonly string[] ReportTypes =
     [
         "customers", "user-customers", "active", "closed", "not-interested",
-        "followups", "overdue", "project", "user-project", "created"
+        "followups", "overdue", "project", "user-project", "created", "source-wise"
     ];
 
     [HttpGet("pdf")]
     [RequirePermission("reports.pdf")]
     public async Task<IActionResult> Pdf(string type = "customers", DateTime? from = null,
-        DateTime? to = null, long? userId = null, long? statusId = null, string? leadGivenBy = null)
+        DateTime? to = null, long? userId = null, long? statusId = null, string? leadGivenBy = null, long? sourceId = null)
     {
-        var first = await Get(type, from, to, userId, statusId, leadGivenBy, 1, 200);
+        var first = await Get(type, from, to, userId, statusId, leadGivenBy, 1, 200, sourceId);
         if (first is not OkObjectResult ok) return first;
         var data = JsonSerializer.SerializeToElement(ok.Value, new JsonSerializerOptions(JsonSerializerDefaults.Web));
         var total = data.GetProperty("total").GetInt32();
@@ -40,7 +40,7 @@ public sealed class ReportsController(AppDbContext db, IConfiguration configurat
         {
             if (page > 1)
             {
-                var next = await Get(type, from, to, userId, statusId, leadGivenBy, page, 200);
+                var next = await Get(type, from, to, userId, statusId, leadGivenBy, page, 200, sourceId);
                 data = JsonSerializer.SerializeToElement(((OkObjectResult)next).Value,
                     new JsonSerializerOptions(JsonSerializerDefaults.Web));
             }
@@ -88,9 +88,9 @@ public sealed class ReportsController(AppDbContext db, IConfiguration configurat
     [HttpGet("export")]
     [RequirePermission("reports.export")]
     public async Task<IActionResult> Export(string type = "customers", DateTime? from = null,
-        DateTime? to = null, long? userId = null, long? statusId = null, string? leadGivenBy = null)
+        DateTime? to = null, long? userId = null, long? statusId = null, string? leadGivenBy = null, long? sourceId = null)
     {
-        var first = await Get(type, from, to, userId, statusId, leadGivenBy, 1, 200);
+        var first = await Get(type, from, to, userId, statusId, leadGivenBy, 1, 200, sourceId);
         if (first is not OkObjectResult ok) return first;
         var data = JsonSerializer.SerializeToElement(ok.Value, new JsonSerializerOptions(JsonSerializerDefaults.Web));
         var total = data.GetProperty("total").GetInt32();
@@ -111,7 +111,7 @@ public sealed class ReportsController(AppDbContext db, IConfiguration configurat
                 throw new TimeoutException("Report export exceeded 60 seconds.");
             if (page > 1)
             {
-                var next = await Get(type, from, to, userId, statusId, leadGivenBy, page, 200);
+                var next = await Get(type, from, to, userId, statusId, leadGivenBy, page, 200, sourceId);
                 data = JsonSerializer.SerializeToElement(((OkObjectResult)next).Value,
                     new JsonSerializerOptions(JsonSerializerDefaults.Web));
             }
@@ -142,7 +142,7 @@ public sealed class ReportsController(AppDbContext db, IConfiguration configurat
     [RequirePermission("reports.view")]
     public async Task<IActionResult> Get(string type = "customers", DateTime? from = null,
         DateTime? to = null, long? userId = null, long? statusId = null, string? leadGivenBy = null,
-        int page = 1, int pageSize = 50)
+        int page = 1, int pageSize = 50, long? sourceId = null)
     {
         if (page < 1 || pageSize is < 1 or > 200 || (long)(page - 1) * pageSize > int.MaxValue)
             return BadRequest(new { message = "Invalid pagination." });
@@ -154,6 +154,7 @@ public sealed class ReportsController(AppDbContext db, IConfiguration configurat
 
         var leads = (await records.LeadsAsync(User, Action)).AsNoTracking();
         if (userId.HasValue) leads = leads.Where(l => l.AssignedToId == userId);
+        if (sourceId.HasValue) leads = leads.Where(l => l.SourceId == sourceId.Value);
         if (statusId.HasValue) leads = leads.Where(l => l.StatusId == statusId);
         if (!string.IsNullOrWhiteSpace(leadGivenBy))
             leads = leads.Where(l => l.LeadGivenBy != null && l.LeadGivenBy.Contains(leadGivenBy));
@@ -189,6 +190,29 @@ public sealed class ReportsController(AppDbContext db, IConfiguration configurat
             "not-interested" => leads.Where(l => l.StatusId == 6 || l.StatusId == 9),
             _ => leads
         };
+
+        if (type == "source-wise")
+        {
+            // Group only records authorized for the reports.view scope.
+            // Lead ProjectAmount is pipeline value, never recognized revenue.
+            var summary = leads.GroupBy(l => new { l.SourceId, SourceName = l.Source.Name })
+                .Select(group => new
+                {
+                    sourceId = group.Key.SourceId,
+                    sourceName = group.Key.SourceName,
+                    leadCount = group.LongCount(),
+                    qualifiedCount = group.LongCount(l =>
+                        l.StatusId == 3 || l.StatusId == 4 || l.StatusId == 5),
+                    wonCount = group.LongCount(l => l.StatusId == 5),
+                    conversionRate = group.LongCount(l => l.StatusId == 5) * 100m / group.LongCount(),
+                    pipelineAmount = group.Sum(l => l.ProjectAmount ?? 0m),
+                    wonAmount = group.Sum(l => l.StatusId == 5 ? l.ProjectAmount ?? 0m : 0m)
+                });
+            var total = await summary.CountAsync();
+            var rows = await summary.OrderBy(x => x.sourceName).ThenBy(x => x.sourceId)
+                .Skip((page - 1) * pageSize).Take(pageSize).ToListAsync();
+            return Ok(new { type, total, page, pageSize, rows });
+        }
 
         if (type is "user-customers" or "user-project")
         {
