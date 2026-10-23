@@ -19,12 +19,19 @@ public sealed class FollowUpsController(AppDbContext db, RecordAccessService rec
     public async Task<IActionResult> List(bool overdueOnly = false, string view = "pending", int page = 1, int pageSize = 50)
     {
         if (page < 1 || pageSize is < 1 or > 200 || (long)(page - 1) * pageSize > int.MaxValue ||
-            view is not ("pending" or "overdue" or "completed" or "all"))
+            view is not ("pending" or "dueSoon" or "overdue" or "completed" or "all"))
             return BadRequest(new { message = "Invalid follow-up filters or pagination." });
         var leadIds = (await records.LeadsAsync(User, Action)).Select(l => l.Id);
         var query = db.LeadFollowUps.AsNoTracking().Where(f => leadIds.Contains(f.LeadId));
         if (overdueOnly || view == "overdue")
             query = query.Where(f => f.CompletedAtUtc == null && f.DueAtUtc < DateTime.UtcNow);
+        else if (view == "dueSoon")
+        {
+            var now = DateTime.UtcNow;
+            var until = now.AddHours(24);
+            query = query.Where(f => f.CompletedAtUtc == null &&
+                f.DueAtUtc >= now && f.DueAtUtc < until);
+        }
         else if (view == "pending") query = query.Where(f => f.CompletedAtUtc == null);
         else if (view == "completed") query = query.Where(f => f.CompletedAtUtc != null);
         var total = await query.CountAsync();
