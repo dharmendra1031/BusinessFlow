@@ -22,25 +22,17 @@ internal static class Program
                 File.ReadAllText(Path.Combine(directory, "definitions.json")));
             if (!definitions.TryGetValue(args[0], out var definition)) return 2;
             var rows = serializer.Deserialize<List<Dictionary<string, object>>>(Console.In.ReadToEnd());
-            DataTable table;
-            if (args[0] == "source-wise")
-            {
-                // The dataset schema is versioned with the RDLC and checked at runtime.
-                var dataSet = new DataSet();
-                dataSet.ReadXmlSchema(Path.Combine(directory, "source-wise.xsd"));
-                table = dataSet.Tables["Items"] ??
-                    throw new InvalidDataException("Typed dataset Items table not found.");
-                foreach (var column in definition.Columns)
-                    if (table.Columns[column.Key] == null ||
-                        table.Columns[column.Key].DataType != ColumnType(column.Value))
-                        throw new InvalidDataException("Dataset column mismatch: " + column.Key);
-            }
-            else
-            {
-                table = new DataTable("Items");
-                foreach (var column in definition.Columns)
-                    table.Columns.Add(column.Key, ColumnType(column.Value));
-            }
+            // Every RDLC binds to the versioned ADO.NET DataSet/XSD contract.
+            var dataSet = new DataSet();
+            dataSet.ReadXmlSchema(Path.Combine(directory, args[0] + ".xsd"));
+            var table = dataSet.Tables["Items"] ??
+                throw new InvalidDataException("Typed dataset Items table not found.");
+            if (table.Columns.Count != definition.Columns.Count)
+                throw new InvalidDataException("Dataset column count mismatch.");
+            foreach (var column in definition.Columns)
+                if (table.Columns[column.Key] == null ||
+                    table.Columns[column.Key].DataType != ColumnType(column.Value))
+                    throw new InvalidDataException("Dataset column mismatch: " + column.Key);
             foreach (var row in rows)
             {
                 var values = definition.Columns.Select(column =>

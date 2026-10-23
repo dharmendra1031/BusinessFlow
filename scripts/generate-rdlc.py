@@ -101,62 +101,30 @@ def make_report(report_type, definition):
     hierarchy = child(child(table, "TablixRowHierarchy"), "TablixMembers")
     header_member = child(hierarchy, "TablixMember")
     child(header_member, "KeepWithGroup", "After")
-    if report_type == "source-wise":
-        child(header_member, "RepeatOnNewPage", "true")
-    child(child(hierarchy, "TablixMember"), "Group", Name="Details")
-    child(table, "DataSetName", "Items")
-    child(table, "Top", "1.2cm")
-    child(table, "Left", "0cm")
-    child(table, "Height", "1.3cm")
-    child(table, "Width", "25cm")
-    child(body, "Height", "3cm")
-    child(section, "Width", "25cm")
-    page = child(section, "Page")
-    for name, value in {"PageHeight": "21cm", "PageWidth": "29.7cm", "LeftMargin": "2cm",
-                        "RightMargin": "2cm", "TopMargin": "2cm", "BottomMargin": "2cm"}.items():
-        child(page, name, value)
-    parameter = child(child(root, "ReportParameters"), "ReportParameter", Name="Title")
-    child(parameter, "DataType", "String")
-    child(parameter, "Prompt", "Title")
-    ET.indent(root)
-    ET.ElementTree(root).write(ROOT / f"{report_type}.rdlc", encoding="utf-8", xml_declaration=True)
-
-    if report_type == "source-wise":
-        # Versioned, strongly typed ADO.NET DataSet for the Source Summary.
-        msdata = "urn:schemas-microsoft-com:xml-msdata"
-        ET.register_namespace("msdata", msdata)
-        schema = ET.Element(f"{{{XS}}}schema", {"id": "SourceReportDataSet"})
-        root_element = ET.SubElement(schema, f"{{{XS}}}element",
-                                     {"name": "SourceReportDataSet",
-                                      f"{{{msdata}}}IsDataSet": "true",
-                                      f"{{{msdata}}}UseCurrentLocale": "true"})
-        choice = ET.SubElement(ET.SubElement(root_element, f"{{{XS}}}complexType"),
-                               f"{{{XS}}}choice", {"minOccurs": "0", "maxOccurs": "unbounded"})
-        items = ET.SubElement(choice, f"{{{XS}}}element", {"name": "Items"})
-        sequence = ET.SubElement(ET.SubElement(items, f"{{{XS}}}complexType"),
-                                 f"{{{XS}}}sequence")
-        xsd_types = {"string": "string", "long": "long",
-                     "decimal": "decimal", "date": "dateTime"}
-        for name, kind in columns.items():
-            ET.SubElement(sequence, f"{{{XS}}}element",
-                          {"name": name, "type": f"xs:{xsd_types[kind]}",
-                           "minOccurs": "0"})
-        ET.indent(schema)
-        ET.ElementTree(schema).write(ROOT / f"{report_type}.xsd",
-                                    encoding="utf-8", xml_declaration=True)
-        return
-
-    schema = ET.Element(f"{{{XS}}}schema", {"id": "Items"})
-    element = ET.SubElement(schema, f"{{{XS}}}element", {"name": "Items"})
-    complex_type = ET.SubElement(element, f"{{{XS}}}complexType")
-    sequence = ET.SubElement(complex_type, f"{{{XS}}}sequence")
-    xsd_types = {"string": "string", "long": "long", "decimal": "decimal", "date": "dateTime"}
+    # Every report has a proper ADO.NET DataSet with a strongly typed Items table.
+    msdata = "urn:schemas-microsoft-com:xml-msdata"
+    ET.register_namespace("msdata", msdata)
+    schema_name = ("SourceReportDataSet" if report_type == "source-wise"
+                   else report_type.replace("-", "_") + "ReportDataSet")
+    schema = ET.Element(f"{{{XS}}}schema", {"id": schema_name})
+    root_element = ET.SubElement(schema, f"{{{XS}}}element",
+                                 {"name": schema_name,
+                                  f"{{{msdata}}}IsDataSet": "true",
+                                  f"{{{msdata}}}UseCurrentLocale": "true"})
+    choice = ET.SubElement(ET.SubElement(root_element, f"{{{XS}}}complexType"),
+                           f"{{{XS}}}choice", {"minOccurs": "0", "maxOccurs": "unbounded"})
+    items = ET.SubElement(choice, f"{{{XS}}}element", {"name": "Items"})
+    sequence = ET.SubElement(ET.SubElement(items, f"{{{XS}}}complexType"),
+                             f"{{{XS}}}sequence")
+    xsd_types = {"string": "string", "long": "long",
+                 "decimal": "decimal", "date": "dateTime"}
     for name, kind in columns.items():
-        ET.SubElement(sequence, f"{{{XS}}}element", {"name": name, "type": f"xs:{xsd_types[kind]}",
-                                                     "minOccurs": "0"})
+        ET.SubElement(sequence, f"{{{XS}}}element",
+                      {"name": name, "type": f"xs:{xsd_types[kind]}",
+                       "minOccurs": "0"})
     ET.indent(schema)
-    ET.ElementTree(schema).write(ROOT / f"{report_type}.xsd", encoding="utf-8", xml_declaration=True)
-
+    ET.ElementTree(schema).write(ROOT / f"{report_type}.xsd",
+                                 encoding="utf-8", xml_declaration=True)
 
 if __name__ == "__main__":
     for report_type, definition in json.loads((ROOT / "definitions.json").read_text()).items():
