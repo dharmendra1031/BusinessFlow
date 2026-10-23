@@ -110,12 +110,20 @@ public sealed class Phase2LeadRoutingTests
             Assert.True(await db.AuditLogs.CountAsync(x => x.Action == "Assign" &&
                 x.ChangedFields!.StartsWith("Automatic source routing")) == 2);
         }
-        Assert.Equal(HttpStatusCode.ServiceUnavailable,
+        // First member is at 2/2, second is at 1/2, so one slot remains.
+        Assert.Equal(HttpStatusCode.Accepted,
             (await web.SendAsync(WebsiteRequest("lead-route-event-1003"))).StatusCode);
         await using (var db = database.CreateContext())
         {
-            Assert.Equal(3, await db.Leads.CountAsync()); // Existing + two routed.
-            Assert.Equal(2, await db.WebsiteLeadSubmissions.CountAsync());
+            Assert.Equal(secondId, await db.Leads.Where(x => x.SourceId == 2)
+                .OrderByDescending(x => x.Id).Select(x => x.AssignedToId).FirstAsync());
+        }
+        Assert.Equal(HttpStatusCode.ServiceUnavailable,
+            (await web.SendAsync(WebsiteRequest("lead-route-event-1004"))).StatusCode);
+        await using (var db = database.CreateContext())
+        {
+            Assert.Equal(4, await db.Leads.CountAsync()); // Existing + three routed.
+            Assert.Equal(3, await db.WebsiteLeadSubmissions.CountAsync());
         }
 
         long ruleId;
@@ -130,7 +138,7 @@ public sealed class Phase2LeadRoutingTests
         {
             Assert.Equal(ownerId, await db.Leads.Where(x => x.SourceId == 2)
                 .OrderByDescending(x => x.Id).Select(x => x.AssignedToId).FirstAsync());
-            Assert.Equal(2, await db.LeadAssignments.CountAsync());
+            Assert.Equal(3, await db.LeadAssignments.CountAsync());
         }
     }
 
