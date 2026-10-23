@@ -73,9 +73,12 @@ public sealed class DevelopmentActivityController(AppDbContext db, RecordAccessS
     [RequirePermission("bugs.create")]
     public async Task<IActionResult> AddBug(long projectId, CreateProjectBugRequest request)
     {
+        await using var transaction = await db.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable);
         var project = await (await VisibleProjects()).Include(p => p.Owner)
             .FirstOrDefaultAsync(p => p.Id == projectId);
         if (project is null) return NotFound();
+        if (project.Status == "Completed")
+            return BadRequest(new { message = "Reopen the project before reporting bugs." });
         if (string.IsNullOrWhiteSpace(request.Title) || request.Title.Trim().Length < 2 ||
             !Severities.Contains(request.Severity))
             return BadRequest(new { message = "Enter a valid bug title and severity." });
@@ -98,6 +101,7 @@ public sealed class DevelopmentActivityController(AppDbContext db, RecordAccessS
         await db.SaveChangesAsync();
         Audit("Create", "ProjectBugs", bug.Id);
         await db.SaveChangesAsync();
+        await transaction.CommitAsync();
         return Created("/api/projects/" + projectId + "/bugs", new { bug.Id });
     }
 
@@ -105,10 +109,13 @@ public sealed class DevelopmentActivityController(AppDbContext db, RecordAccessS
     [RequirePermission("bugs.edit")]
     public async Task<IActionResult> UpdateBug(long projectId, long bugId, UpdateProjectBugRequest request)
     {
+        await using var transaction = await db.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable);
         var project = await (await VisibleProjects()).Include(p => p.Owner)
             .FirstOrDefaultAsync(p => p.Id == projectId);
         if (project is null) return NotFound();
         if (!await CanManage(project)) return Forbid();
+        if (project.Status == "Completed")
+            return BadRequest(new { message = "Reopen the project before editing bugs." });
         if (string.IsNullOrWhiteSpace(request.Title) || request.Title.Trim().Length < 2 ||
             !Severities.Contains(request.Severity) || !BugStatuses.Contains(request.Status))
             return BadRequest(new { message = "Enter a valid bug title, severity and status." });
@@ -131,6 +138,7 @@ public sealed class DevelopmentActivityController(AppDbContext db, RecordAccessS
         project.UpdatedAtUtc = bug.UpdatedAtUtc;
         Audit("Update", "ProjectBugs", bug.Id);
         await db.SaveChangesAsync();
+        await transaction.CommitAsync();
         return NoContent();
     }
 
@@ -140,9 +148,12 @@ public sealed class DevelopmentActivityController(AppDbContext db, RecordAccessS
     {
         if (!BugStatuses.Contains(request.Status))
             return BadRequest(new { message = "Invalid bug status." });
+        await using var transaction = await db.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable);
         var project = await (await VisibleProjects()).Include(p => p.Owner)
             .FirstOrDefaultAsync(p => p.Id == projectId);
         if (project is null) return NotFound();
+        if (project.Status == "Completed")
+            return BadRequest(new { message = "Reopen the project before changing bug status." });
         var bug = await db.ProjectBugs.FirstOrDefaultAsync(b => b.Id == bugId && b.ProjectId == projectId);
         if (bug is null) return NotFound();
         if (await StatusAccess(projectId, request.Status) is { } denied) return denied;
@@ -159,6 +170,7 @@ public sealed class DevelopmentActivityController(AppDbContext db, RecordAccessS
         project.UpdatedAtUtc = bug.UpdatedAtUtc;
         Audit("Status", "ProjectBugs", bug.Id);
         await db.SaveChangesAsync();
+        await transaction.CommitAsync();
         return NoContent();
     }
 
