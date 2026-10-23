@@ -16,15 +16,25 @@ public sealed class FollowUpsController(AppDbContext db, RecordAccessService rec
     private string Action => RolePermissionService.ForRequest(Request) ?? "followups.view";
     [HttpGet]
     [RequirePermission("followups.view")]
-    public async Task<IActionResult> List(bool overdueOnly = false, string view = "pending", int page = 1, int pageSize = 50)
+    public async Task<IActionResult> List(bool overdueOnly = false, string view = "pending",
+        bool mineOnly = false, int page = 1, int pageSize = 50)
     {
         if (page < 1 || pageSize is < 1 or > 200 || (long)(page - 1) * pageSize > int.MaxValue ||
-            view is not ("pending" or "overdue" or "completed" or "all"))
+            view is not ("pending" or "overdue" or "dueSoon" or "completed" or "all"))
             return BadRequest(new { message = "Invalid follow-up filters or pagination." });
         var leadIds = (await records.LeadsAsync(User, Action)).Select(l => l.Id);
+        var now = DateTime.UtcNow;
+        var next24Hours = now.AddHours(24);
         var query = db.LeadFollowUps.AsNoTracking().Where(f => leadIds.Contains(f.LeadId));
+        if (mineOnly)
+        {
+            var currentUserId = LeadAccess.UserId(User);
+            query = query.Where(f => f.AssignedToId == currentUserId);
+        }
         if (overdueOnly || view == "overdue")
-            query = query.Where(f => f.CompletedAtUtc == null && f.DueAtUtc < DateTime.UtcNow);
+            query = query.Where(f => f.CompletedAtUtc == null && f.DueAtUtc < now);
+        else if (view == "dueSoon")
+            query = query.Where(f => f.CompletedAtUtc == null && f.DueAtUtc >= now && f.DueAtUtc < next24Hours);
         else if (view == "pending") query = query.Where(f => f.CompletedAtUtc == null);
         else if (view == "completed") query = query.Where(f => f.CompletedAtUtc != null);
         var total = await query.CountAsync();
@@ -32,8 +42,30 @@ public sealed class FollowUpsController(AppDbContext db, RecordAccessService rec
             .ThenBy(f => f.DueAtUtc).ThenBy(f => f.Id)
             .Skip((page - 1) * pageSize).Take(pageSize)
             .Select(f => new { f.Id, f.LeadId, LeadName = f.Lead.Name, f.Notes,
-                f.DueAtUtc, f.CompletedAtUtc }).ToListAsync();
+                f.DueAtUtc, f.CompletedAtUtc, f.AssignedToId }).ToListAsync();
         return Ok(new { total, page, pageSize, items = results });
+    }
+
+    // Counts use the exact same server-side lead scope as the list, including custom roles.
+    [HttpGet("reminder-summary")]
+    [RequirePermission("followups.view")]
+    public async Task<IActionResult> ReminderSummary(bool mineOnly = true, CancellationToken ct = default)
+    {
+        var leadIds = (await records.LeadsAsync(User, Action, ct)).Select(x => x.Id);
+        var pending = db.LeadFollowUps.AsNoTracking()
+            .Where(f => leadIds.Contains(f.LeadId) && f.CompletedAtUtc == null);
+        if (mineOnly)
+        {
+            var userId = LeadAccess.UserId(User);
+            pending = pending.Where(f => f.AssignedToId == userId);
+        }
+
+        var now = DateTime.UtcNow;
+        var next24Hours = now.AddHours(24);
+        var overdue = await pending.CountAsync(f => f.DueAtUtc < now, ct);
+        var dueSoon = await pending.CountAsync(f => f.DueAtUtc >= now && f.DueAtUtc < next24Hours, ct);
+        var later = await pending.CountAsync(f => f.DueAtUtc >= next24Hours, ct);
+        return Ok(new { overdue, dueSoon, later, pendingTotal = overdue + dueSoon + later });
     }
 
     [HttpPost("/api/leads/{leadId:long}/followups")]
