@@ -254,6 +254,10 @@ export function LeadsPage({ token, user, permissions, newLeadRequest, onNewLeadO
     '/api/leads?' + params, token);
   const { data: statuses } = useResource<Lookup[]>('/api/masters/lead-statuses', token);
   const { data: sources } = useResource<Lookup[]>('/api/masters/lead-sources', token);
+  useEffect(() => {
+    if (sources && !sources.some(source => source.id === sourceId))
+      setSourceId(sources[0]?.id ?? 0);
+  }, [sources, sourceId]);
   const canCreate = permissions['leads.create'] === true;
   const canEdit = permissions['leads.edit'] === true;
   const canAssign = permissions['leads.assign'] === true;
@@ -453,7 +457,7 @@ export function LeadsPage({ token, user, permissions, newLeadRequest, onNewLeadO
             value={requirement} onChange={event => setRequirement(event.target.value)} /></label>
           <div className="drawer-actions"><button type="button" disabled={working}
             onClick={() => setShowNew(false)}>Cancel</button>
-            <button className="primary" disabled={working}>{working ? 'Saving…' : 'Create lead'}</button></div>
+            <button className="primary" disabled={working || !sources?.length}>{working ? 'Saving…' : 'Create lead'}</button></div>
         </form>
       </aside>
     </div>}

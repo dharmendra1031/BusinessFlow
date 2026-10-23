@@ -137,6 +137,8 @@ export default function LeadDetails({ lead, sources, canEdit, canManageFollowUps
         <label>Company name<input readOnly={!canEdit} maxLength={200} value={companyName}
           onChange={event => setCompanyName(event.target.value)} /></label>
         <label>Lead source<select disabled={!canEdit} value={sourceId} onChange={event => setSourceId(Number(event.target.value))}>
+          {!sources.some(source => source.id === sourceId) &&
+            <option value={sourceId}>{lead.source} (Inactive)</option>}
           {sources.map(source => <option key={source.id} value={source.id}>{source.name}</option>)}
         </select></label>
         <label>Address<input readOnly={!canEdit} maxLength={500} value={address}
