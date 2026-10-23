@@ -41,3 +41,37 @@ test('Source Summary uses the selected SQL report filters and renders typed metr
   expect(calls[0].searchParams.get('from')).toBe('2026-01-01');
   expect(calls[0].searchParams.get('to')).toBe('2026-01-31');
 });
+
+
+test('Source details report filters by lead source and shows assigned employee', async ({ page }) => {
+  await page.route('**/api/reports?**', async route => {
+    const url = new URL(route.request().url());
+    if (url.searchParams.get('type') !== 'source-details') {
+      await route.continue();
+      return;
+    }
+    expect(url.searchParams.get('sourceId')).toBe('2');
+    await route.fulfill({
+      status: 200, contentType: 'application/json',
+      body: JSON.stringify({
+        type: 'source-details', total: 1, page: 1, pageSize: 50,
+        rows: [{ sourceName: 'Website', customerCode: 'CUS-2026-003001',
+          customerName: 'Website test lead', assignedUser: 'Sales colleague',
+          leadStatus: 'Qualified', projectAmount: 250,
+          createdAtUtc: '2026-10-23T12:00:00Z' }],
+      }),
+    });
+  });
+  await page.addInitScript(session =>
+    sessionStorage.setItem('crmSession', JSON.stringify(session)), {
+    token: process.env.E2E_ADMIN_TOKEN!,
+    user: JSON.parse(process.env.E2E_ADMIN_USER!),
+  });
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Reports', exact: true }).click();
+  await page.getByLabel('Report').selectOption('source-details');
+  await page.getByLabel('Source', { exact: true }).selectOption('2');
+  await page.getByRole('button', { name: 'Run report' }).click();
+  await expect(page.getByRole('cell', { name: 'Website test lead' })).toBeVisible();
+  await expect(page.getByRole('cell', { name: 'Sales colleague' })).toBeVisible();
+});
