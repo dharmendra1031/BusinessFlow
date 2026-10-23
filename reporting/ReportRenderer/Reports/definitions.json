@@ -1,12 +1,134 @@
 {
-  "customers": { "Title": "Customer List", "Columns": { "customerCode": "string", "customerName": "string", "mobileNumber": "string", "companyName": "string", "leadStatus": "string", "projectAmount": "decimal", "createdAtUtc": "date" } },
-  "active": { "Title": "Active Leads", "Columns": { "customerCode": "string", "customerName": "string", "mobileNumber": "string", "companyName": "string", "leadStatus": "string", "projectAmount": "decimal", "createdAtUtc": "date" } },
-  "closed": { "Title": "Closed Leads", "Columns": { "customerCode": "string", "customerName": "string", "mobileNumber": "string", "companyName": "string", "leadStatus": "string", "projectAmount": "decimal", "createdAtUtc": "date" } },
-  "not-interested": { "Title": "Not Interested", "Columns": { "customerCode": "string", "customerName": "string", "mobileNumber": "string", "companyName": "string", "leadStatus": "string", "projectAmount": "decimal", "createdAtUtc": "date" } },
-  "project": { "Title": "Project Amount", "Columns": { "customerCode": "string", "customerName": "string", "mobileNumber": "string", "companyName": "string", "leadStatus": "string", "projectAmount": "decimal", "createdAtUtc": "date" } },
-  "created": { "Title": "Customer Creation", "Columns": { "customerCode": "string", "customerName": "string", "mobileNumber": "string", "companyName": "string", "leadStatus": "string", "projectAmount": "decimal", "createdAtUtc": "date" } },
-  "followups": { "Title": "Follow-up Report", "Columns": { "customerCode": "string", "customerName": "string", "nextFollowUpDate": "date", "followUpDate": "date", "remarks": "string" } },
-  "overdue": { "Title": "Overdue Follow-ups", "Columns": { "customerCode": "string", "customerName": "string", "nextFollowUpDate": "date", "followUpDate": "date", "remarks": "string" } },
-  "user-customers": { "Title": "User-wise Customers", "Columns": { "userName": "string", "customerCount": "long", "projectAmount": "decimal" } },
-  "user-project": { "Title": "User-wise Project Amount", "Columns": { "userName": "string", "customerCount": "long", "projectAmount": "decimal" } }
+  "customers": {
+    "Title": "Customer List",
+    "Columns": {
+      "customerCode": "string",
+      "customerName": "string",
+      "mobileNumber": "string",
+      "companyName": "string",
+      "leadStatus": "string",
+      "projectAmount": "decimal",
+      "createdAtUtc": "date"
+    }
+  },
+  "active": {
+    "Title": "Active Leads",
+    "Columns": {
+      "customerCode": "string",
+      "customerName": "string",
+      "mobileNumber": "string",
+      "companyName": "string",
+      "leadStatus": "string",
+      "projectAmount": "decimal",
+      "createdAtUtc": "date"
+    }
+  },
+  "closed": {
+    "Title": "Closed Leads",
+    "Columns": {
+      "customerCode": "string",
+      "customerName": "string",
+      "mobileNumber": "string",
+      "companyName": "string",
+      "leadStatus": "string",
+      "projectAmount": "decimal",
+      "createdAtUtc": "date"
+    }
+  },
+  "not-interested": {
+    "Title": "Not Interested",
+    "Columns": {
+      "customerCode": "string",
+      "customerName": "string",
+      "mobileNumber": "string",
+      "companyName": "string",
+      "leadStatus": "string",
+      "projectAmount": "decimal",
+      "createdAtUtc": "date"
+    }
+  },
+  "project": {
+    "Title": "Project Amount",
+    "Columns": {
+      "customerCode": "string",
+      "customerName": "string",
+      "mobileNumber": "string",
+      "companyName": "string",
+      "leadStatus": "string",
+      "projectAmount": "decimal",
+      "createdAtUtc": "date"
+    }
+  },
+  "created": {
+    "Title": "Customer Creation",
+    "Columns": {
+      "customerCode": "string",
+      "customerName": "string",
+      "mobileNumber": "string",
+      "companyName": "string",
+      "leadStatus": "string",
+      "projectAmount": "decimal",
+      "createdAtUtc": "date"
+    }
+  },
+  "followups": {
+    "Title": "Follow-up Report",
+    "Columns": {
+      "customerCode": "string",
+      "customerName": "string",
+      "nextFollowUpDate": "date",
+      "followUpDate": "date",
+      "remarks": "string"
+    }
+  },
+  "overdue": {
+    "Title": "Overdue Follow-ups",
+    "Columns": {
+      "customerCode": "string",
+      "customerName": "string",
+      "nextFollowUpDate": "date",
+      "followUpDate": "date",
+      "remarks": "string"
+    }
+  },
+  "user-customers": {
+    "Title": "User-wise Customers",
+    "Columns": {
+      "userName": "string",
+      "customerCount": "long",
+      "projectAmount": "decimal"
+    }
+  },
+  "user-project": {
+    "Title": "User-wise Project Amount",
+    "Columns": {
+      "userName": "string",
+      "customerCount": "long",
+      "projectAmount": "decimal"
+    }
+  },
+  "source-summary": {
+    "Title": "Source-wise Lead Summary",
+    "Columns": {
+      "sourceId": "long",
+      "sourceName": "string",
+      "leadCount": "long",
+      "qualifiedCount": "long",
+      "wonCount": "long",
+      "conversionPercent": "decimal",
+      "projectAmount": "decimal"
+    }
+  },
+  "source-details": {
+    "Title": "Source-wise Lead Details",
+    "Columns": {
+      "sourceName": "string",
+      "customerCode": "string",
+      "customerName": "string",
+      "assignedUser": "string",
+      "leadStatus": "string",
+      "projectAmount": "decimal",
+      "createdAtUtc": "date"
+    }
+  }
 }

@@ -45,7 +45,8 @@ if (-not (Test-Path -LiteralPath (Join-Path $publish 'ReportRenderer/ReportRende
     throw 'RDLC renderer is missing from the IIS package.'
 }
 foreach ($reportType in @('customers','user-customers','active','closed','not-interested',
-                         'followups','overdue','project','user-project','created')) {
+                         'followups','overdue','project','user-project','created',
+                         'source-summary','source-details')) {
     if (-not (Test-Path -LiteralPath (Join-Path $publish "ReportRenderer/Reports/$reportType.rdlc"))) {
         throw "RDLC template is missing: $reportType"
     }
