@@ -78,6 +78,24 @@ function Workspace() {
     return () => { active = false; };
   }, [session?.user.id, session?.token]);
 
+  const [reminderCount, setReminderCount] = useState(0);
+  useEffect(() => {
+    if (!session || allowed?.['followups.view'] !== true) {
+      setReminderCount(0);
+      return;
+    }
+    let active = true;
+    async function checkReminders() {
+      try {
+        const data = await api<{ total: number }>('/api/followups/reminders?withinHours=24&pageSize=1', session!.token);
+        if (active) setReminderCount(data.total);
+      } catch { if (active) setReminderCount(0); }
+    }
+    void checkReminders();
+    const timer = window.setInterval(() => { void checkReminders(); }, 60_000);
+    return () => { active = false; window.clearInterval(timer); };
+  }, [session?.user.id, session?.token, allowed?.['followups.view']]);
+
   function navigate(next: Screen) {
     setScreen(next);
     setMenuOpen(false);
@@ -159,6 +177,10 @@ function Workspace() {
           <span className="today">{new Date().toLocaleDateString(undefined, {
             day: 'numeric', month: 'short', year: 'numeric'
           })}</span>
+          {reminderCount > 0 && <button type="button" className="secondary-action"
+            onClick={() => navigate('followups')} aria-label={'My follow-up reminders: ' + reminderCount}>
+            <Icon name="clock" size={17} /> {reminderCount} due
+          </button>}
           {allowed?.['leads.create'] === true && <button className="primary topbar-add" onClick={() => {
             navigate('leads');
             setNewLeadRequest(value => value + 1);

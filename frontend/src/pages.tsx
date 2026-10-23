@@ -470,6 +470,14 @@ export function FollowUpsPage({ token }: { token: string }) {
   const [page, setPage] = useState(1);
   const { data, refresh, error, loading } = useResource<Paged<FollowUp>>(
     `/api/followups?view=${tab}&page=${page}&pageSize=50`, token);
+  const { data: reminders, refresh: refreshReminders, error: reminderError } = useResource<{
+    total: number; overdue: number; upcoming: number;
+    items: (FollowUp & { assignedToId: number })[];
+  }>('/api/followups/reminders?withinHours=24&pageSize=5', token);
+  useEffect(() => {
+    const timer = window.setInterval(() => { void refreshReminders(); }, 60_000);
+    return () => window.clearInterval(timer);
+  }, [refreshReminders]);
   const [working, setWorking] = useState<number | null>(null);
   const [editing, setEditing] = useState<FollowUp | null>(null);
   const [editDueAt, setEditDueAt] = useState('');
@@ -496,7 +504,7 @@ export function FollowUpsPage({ token }: { token: string }) {
       await api('/api/followups/' + editing.id, token, { method: 'PUT',
         body: JSON.stringify({ dueAtUtc: new Date(editDueAt).toISOString(), notes: editNotes }) });
       setEditing(null);
-      await refresh();
+      await Promise.all([refresh(), refreshReminders()]);
       notify('success', 'Follow-up updated');
     } catch (err) {
       notify('error', 'Update failed', err instanceof Error ? err.message : undefined);
@@ -513,7 +521,7 @@ export function FollowUpsPage({ token }: { token: string }) {
     setWorking(item.id);
     try {
       await api('/api/followups/' + item.id + '/complete', token, { method: 'PATCH' });
-      await refresh();
+      await Promise.all([refresh(), refreshReminders()]);
       notify('success', 'Follow-up completed', item.leadName + ' was updated.');
     } catch (err) {
       notify('error', 'Could not complete follow-up', err instanceof Error ? err.message : undefined);
@@ -524,6 +532,25 @@ export function FollowUpsPage({ token }: { token: string }) {
     <h1>Follow-ups</h1><p>Keep every customer conversation moving forward.</p></div>
     <button className="secondary-action" onClick={() => void refresh()}><Icon name="refresh" size={17} /> Refresh</button>
   </header>
+    <section className="panel followup-panel" aria-label="My follow-up reminders">
+      <div className="panel-heading"><h2>My reminders · next 24 hours</h2>
+        <button type="button" onClick={() => void refreshReminders()}><Icon name="refresh" size={16} /> Refresh</button>
+      </div>
+      {reminderError && <ErrorState message={reminderError} retry={() => void refreshReminders()} />}
+      {reminders && <>
+        <p role="status">{reminders.overdue} overdue · {reminders.upcoming} due soon</p>
+        {reminders.items.length > 0 ? <div className="task-table">
+          {reminders.items.map(item => <article className="followup-row" key={item.id}>
+            <span className="task-avatar">{item.leadName[0]?.toUpperCase() || 'L'}</span>
+            <div className="followup-info"><strong>{item.leadName}</strong><p>{item.notes}</p></div>
+            <div className="followup-due"><Icon name="calendar" size={16} />
+              <span className={new Date(item.dueAtUtc).getTime() < Date.now() ? 'overdue-text' : ''}>
+                {dateLabel(item.dueAtUtc)}</span></div>
+          </article>)}
+        </div> : <p>No reminders due within the next 24 hours.</p>}
+      </>}
+      <p>Reminders refresh every minute while this page is open.</p>
+    </section>
     <section className="panel followup-panel">
       <div className="tab-list" role="tablist" aria-label="Filter follow-ups">
         {(['pending', 'overdue', 'completed', 'all'] as const).map(item =>
