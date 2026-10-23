@@ -55,9 +55,10 @@ public sealed class WebsiteIntakeController(AppDbContext db, IConfiguration conf
         var signature = Request.Headers["X-Website-Signature"].ToString();
         if (!signature.StartsWith("sha256=", StringComparison.OrdinalIgnoreCase) ||
             signature.Length != 71) return Unauthorized();
-        var supplied = new byte[32];
-        if (!Convert.TryFromHexString(signature.AsSpan(7), supplied, out var written) || written != 32)
-            return Unauthorized();
+        byte[] supplied;
+        try { supplied = Convert.FromHexString(signature.AsSpan(7)); }
+        catch (FormatException) { return Unauthorized(); }
+        if (supplied.Length != 32) return Unauthorized();
 
         var prefix = Encoding.UTF8.GetBytes(timestamp.ToString(System.Globalization.CultureInfo.InvariantCulture) + ".");
         var signed = new byte[prefix.Length + body.Length];
