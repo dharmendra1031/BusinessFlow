@@ -129,13 +129,13 @@ export default function ReportsPage({ token, user }: { token: string; user: User
         <label>From <input type="date" max={to || undefined} value={from} onChange={event => setFrom(event.target.value)} /></label>
         <label>To <input type="date" min={from || undefined} value={to} onChange={event => setTo(event.target.value)} /></label>
         <label>Lead given by <input maxLength={150} value={leadGivenBy} onChange={event => setLeadGivenBy(event.target.value)} /></label>
-        <label>Source <select aria-label="Source" value={sourceId} onChange={event => setSourceId(event.target.value)}>
-          <option value="">All sources</option>
-          {sources.map(source => <option key={source.id} value={source.id}>{source.name}</option>)}
-        </select></label>
         <label>Status <select aria-label="Status" value={statusId} onChange={event => setStatusId(event.target.value)}>
           <option value="">All statuses</option>
           {statuses.map(status => <option key={status.id} value={status.id}>{status.name}</option>)}
+        </select></label>
+        <label>Source <select aria-label="Source" value={sourceId} onChange={event => setSourceId(event.target.value)}>
+          <option value="">All sources</option>
+          {sources.map(source => <option key={source.id} value={source.id}>{source.name}</option>)}
         </select></label>
         {employees.length > 0 && <label>User <select value={userId} onChange={event => setUserId(event.target.value)}>
           <option value="">All permitted users</option>
