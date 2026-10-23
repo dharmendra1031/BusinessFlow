@@ -1,6 +1,6 @@
 # Phase 2 — Signed Website Lead Capture Foundation
 
-**Status:** Implemented on `development`. GitHub SQL/API, frontend and Windows IIS checks must pass on the exact code commit. **No live website has been connected and no local SQL migrations have been applied.**
+**Status:** CI Verified on code commit `863f0f5` (`development`). Local staging and production acceptance pending. **No live website has been connected and no local SQL migrations have been applied.**
 
 ## Purpose and security boundary
 
@@ -51,3 +51,10 @@ Each successful first submission creates a Lead/customer code, idempotency recei
 - **Not implemented:** Facebook/Meta or WhatsApp provider callbacks and their signature verification, queue/dead-letter infrastructure, distributed idempotent throttling, notifications and automatic lead routing.
 
 Phase 2 Website Lead Capture must not be marked production accepted until real staging and website-backend integration tests pass.
+
+## Verified GitHub evidence
+
+- [CI run 39912935530](https://github.com/dharmendra1031/BusinessFlow/actions/runs/39912935530): **45/45 SQL/API PASS**, **39/39 Playwright PASS**, EF migration snapshot, .NET dependency audit and React production build PASS.
+- [Windows IIS build 39912935682](https://github.com/dharmendra1031/BusinessFlow/actions/runs/39912935682): **PASS**.
+- Dedicated SQL/API tests cover valid HMAC, timestamp expiry, altered signature, missing consent, stale/invalid phone payload, disabled website source, fail-closed configuration, repeated submission and reused event ID with changed payload.
+- Existing browser regression suite passed; **live website backend E2E and provider sandbox validation have NOT been performed**.

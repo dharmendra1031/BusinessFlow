@@ -90,8 +90,8 @@ Source evidence: `backend/BusinessFlow.Api/`, `frontend/src/`, `tests/BusinessFl
 | --- | --- | --- |
 | Lead source master | Admin can add, rename and deactivate a source without disrupting historical leads | CI Verified; staging pending |
 | Duplicate review | Normalized phone/email matching, manual Admin pair review; no automatic merge, historical ownership preserved | CI Verified (review MVP); merge policy pending |
-| Capture integrations | Authenticated website/Meta/WhatsApp/other provider intake only after approved credentials and data handling rules | Not started |
-| Integration resilience | Verified signatures, idempotency, bounded retries, failure/audit logs and secure secret storage | Not started |
+| Capture integrations | Authenticated website/Meta/WhatsApp/other provider intake only after approved credentials and data handling rules | Website signed intake CI Verified; Meta/WhatsApp pending |
+| Integration resilience | Verified signatures, idempotency, bounded retries, failure/audit logs and secure secret storage | Website HMAC, receipt idempotency and rate limit CI Verified; provider retry/monitoring pending |
 | Lead routing | Rules for team capacity, source, territory and manual manager override; assignment history remains accurate | Not started |
 | Follow-up reminders | Scheduled notifications, retries, ownership changes and opt-out/consent | Not started |
 | Source reporting | Lead count, qualification, conversion and attributed value by source and selected period | Not started |
