@@ -20,6 +20,16 @@ The app's existing Manual Follow-up Create, Edit and Complete actions remain unc
 
 ## Verification and release boundary
 
+**Verified application commit:** `1751313`, `development`.
+
+- [SQL/API and browser CI](https://github.com/dharmendra1031/BusinessFlow/actions/runs/39936860254): **49/49 SQL/API tests PASS**, **41/41 Playwright Chromium tests PASS**, React production build, migration snapshot and .NET dependency audit PASS.
+- [Windows IIS package CI](https://github.com/dharmendra1031/BusinessFlow/actions/runs/39936860283): **PASS**.
+- New reminder-specific SQL-backed tests exercise ownership, access scope, due/overdue windows, validation and reassignment.
+- Dedicated Playwright reminder panel and header indicator test passes; the existing Follow-up CRUD browser test needed a corrected locator to distinguish task list from duplicate reminder preview, fixed in `1751313`.
+- **Not production accepted:** no real local staging backup/restore, live IIS deployment or external delivery provider verification yet.
+
+## Previous CI history (resolved)
+
 - Application code on `development` (latest test correction at `48e6662`).
 - [GitHub SQL/API and browser CI](https://github.com/dharmendra1031/BusinessFlow/actions/runs/39935263037) — verify the **final workflow conclusion** before marking this milestone CI Verified.
 - [Windows IIS package run](https://github.com/dharmendra1031/BusinessFlow/actions/runs/39935262993) — build/package verification; not a live deployment.

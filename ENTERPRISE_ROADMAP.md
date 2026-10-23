@@ -93,7 +93,7 @@ Source evidence: `backend/BusinessFlow.Api/`, `frontend/src/`, `tests/BusinessFl
 | Capture integrations | Authenticated website/Meta/WhatsApp/other provider intake only after approved credentials and data handling rules | Website signed intake CI Verified; Meta/WhatsApp pending |
 | Integration resilience | Verified signatures, idempotency, bounded retries, failure/audit logs and secure secret storage | Website HMAC, receipt idempotency and rate limit CI Verified; provider retry/monitoring pending |
 | Lead routing | Rules for team capacity, source, territory and manual manager override; assignment history remains accurate | Website source-to-team least-load + capacity CI Verified; territory and advanced routing pending |
-| Follow-up reminders | Scheduled notifications, retries, ownership changes and opt-out/consent | In-app scoped due/overdue reminders implemented; external delivery/retries/opt-out pending, staging pending |
+| Follow-up reminders | Scheduled notifications, retries, ownership changes and opt-out/consent | In-app reminders CI Verified (49 SQL/API, 41 Playwright); external delivery/retries/opt-out and staging pending |
 | Source reporting | Lead count, qualification, conversion and attributed value by source and selected period | Not started |
 | Proposals | Versions, approvals, client response and handoff to delivery | Not started |
 
