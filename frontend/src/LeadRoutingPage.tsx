@@ -46,7 +46,7 @@ export default function LeadRoutingPage({ token }: { token: string }) {
 
   async function save(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (working || !sourceId || !teamId || maxOpenLeads < 1 || maxOpenLeads > 1000) return;
+    if (working || !sourceId || !teamId || maxOpenLeads < 1 || maxOpenLeads > 500) return;
     setWorking(true);
     try {
       await api('/api/admin/lead-routing' + (editing !== null ? '/' + editing : ''), token, {
@@ -108,7 +108,7 @@ export default function LeadRoutingPage({ token }: { token: string }) {
             <option key={t.id} value={t.id}>{t.name} · {organization.departments.find(d => d.id === t.departmentId)?.name}</option>)}
         </select></label>
         <label>Maximum open leads per employee
-          <input type="number" required min={1} max={1000} value={maxOpenLeads}
+          <input type="number" required min={1} max={500} value={maxOpenLeads}
             onChange={event => setMaxOpenLeads(Number(event.target.value))} /></label>
         <label><input type="checkbox" checked={isActive}
           onChange={event => setIsActive(event.target.checked)} /> Enable automatic routing</label>
