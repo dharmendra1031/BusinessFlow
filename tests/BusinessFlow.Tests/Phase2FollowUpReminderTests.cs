@@ -72,9 +72,9 @@ public sealed class Phase2FollowUpReminderTests
         Assert.Equal(HttpStatusCode.BadRequest,
             (await employee.GetAsync("/api/followups/reminders?pageSize=51")).StatusCode);
 
-        var lead = await admin.GetFromJsonAsync<JsonElement>("/api/leads/" + leadId);
+        var leadResponse = await admin.GetFromJsonAsync<JsonElement>("/api/leads/" + leadId);
         var assigned = await admin.PostAsJsonAsync("/api/leads/" + leadId + "/assign",
-            new { userId = colleagueId, rowVersion = lead.GetProperty("rowVersion").GetString() });
+            new { userId = colleagueId, rowVersion = leadResponse.GetProperty("rowVersion").GetString() });
         Assert.Equal(HttpStatusCode.NoContent, assigned.StatusCode);
 
         var employeeAfter = await employee.GetFromJsonAsync<JsonElement>(
