@@ -102,4 +102,42 @@ public sealed class Phase2FollowUpReminderTests
         Assert.Equal(HttpStatusCode.Unauthorized,
             (await client.GetAsync("/api/followups/reminders")).StatusCode);
     }
+
+    [Fact]
+    public async Task Due_soon_filter_excludes_overdue_completed_and_later_followups()
+    {
+        await using var database = await Phase1TestDatabase.CreateAsync();
+        await using var host = new Phase1ApiHost(database);
+        using var employee = await host.ClientAsync("Employee");
+        var userId = (await employee.GetFromJsonAsync<JsonElement>("/api/auth/me"))
+            .GetProperty("id").GetInt64();
+        await using (var db = database.CreateContext())
+        {
+            var lead = new Lead
+            {
+                Name = "Upcoming call", Phone = "9876543210", SourceId = 1, StatusId = 1,
+                CreatedById = userId, AssignedToId = userId
+            };
+            db.Leads.Add(lead);
+            await db.SaveChangesAsync();
+            var now = DateTime.UtcNow;
+            db.LeadFollowUps.AddRange(
+                new LeadFollowUp { LeadId = lead.Id, AssignedToId = userId, CreatedById = userId,
+                    Notes = "Due soon", DueAtUtc = now.AddHours(6) },
+                new LeadFollowUp { LeadId = lead.Id, AssignedToId = userId, CreatedById = userId,
+                    Notes = "Overdue", DueAtUtc = now.AddHours(-2) },
+                new LeadFollowUp { LeadId = lead.Id, AssignedToId = userId, CreatedById = userId,
+                    Notes = "Due later", DueAtUtc = now.AddDays(3) },
+                new LeadFollowUp { LeadId = lead.Id, AssignedToId = userId, CreatedById = userId,
+                    Notes = "Completed", DueAtUtc = now.AddHours(3), CompletedAtUtc = now });
+            await db.SaveChangesAsync();
+        }
+
+        var result = await employee.GetFromJsonAsync<JsonElement>("/api/followups?view=dueSoon");
+        Assert.Equal(1, result.GetProperty("total").GetInt32());
+        Assert.Equal("Due soon", result.GetProperty("items")[0].GetProperty("notes").GetString());
+        Assert.Equal(HttpStatusCode.BadRequest,
+            (await employee.GetAsync("/api/followups?view=unsupported")).StatusCode);
+    }
+
 }
