@@ -260,6 +260,12 @@ public sealed class ProjectsController(AppDbContext db, RecordAccessService reco
             return BadRequest(new { message = "A valid row version is required. Reload this record." });
 
         if (task.Status == request.Status) return NoContent();
+        if (request.Status != "Done" &&
+            (task.MilestoneId.HasValue && await db.ProjectMilestones.AnyAsync(m =>
+                m.Id == task.MilestoneId.Value && m.Status == "Completed") ||
+             task.SprintId.HasValue && await db.ProjectSprints.AnyAsync(sp =>
+                sp.Id == task.SprintId.Value && sp.Status == "Completed")))
+            return BadRequest(new { message = "Reopen the completed milestone or sprint before changing the task status." });
 
         task.Status = request.Status;
         task.CompletedAtUtc = request.Status == "Done" ? DateTime.UtcNow : null;
