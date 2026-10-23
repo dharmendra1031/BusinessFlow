@@ -466,10 +466,14 @@ export function LeadsPage({ token, user, permissions, newLeadRequest, onNewLeadO
 
 export function FollowUpsPage({ token }: { token: string }) {
   const { notify, confirm } = useFeedback();
-  const [tab, setTab] = useState<'pending' | 'overdue' | 'completed' | 'all'>('pending');
+  const [tab, setTab] = useState<'pending' | 'overdue' | 'dueSoon' | 'completed' | 'all'>('pending');
+  const [mineOnly, setMineOnly] = useState(false);
   const [page, setPage] = useState(1);
   const { data, refresh, error, loading } = useResource<Paged<FollowUp>>(
-    `/api/followups?view=${tab}&page=${page}&pageSize=50`, token);
+    `/api/followups?view=${tab}&mineOnly=${mineOnly}&page=${page}&pageSize=50`, token);
+  const { data: reminderSummary, refresh: refreshReminders } =
+    useResource<{ overdue: number; dueSoon: number; later: number; pendingTotal: number }>(
+      '/api/followups/reminder-summary?mineOnly=true', token);
   const [working, setWorking] = useState<number | null>(null);
   const [editing, setEditing] = useState<FollowUp | null>(null);
   const [editDueAt, setEditDueAt] = useState('');
@@ -496,7 +500,7 @@ export function FollowUpsPage({ token }: { token: string }) {
       await api('/api/followups/' + editing.id, token, { method: 'PUT',
         body: JSON.stringify({ dueAtUtc: new Date(editDueAt).toISOString(), notes: editNotes }) });
       setEditing(null);
-      await refresh();
+      await Promise.all([refresh(), refreshReminders()]);
       notify('success', 'Follow-up updated');
     } catch (err) {
       notify('error', 'Update failed', err instanceof Error ? err.message : undefined);
@@ -513,7 +517,7 @@ export function FollowUpsPage({ token }: { token: string }) {
     setWorking(item.id);
     try {
       await api('/api/followups/' + item.id + '/complete', token, { method: 'PATCH' });
-      await refresh();
+      await Promise.all([refresh(), refreshReminders()]);
       notify('success', 'Follow-up completed', item.leadName + ' was updated.');
     } catch (err) {
       notify('error', 'Could not complete follow-up', err instanceof Error ? err.message : undefined);
@@ -522,13 +526,24 @@ export function FollowUpsPage({ token }: { token: string }) {
 
   return <section><header className="page-header"><div><span className="section-kicker">YOUR TASKS</span>
     <h1>Follow-ups</h1><p>Keep every customer conversation moving forward.</p></div>
-    <button className="secondary-action" onClick={() => void refresh()}><Icon name="refresh" size={17} /> Refresh</button>
+    <button className="secondary-action" onClick={() => void Promise.all([refresh(), refreshReminders()])}><Icon name="refresh" size={17} /> Refresh</button>
   </header>
     <section className="panel followup-panel">
+      <div className="panel-heading"><div><h2>My reminders</h2>
+        <p>Overdue: {reminderSummary?.overdue ?? '—'} · Due next 24h: {reminderSummary?.dueSoon ?? '—'} ·
+          Later: {reminderSummary?.later ?? '—'}</p></div>
+        <button type="button" onClick={() => { setMineOnly(true); setTab('dueSoon'); setPage(1); }}>View my due reminders</button>
+      </div>
+      <div className="table-toolbar">
+        <label><input type="checkbox" checked={mineOnly}
+          onChange={event => { setMineOnly(event.target.checked); setPage(1); }} /> Assigned to me only</label>
+      </div>
       <div className="tab-list" role="tablist" aria-label="Filter follow-ups">
-        {(['pending', 'overdue', 'completed', 'all'] as const).map(item =>
+        {(['pending', 'overdue', 'dueSoon', 'completed', 'all'] as const).map(item =>
           <button key={item} role="tab" aria-selected={tab === item} className={tab === item ? 'selected' : ''}
-            onClick={() => { setTab(item); setPage(1); }}>{item[0].toUpperCase() + item.slice(1)}</button>)}
+            onClick={() => { setTab(item); setPage(1); }}>
+            {item === 'dueSoon' ? 'Due next 24h' : item[0].toUpperCase() + item.slice(1)}
+          </button>)}
       </div>
       {error && <ErrorState message={error} retry={() => void refresh()} />}
       {loading && !data ? <div className="loading-state">Loading follow-ups…</div> :

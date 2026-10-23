@@ -4,7 +4,7 @@ export type Lead = { rowVersion: string; id: number; customerCode: string | null
 export type Employee = { id: number; phoneNumber: string | null; isActive: boolean; fullName: string; email: string; managerId: number | null; departmentId?: number | null; roles?: string[] };
 export type Lookup = { id: number; name: string };
 export type Dashboard = { totalUsers: number; activeLeads: number; closedLeads: number; notInterestedLeads: number; totalProjectAmount: number; todayFollowUps: number; upcomingFollowUps: number; userWise: { userId: number | null; userName: string; customers: number; amount: number }[] | null; totalLeads: number; newLeads: number; wonLeads: number; lostLeads: number; overdueFollowUps: number };
-export type FollowUp = { id: number; leadId: number; leadName: string; notes: string; dueAtUtc: string; completedAtUtc: string | null };
+export type FollowUp = { id: number; leadId: number; leadName: string; notes: string; dueAtUtc: string; completedAtUtc: string | null; assignedToId: number };
 export type Paged<T> = { total: number; page: number; pageSize: number; items: T[] };
 
 export type ReportResult = { type: string; total: number; page: number; pageSize: number; rows: Record<string, string | number | boolean | null>[] };
