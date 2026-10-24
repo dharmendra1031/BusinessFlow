@@ -14,7 +14,9 @@ git pull --ff-only origin development
 .\scripts\check-local-staging.ps1 -Server 'localhost' -SourceDatabase 'LeadManagement' -StagingDatabase 'LeadManagement_Stage_20261021'
 ~~~
 
-Replace server/database identifiers as required; do not share SQL passwords or local connection secrets. The script requires sqlcmd and Windows integrated SQL authentication. It executes **only metadata and SELECT queries**. It checks source availability, online status, EF migration history, current migrations and Leads/Projects/Tasks row counts. It rejects an already existing staging target and requires the distinct Source_Stage_* naming pattern.
+Replace server/database identifiers as required; do not share SQL passwords or local connection secrets. The script requires sqlcmd and Windows integrated SQL authentication. It executes **only metadata and SELECT queries**. It checks source availability, online status, non-empty EF migration history, required Leads/DevelopmentProjects/DevelopmentTasks/AuditLogs tables, and their row counts. It rejects an already existing staging target, system databases and a staging name without a distinct Source_Stage_* suffix.
+
+**Fail-closed rule:** Missing required tables or migration history means the source is not yet a verified BusinessFlow staging baseline. Stop and investigate; do not bypass this check or migrate the source database to make the preflight pass. This command does not perform a backup or restore.
 
 Stop if the connection, migrations history or target-name validation fails. Do not apply migrations to the source database.
 
