@@ -33,6 +33,23 @@ jobs:
             $parseErrors | ForEach-Object { Write-Error $_.Message }
             throw 'Local staging preflight PowerShell syntax validation failed.'
           }
+      - name: Reject unsafe local staging parameters
+        shell: pwsh
+        run: |
+          $cases = @(
+            @{ Source = 'master'; Stage = 'master_Stage_Safety'; Expected = 'System databases' },
+            @{ Source = 'LeadManagement'; Stage = 'LeadManagement_Stage_'; Expected = 'unique suffix' },
+            @{ Source = 'LeadManagement;DROP'; Stage = 'LeadManagement_Stage_Test'; Expected = 'Database names' }
+          )
+          foreach ($case in $cases) {
+            try {
+              & ./scripts/check-local-staging.ps1 -Server localhost -SourceDatabase $case.Source -StagingDatabase $case.Stage
+              throw 'Preflight accepted an invalid database name.'
+            }
+            catch {
+              if ($_.Exception.Message -notlike "*$($case.Expected)*") { throw }
+            }
+          }
       - name: Build Windows IIS package
         shell: pwsh
         run: |
