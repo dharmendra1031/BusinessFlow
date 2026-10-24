@@ -15,8 +15,12 @@ foreach ($name in @($SourceDatabase, $StagingDatabase)) {
     }
 }
 $prefix = $SourceDatabase + '_Stage_'
-if (-not $StagingDatabase.StartsWith($prefix, [StringComparison]::OrdinalIgnoreCase)) {
-    throw "StagingDatabase must start with '$prefix' and must be a different, newly named database."
+if (-not $StagingDatabase.StartsWith($prefix, [StringComparison]::OrdinalIgnoreCase) -or
+    $StagingDatabase.Length -le $prefix.Length) {
+    throw "StagingDatabase must start with '$prefix' and include a unique suffix."
+}
+if ($SourceDatabase -in @('master', 'model', 'msdb', 'tempdb')) {
+    throw 'System databases cannot be used as the BusinessFlow staging source.'
 }
 if ([string]::IsNullOrWhiteSpace($Server)) { throw 'Server is required.' }
 if (-not (Get-Command sqlcmd -ErrorAction SilentlyContinue)) {
@@ -34,6 +38,16 @@ IF DB_ID(N'$StagingDatabase') IS NOT NULL
     THROW 51003, 'Staging target already exists: do not overwrite or reuse it.', 1;
 IF OBJECT_ID(N'[$SourceDatabase].dbo.__EFMigrationsHistory', N'U') IS NULL
     THROW 51004, 'Source EF migrations history is missing. Reconcile legacy upgrades before continuing.', 1;
+IF NOT EXISTS (SELECT 1 FROM [$SourceDatabase].dbo.__EFMigrationsHistory)
+    THROW 51005, 'Source EF migrations history is empty. Stop and reconcile the baseline.', 1;
+IF OBJECT_ID(N'[$SourceDatabase].dbo.Leads', N'U') IS NULL
+    THROW 51006, 'Source Leads table is missing. Stop and inspect the database.', 1;
+IF OBJECT_ID(N'[$SourceDatabase].dbo.DevelopmentProjects', N'U') IS NULL
+    THROW 51007, 'Source DevelopmentProjects table is missing. Stop and reconcile the baseline.', 1;
+IF OBJECT_ID(N'[$SourceDatabase].dbo.DevelopmentTasks', N'U') IS NULL
+    THROW 51008, 'Source DevelopmentTasks table is missing. Stop and reconcile the baseline.', 1;
+IF OBJECT_ID(N'[$SourceDatabase].dbo.AuditLogs', N'U') IS NULL
+    THROW 51009, 'Source AuditLogs table is missing. Stop and reconcile the baseline.', 1;
 
 SELECT N'SOURCE_DATABASE' AS CheckName, CAST(name AS nvarchar(128)) AS Detail
     FROM sys.databases WHERE name = N'$SourceDatabase';
@@ -42,15 +56,14 @@ SELECT N'RECOVERY_MODEL' AS CheckName, CAST(recovery_model_desc AS nvarchar(128)
 SELECT N'STAGING_TARGET_AVAILABLE' AS CheckName, N'$StagingDatabase' AS Detail;
 EXEC(N'SELECT N''MIGRATION'' AS CheckName, CAST(MigrationId AS nvarchar(200)) AS Detail
     FROM [$SourceDatabase].dbo.__EFMigrationsHistory ORDER BY MigrationId;');
-IF OBJECT_ID(N'[$SourceDatabase].dbo.Leads', N'U') IS NOT NULL
-    EXEC(N'SELECT N''LEADS'' AS CheckName, CAST(COUNT_BIG(*) AS nvarchar(30)) AS Detail
-        FROM [$SourceDatabase].dbo.Leads;');
-IF OBJECT_ID(N'[$SourceDatabase].dbo.DevelopmentProjects', N'U') IS NOT NULL
-    EXEC(N'SELECT N''PROJECTS'' AS CheckName, CAST(COUNT_BIG(*) AS nvarchar(30)) AS Detail
-        FROM [$SourceDatabase].dbo.DevelopmentProjects;');
-IF OBJECT_ID(N'[$SourceDatabase].dbo.DevelopmentTasks', N'U') IS NOT NULL
-    EXEC(N'SELECT N''TASKS'' AS CheckName, CAST(COUNT_BIG(*) AS nvarchar(30)) AS Detail
-        FROM [$SourceDatabase].dbo.DevelopmentTasks;');
+EXEC(N'SELECT N''LEADS'' AS CheckName, CAST(COUNT_BIG(*) AS nvarchar(30)) AS Detail
+    FROM [$SourceDatabase].dbo.Leads;');
+EXEC(N'SELECT N''PROJECTS'' AS CheckName, CAST(COUNT_BIG(*) AS nvarchar(30)) AS Detail
+    FROM [$SourceDatabase].dbo.DevelopmentProjects;');
+EXEC(N'SELECT N''TASKS'' AS CheckName, CAST(COUNT_BIG(*) AS nvarchar(30)) AS Detail
+    FROM [$SourceDatabase].dbo.DevelopmentTasks;');
+EXEC(N'SELECT N''AUDIT_LOGS'' AS CheckName, CAST(COUNT_BIG(*) AS nvarchar(30)) AS Detail
+    FROM [$SourceDatabase].dbo.AuditLogs;');
 "@
 
 Write-Host "Read-only SQL staging preflight: $Server"
