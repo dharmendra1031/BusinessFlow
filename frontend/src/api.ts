@@ -1,10 +1,12 @@
 const apiUrl = import.meta.env.VITE_API_URL || '';
 let csrfToken = '';
-let requests = 0;
+let pendingActions = 0;
 
+// Only user-initiated writes and downloads display the blocking progress popup.
+// Background reads already show loading states inside their own screens.
 function requestActivity(change: number) {
-  requests = Math.max(0, requests + change);
-  window.dispatchEvent(new CustomEvent('businessflow:requests', { detail: requests }));
+  pendingActions = Math.max(0, pendingActions + change);
+  window.dispatchEvent(new CustomEvent('businessflow:requests', { detail: pendingActions }));
 }
 
 export function setCsrfToken(value: string) { csrfToken = value; }
@@ -39,7 +41,8 @@ function errorText(data: unknown, status: number): string {
 export async function api<T>(path: string, token: string, options: RequestInit & { onVersion?: (version: string) => void } = {}): Promise<T> {
   const { onVersion, ...requestOptions } = options;
   let response: Response;
-  requestActivity(1);
+  const showProgress = !!options.method && !['GET', 'HEAD', 'OPTIONS'].includes(options.method.toUpperCase());
+  if (showProgress) requestActivity(1);
   try {
     response = await fetch(apiUrl + path, {
       credentials: 'same-origin',
@@ -55,7 +58,7 @@ export async function api<T>(path: string, token: string, options: RequestInit &
   } catch {
     throw new Error('Cannot reach the CRM server. Check your connection and try again.');
   } finally {
-    requestActivity(-1);
+    if (showProgress) requestActivity(-1);
   }
 
   if (!response.ok) {
