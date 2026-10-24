@@ -70,6 +70,22 @@ function Workspace() {
   const [newLeadRequest, setNewLeadRequest] = useState(0);
   const [allowed, setAllowed] = useState<Record<string, boolean> | null>(null);
   useEffect(() => {
+    if (!session) return;
+    let handled = false;
+    const onExpired = () => {
+      if (handled) return;
+      handled = true;
+      setCsrfToken('');
+      sessionStorage.removeItem('crmSession');
+      setSession(null);
+      setAllowed(null);
+      setMenuOpen(false);
+      notify('warning', 'Session expired', 'Please sign in again.');
+    };
+    window.addEventListener('businessflow:session-expired', onExpired);
+    return () => window.removeEventListener('businessflow:session-expired', onExpired);
+  }, [session, notify]);
+  useEffect(() => {
     if (!session) { setAllowed(null); return; }
     let active = true;
     void api<{ permissions: Record<string, boolean> }>('/api/auth/permissions', session.token)
