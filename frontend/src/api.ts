@@ -9,6 +9,11 @@ function requestActivity(change: number) {
 
 export function setCsrfToken(value: string) { csrfToken = value; }
 
+function signalExpiredSession(path: string, status: number) {
+  if (status === 401 && path !== '/api/auth/login' && path !== '/api/auth/me')
+    window.dispatchEvent(new Event('businessflow:session-expired'));
+}
+
 export class ApiError extends Error {
   constructor(message: string, public readonly status: number) { super(message); }
 }
@@ -54,6 +59,7 @@ export async function api<T>(path: string, token: string, options: RequestInit &
   }
 
   if (!response.ok) {
+    signalExpiredSession(path, response.status);
     const data: unknown = await response.json().catch(() => null);
     throw new ApiError(errorText(data, response.status), response.status);
   }
@@ -70,6 +76,7 @@ export async function apiBlob(path: string, token: string): Promise<Blob> {
     headers: token ? { Authorization: 'Bearer ' + token } : {}
   });
   if (!response.ok) {
+    signalExpiredSession(path, response.status);
     const data: unknown = await response.json().catch(() => null);
     throw new ApiError(errorText(data, response.status), response.status);
   }
