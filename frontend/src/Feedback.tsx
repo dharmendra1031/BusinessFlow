@@ -73,6 +73,31 @@ export function FeedbackProvider({ children }: { children: React.ReactNode }) {
     current?.resolve(accepted);
   }, []);
 
+  useEffect(() => {
+    function markInvalid(event: Event) {
+      const field = event.target;
+      if (field instanceof HTMLInputElement || field instanceof HTMLSelectElement ||
+          field instanceof HTMLTextAreaElement)
+        field.setAttribute('aria-invalid', 'true');
+    }
+    function clearInvalid(event: Event) {
+      const field = event.target;
+      if (field instanceof HTMLInputElement || field instanceof HTMLSelectElement ||
+          field instanceof HTMLTextAreaElement) {
+        field.removeAttribute('aria-invalid');
+        field.setCustomValidity('');
+      }
+    }
+    document.addEventListener('invalid', markInvalid, true);
+    document.addEventListener('input', clearInvalid, true);
+    document.addEventListener('change', clearInvalid, true);
+    return () => {
+      document.removeEventListener('invalid', markInvalid, true);
+      document.removeEventListener('input', clearInvalid, true);
+      document.removeEventListener('change', clearInvalid, true);
+    };
+  }, []);
+
   useEffect(() => () => {
     timers.current.forEach(clearTimeout);
     activeDialog.current?.resolve(false);
@@ -128,6 +153,9 @@ export function FeedbackProvider({ children }: { children: React.ReactNode }) {
         <span className={'dialog-symbol ' + (confirmation.danger ? 'dialog-danger' : 'dialog-primary')}>
           <Icon name={confirmation.level === 'success' ? 'check' : confirmation.danger ? 'warning' : 'info'} size={24} />
         </span>
+        {confirmation.level && <span className="feedback-kicker">
+          {confirmation.level === 'success' ? 'Success' : 'Action failed'}
+        </span>}
         <h2 id="dialog-title">{confirmation.title}</h2>
         <p id="dialog-description">{confirmation.message}</p>
         <div className="dialog-actions">
