@@ -5,13 +5,14 @@ import { api, ApiError } from './api';
 import { Icon } from './Icon';
 import { useFeedback } from './Feedback';
 import ProjectActivity from './ProjectActivity';
+import ProjectFields from './ProjectFields';
+import ProjectTaskList from './ProjectTaskList';
 import ProjectPlanning from './ProjectPlanning';
 import { clearFieldError, handleDialogKeyDown, handleFormKeyDown, validateForm } from './formUtils';
 import type { DevelopmentProject, DevelopmentTask, Employee, Paged, ProjectPlan, User } from './types';
 
 type WonLead = { id: number; name: string; customerCode: string | null };
 const projectStatuses = ['Planning', 'InProgress', 'OnHold', 'Completed'];
-const taskStatuses = ['Todo', 'InProgress', 'Blocked', 'Done'];
 const label = (value: string) => value.replace(/([a-z])([A-Z])/g, '$1 $2');
 
 export default function ProjectsPage({ token, user, permissions }: {
@@ -331,21 +332,11 @@ export default function ProjectsPage({ token, user, permissions }: {
         </details>}
         {allowed('planning.view') && <ProjectPlanning project={selected} token={token} planning={planning}
           canManage={canManagePlanning && mayManage(selected)} onSaved={() => openProject(selected.id)} />}
-        <div className="project-section"><h3>Development tasks</h3>
-          {selected.tasks?.length ? <div className="project-tasks">{selected.tasks.map(task =>
-            <div className="project-task" key={task.id}>
-              <div><strong>{task.title}</strong><p>{task.description || 'No description'}</p>
-                <small>{task.assignedTo || 'Unassigned'} · {task.priority} · {task.dueDate?.slice(0, 10) || 'No deadline'}</small>
-              </div>
-              {canChangeTask ? <select aria-label={'Status for ' + task.title} value={task.status}
-                disabled={taskSaving || selected.status === 'Completed' || (!mayManage(selected) && task.assignedToId !== user.id)}
-                onChange={event => void changeTask(task, event.target.value)}>
-                {taskStatuses.map(status => <option key={status} value={status}>{label(status)}</option>)}
-              </select> : <span className="status-badge">{label(task.status)}</span>}
-              {canEditTask && mayManage(selected) && selected.status !== 'Completed' &&
-                <button type="button" className="text-action" onClick={() => startEditTask(task)}>Edit task</button>}
-            </div>)}</div> : <p className="field-help">No tasks yet.</p>}
-        </div>
+        <ProjectTaskList project={selected} userId={user.id}
+          canChangeTask={canChangeTask} canEditTask={canEditTask}
+          canManage={mayManage(selected)} taskSaving={taskSaving}
+          onChangeStatus={(item, nextStatus) => { void changeTask(item, nextStatus); }}
+          onEditTask={startEditTask} />
         <ProjectActivity project={selected} token={token} user={user}
           canManage={mayManage(selected)} permissions={permissions} />
         {(editingTask ? canEditTask : canCreateTask) && mayManage(selected) && selected.status !== 'Completed' &&
@@ -391,28 +382,3 @@ export default function ProjectsPage({ token, user, permissions }: {
   </section>;
 }
 
-type ProjectFieldsProps = {
-  name: string; setName: (value: string) => void;
-  description: string; setDescription: (value: string) => void;
-  ownerId: string; setOwnerId: (value: string) => void;
-  startDate: string; setStartDate: (value: string) => void;
-  dueDate: string; setDueDate: (value: string) => void;
-  token: string; action: string; selectedName?: string;
-};
-
-function ProjectFields(props: ProjectFieldsProps) {
-  const { name, setName, description, setDescription, ownerId, setOwnerId,
-    startDate, setStartDate, dueDate, setDueDate, token, action, selectedName } = props;
-  return <>
-    <label>Project name *<input required minLength={2} maxLength={150} value={name}
-      onChange={event => setName(event.target.value)} /></label>
-    <label>Description<textarea maxLength={2000} value={description}
-      onChange={event => setDescription(event.target.value)} /></label>
-    <EmployeeSearchSelect token={token} action={action} label="Project owner" required
-      value={ownerId} onChange={setOwnerId} selectedName={selectedName} />
-    <label>Start date<input type="date" value={startDate} max={dueDate || undefined}
-      onChange={event => setStartDate(event.target.value)} /></label>
-    <label>Due date<input type="date" value={dueDate} min={startDate || undefined}
-      onChange={event => setDueDate(event.target.value)} /></label>
-  </>;
-}
