@@ -35,6 +35,7 @@ public sealed class Lead
     public string? Email { get; set; }
     public string? NormalizedEmail { get; private set; }
     public string? CompanyName { get; set; }
+    public long? CustomerId { get; set; }
     public string? CustomerCode { get; set; }
     public string? Address { get; set; }
     public string? LeadGivenBy { get; set; }

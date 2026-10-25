@@ -8,6 +8,8 @@ namespace BusinessFlow.Api.Data;
 public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
     : IdentityDbContext<ApplicationUser, IdentityRole<long>, long>(options)
 {
+    public DbSet<Customer> Customers => Set<Customer>();
+    public DbSet<CustomerContact> CustomerContacts => Set<CustomerContact>();
     public DbSet<Lead> Leads => Set<Lead>();
     public DbSet<LeadRoutingRule> LeadRoutingRules => Set<LeadRoutingRule>();
     public DbSet<WebsiteLeadSubmission> WebsiteLeadSubmissions => Set<WebsiteLeadSubmission>();
@@ -98,6 +100,24 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
             .HasForeignKey(u => u.ManagerId)
             .OnDelete(DeleteBehavior.NoAction);
 
+        modelBuilder.Entity<Customer>(entity =>
+        {
+            entity.Property(x => x.Name).HasMaxLength(200).IsRequired();
+            entity.Property(x => x.Phone).HasMaxLength(30);
+            entity.Property(x => x.Email).HasMaxLength(256);
+            entity.Property(x => x.Address).HasMaxLength(500);
+            entity.HasIndex(x => x.Name);
+        });
+        modelBuilder.Entity<CustomerContact>(entity =>
+        {
+            entity.Property(x => x.Name).HasMaxLength(150).IsRequired();
+            entity.Property(x => x.Designation).HasMaxLength(100);
+            entity.Property(x => x.Email).HasMaxLength(256);
+            entity.Property(x => x.Phone).HasMaxLength(30);
+            entity.HasIndex(x => new { x.CustomerId, x.IsPrimary });
+            entity.HasOne<Customer>().WithMany().HasForeignKey(x => x.CustomerId)
+                .OnDelete(DeleteBehavior.NoAction);
+        });
         modelBuilder.Entity<Lead>(entity =>
         {
             entity.Property(x => x.Name).HasMaxLength(150).IsRequired();
@@ -108,6 +128,9 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
             entity.Property(x => x.NormalizedEmail).HasMaxLength(256)
                 .HasComputedColumnSql("NULLIF(LOWER(LTRIM(RTRIM([Email]))), N'')", stored: true);
             entity.Property(x => x.CompanyName).HasMaxLength(200);
+            entity.HasIndex(x => x.CustomerId);
+            entity.HasOne<Customer>().WithMany().HasForeignKey(x => x.CustomerId)
+                .OnDelete(DeleteBehavior.NoAction);
             entity.Property(x => x.CustomerCode).HasMaxLength(30);
             entity.Property(x => x.Address).HasMaxLength(500);
             entity.Property(x => x.LeadGivenBy).HasMaxLength(150);
