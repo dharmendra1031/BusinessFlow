@@ -212,6 +212,97 @@ namespace BusinessFlow.Api.Migrations
                     b.ToTable("DeveloperWorklogs");
                 });
 
+            modelBuilder.Entity("BusinessFlow.Api.Models.Customer", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<string>("Address")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Email")
+                        .HasMaxLength(256)
+                        .HasColumnType("nvarchar(256)");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("Phone")
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<DateTime>("UpdatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Name");
+
+                    b.ToTable("Customers");
+                });
+
+            modelBuilder.Entity("BusinessFlow.Api.Models.CustomerContact", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<long>("CustomerId")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("Designation")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("Email")
+                        .HasMaxLength(256)
+                        .HasColumnType("nvarchar(256)");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsPrimary")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
+                    b.Property<string>("Phone")
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CustomerId", "IsPrimary");
+
+                    b.ToTable("CustomerContacts");
+                });
+
             modelBuilder.Entity("BusinessFlow.Api.Models.DevelopmentProject", b =>
                 {
                     b.Property<long>("Id")
@@ -368,6 +459,9 @@ namespace BusinessFlow.Api.Migrations
                     b.Property<long>("CreatedById")
                         .HasColumnType("bigint");
 
+                    b.Property<long?>("CustomerId")
+                        .HasColumnType("bigint");
+
                     b.Property<string>("CustomerCode")
                         .HasMaxLength(30)
                         .HasColumnType("nvarchar(30)");
@@ -438,6 +532,8 @@ namespace BusinessFlow.Api.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("CreatedById");
+
+                    b.HasIndex("CustomerId");
 
                     b.HasIndex("CustomerCode")
                         .IsUnique()
@@ -1279,6 +1375,15 @@ namespace BusinessFlow.Api.Migrations
                     b.Navigation("User");
                 });
 
+            modelBuilder.Entity("BusinessFlow.Api.Models.CustomerContact", b =>
+                {
+                    b.HasOne("BusinessFlow.Api.Models.Customer", null)
+                        .WithMany()
+                        .HasForeignKey("CustomerId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("BusinessFlow.Api.Models.DevelopmentProject", b =>
                 {
                     b.HasOne("BusinessFlow.Api.Models.ApplicationUser", null)
@@ -1338,6 +1443,11 @@ namespace BusinessFlow.Api.Migrations
 
             modelBuilder.Entity("BusinessFlow.Api.Models.Lead", b =>
                 {
+                    b.HasOne("BusinessFlow.Api.Models.Customer", null)
+                        .WithMany()
+                        .HasForeignKey("CustomerId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
                     b.HasOne("BusinessFlow.Api.Models.ApplicationUser", "AssignedTo")
                         .WithMany()
                         .HasForeignKey("AssignedToId")
