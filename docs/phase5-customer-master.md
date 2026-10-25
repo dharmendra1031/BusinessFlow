@@ -28,3 +28,11 @@ Customer-specific data scope and role matrix, complete paginated linked history,
 - Duplicate matching is an application-level review check, not a global uniqueness guarantee under simultaneous requests. Manual exception/merge policy and stress tests are pending.
 - Real IIS staging migration and backup/restore acceptance are still pending.
 
+## Customer read-only permission model
+
+- `customers.view`: Admin has full access through existing `/api/admin/customers` endpoints; Manager receives read-only `/api/customers` access limited to customers associated with visible assigned/reporting-team leads. Employee has **no default** customer access, but can receive an explicit scoped role grant.
+- Non-admin responses contain only customer ID/name and permitted lead IDs/names/statuses. Customer phone, email, GSTIN, billing, contact persons and history are **never** returned by this read-only endpoint.
+- Non-admin customer access does not grant Customer Master write permissions. Other existing Admin endpoints remain protected by `[Authorize(Roles = "Admin")]`.
+- The read-only API checks effective `customers.view` permission and applies the matching lead data scope before lookup. Unlinked customers are not exposed.
+- `customers.view` supports existing permission restrictions and custom-role data scope grants. Full Sales/Accounts edit matrix remains unapproved and is not silently enabled.
+

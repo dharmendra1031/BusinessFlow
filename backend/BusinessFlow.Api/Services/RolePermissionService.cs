@@ -15,14 +15,14 @@ public sealed class RolePermissionService(AppDbContext db)
         "projects.create", "projects.edit", "tasks.create", "tasks.edit", "tasks.status",
         "bugs.view", "bugs.create", "bugs.edit", "bugs.status", "bugs.close",
         "worklogs.view", "worklogs.post", "planning.view", "planning.manage",
-        "reports.export", "reports.pdf", "employees.create", "employees.edit", "employees.disable",
+        "reports.export", "reports.pdf", "customers.view", "employees.create", "employees.edit", "employees.disable",
         "employees.reset-password", "organization.manage", "roles.manage"
     ];
 
     private static readonly string[] EmployeeRestricted =
     [
         "leads.assign", "leads.approve", "employees.view", "projects.create", "projects.edit",
-        "tasks.create", "tasks.edit", "bugs.edit", "bugs.close", "planning.manage"
+        "tasks.create", "tasks.edit", "bugs.edit", "bugs.close", "planning.manage", "customers.view"
     ];
 
     public static bool AdminOnly(string permission) => permission is

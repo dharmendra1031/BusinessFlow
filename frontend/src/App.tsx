@@ -16,6 +16,7 @@ import LeadSourcesPage from './LeadSourcesPage';
 import LeadDuplicatesPage from './LeadDuplicatesPage';
 import LeadRoutingPage from './LeadRoutingPage';
 import CustomersPage from './CustomersPage';
+import CustomerDirectoryPage from './CustomerDirectoryPage';
 import type { User } from './types';
 
 type Session = { token: string; user: User };
@@ -156,7 +157,8 @@ function Workspace() {
   const items = navigation.filter(item =>
     (item.id !== 'approvals' || allowed?.['leads.approve'] === true) &&
     (item.id !== 'employees' || canSeeTeam) &&
-    (item.id !== 'audit' && item.id !== 'permissions' && item.id !== 'organization' && item.id !== 'roles' && item.id !== 'sources' && item.id !== 'duplicates' && item.id !== 'routing' && item.id !== 'customers' || user.roles.includes('Admin')) &&
+    (item.id !== 'audit' && item.id !== 'permissions' && item.id !== 'organization' && item.id !== 'roles' && item.id !== 'sources' && item.id !== 'duplicates' && item.id !== 'routing' || user.roles.includes('Admin')) &&
+    (item.id !== 'customers' || allowed?.['customers.view'] === true) &&
     (allowed?.[moduleAccess[item.id] || ''] !== false));
   const pageTitle = { dashboard: 'Dashboard', leads: 'All leads', projects: 'Development projects', followups: 'Follow-ups', employees: 'Team', reports: 'Reports', audit: 'Audit history', permissions: 'Role permissions', roles: 'Custom roles', organization: 'Organization', sources: 'Lead sources', duplicates: 'Duplicate review', routing: 'Lead routing', customers: 'Customer master', approvals: 'Lead approvals', settings: 'Change password' }[screen];
 
@@ -223,7 +225,9 @@ function Workspace() {
         {screen === 'sources' && user.roles.includes('Admin') && <LeadSourcesPage token={session.token} />}
         {screen === 'duplicates' && user.roles.includes('Admin') && <LeadDuplicatesPage token={session.token} />}
         {screen === 'routing' && user.roles.includes('Admin') && <LeadRoutingPage token={session.token} />}
-        {screen === 'customers' && user.roles.includes('Admin') && <CustomersPage token={session.token} />}
+        {screen === 'customers' && allowed?.['customers.view'] === true &&
+          (user.roles.includes('Admin') ? <CustomersPage token={session.token} /> :
+            <CustomerDirectoryPage token={session.token} />)}
       </main>
     </div>
   </div>;
