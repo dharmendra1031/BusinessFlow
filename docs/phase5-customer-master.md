@@ -17,3 +17,14 @@ GitHub CI uses temporary disposable SQL Server databases; do not apply migration
 ## Next increments
 
 Customer-specific data scope and role matrix, complete paginated linked history, customer merge governance, direct commercial quotations and contracts, invoice/payment integration, and client support/AMC.
+
+## Billing details and duplicate checks — incremental update
+
+- Optional legal/billing name, address, city, state, postal code, country and Indian GSTIN fields are supported by API and UI. A blank GSTIN is allowed for customers outside India's GST system.
+- SQL migration `20261025110000_AddCustomerBilling` adds nullable columns and a persisted phone-normalization column with non-unique indexes; existing customer, lead and project data is not rewritten.
+- Admin customer creation/update returns HTTP 409 with matching customer identifiers if email (case-insensitive), normalized phone, or GSTIN matches another customer. It does **not** automatically merge records. Contact persons can legitimately share contact information.
+- Customer audit history is paginated and contains Customer/Contact actions plus explicit lead link/unlink events; the UI can load earlier entries.
+- Existing one-project-per-Won-lead semantics and employee access restrictions remain unchanged. Customer roles and data-scope permissions need separate reviewed design.
+- Duplicate matching is an application-level review check, not a global uniqueness guarantee under simultaneous requests. Manual exception/merge policy and stress tests are pending.
+- Real IIS staging migration and backup/restore acceptance are still pending.
+

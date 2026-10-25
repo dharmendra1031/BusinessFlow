@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { api } from './api';
+import CustomerBillingFields, { emptyCustomerBilling, type CustomerBilling } from './CustomerBillingFields';
 import { Icon } from './Icon';
 import { useFeedback } from './Feedback';
 import { clearFieldError, handleDialogKeyDown, handleFormKeyDown, validateForm } from './formUtils';
@@ -8,6 +9,9 @@ import type { Paged } from './types';
 type Customer = {
   id: number; name: string; email: string | null; phone: string | null;
   address?: string | null; isActive: boolean; rowVersion: string;
+  legalName?: string | null; gstin?: string | null; billingAddress?: string | null;
+  billingCity?: string | null; billingState?: string | null;
+  billingPostalCode?: string | null; billingCountry?: string | null;
   leadCount?: number; projectCount?: number;
 };
 type Contact = {
@@ -22,6 +26,23 @@ type Detail = {
   leads: LinkedLead[]; leadCount: number;
   projects: LinkedProject[]; projectCount: number;
 };
+type CustomerHistory = {
+  id: number; action: string; tableName: string; recordId: number;
+  userId: number; createdAtUtc: string;
+};
+
+function currentBilling(customer: Customer): CustomerBilling {
+  return {
+    legalName: customer.legalName ?? '',
+    gstin: customer.gstin ?? '',
+    billingAddress: customer.billingAddress ?? '',
+    billingCity: customer.billingCity ?? '',
+    billingState: customer.billingState ?? '',
+    billingPostalCode: customer.billingPostalCode ?? '',
+    billingCountry: customer.billingCountry ?? '',
+  };
+}
+
 type ContactForm = {
   name: string; designation: string; email: string; phone: string;
   isPrimary: boolean; isActive: boolean;
@@ -44,6 +65,10 @@ export default function CustomersPage({ token }: { token: string }) {
   const [newName, setNewName] = useState('');
   const [newEmail, setNewEmail] = useState('');
   const [newPhone, setNewPhone] = useState('');
+  const [newBilling, setNewBilling] = useState<CustomerBilling>(emptyCustomerBilling);
+  const [editBilling, setEditBilling] = useState<CustomerBilling>(emptyCustomerBilling);
+  const [history, setHistory] = useState<Paged<CustomerHistory> | null>(null);
+  const [historyPage, setHistoryPage] = useState(1);
   const [editName, setEditName] = useState('');
   const [editEmail, setEditEmail] = useState('');
   const [editPhone, setEditPhone] = useState('');
@@ -72,8 +97,14 @@ export default function CustomersPage({ token }: { token: string }) {
 
   async function openCustomer(id: number) {
     try {
-      const current = await api<Detail>('/api/admin/customers/' + id, token);
+      const [current, recentHistory] = await Promise.all([
+        api<Detail>('/api/admin/customers/' + id, token),
+        api<Paged<CustomerHistory>>('/api/admin/customers/' + id + '/history', token),
+      ]);
       setDetail(current);
+      setHistory(recentHistory);
+      setHistoryPage(1);
+      setEditBilling(currentBilling(current.customer));
       setEditName(current.customer.name);
       setEditEmail(current.customer.email ?? '');
       setEditPhone(current.customer.phone ?? '');
@@ -86,6 +117,8 @@ export default function CustomersPage({ token }: { token: string }) {
 
   function close() {
     setDetail(null);
+    setHistory(null);
+    setHistoryPage(1);
     setEditingContact(null);
     setContact(blankContact());
     setLeadSearch('');
@@ -100,9 +133,10 @@ export default function CustomersPage({ token }: { token: string }) {
       const created = await api<{ id: number }>('/api/admin/customers', token, {
         method: 'POST', body: JSON.stringify({
           name: newName.trim(), email: newEmail.trim() || null, phone: newPhone.trim() || null,
+          ...newBilling, gstin: newBilling.gstin.trim() || null,
         }),
       });
-      setNewName(''); setNewEmail(''); setNewPhone('');
+      setNewName(''); setNewEmail(''); setNewPhone(''); setNewBilling(emptyCustomerBilling());
       await load();
       await openCustomer(created.id);
       notify('success', 'Customer created');
@@ -120,6 +154,7 @@ export default function CustomersPage({ token }: { token: string }) {
         method: 'PUT', body: JSON.stringify({
           name: editName.trim(), email: editEmail.trim() || null,
           phone: editPhone.trim() || null, address: editAddress.trim() || null,
+          ...editBilling, gstin: editBilling.gstin.trim() || null,
           isActive: editActive, rowVersion: detail.customer.rowVersion,
         }),
       });
@@ -236,6 +271,21 @@ export default function CustomersPage({ token }: { token: string }) {
     } finally { setWorking(false); }
   }
 
+
+  async function loadMoreHistory() {
+    if (!detail || !history || history.items.length >= history.total) return;
+    const next = historyPage + 1;
+    try {
+      const extra = await api<Paged<CustomerHistory>>(
+        '/api/admin/customers/' + detail.customer.id + '/history?page=' + next, token);
+      setHistory(previous => previous
+        ? { ...extra, items: [...previous.items, ...extra.items] } : extra);
+      setHistoryPage(next);
+    } catch (err) {
+      notify('error', 'Unable to load customer history', err instanceof Error ? err.message : undefined);
+    }
+  }
+
   return <section>
     <header className="page-header"><div>
       <span className="section-kicker">CLIENT RELATIONSHIPS</span>
@@ -244,7 +294,7 @@ export default function CustomersPage({ token }: { token: string }) {
     </div></header>
 
     <section className="panel" aria-label="Add customer">
-      <div className="panel-heading"><h2>Add customer</h2><p>Existing leads are never linked automatically.</p></div>
+      <div className="panel-heading"><h2>Add customer</h2><p>Duplicate phone, email or GSTIN requires review. Leads are never linked automatically.</p></div>
       <form className="form-grid" onSubmit={createCustomer} onInput={clearFieldError} onKeyDown={handleFormKeyDown}>
         <label>Customer / company name *<input required minLength={2} maxLength={200}
           value={newName} onChange={event => setNewName(event.target.value)} /></label>
@@ -252,6 +302,7 @@ export default function CustomersPage({ token }: { token: string }) {
           value={newEmail} onChange={event => setNewEmail(event.target.value)} /></label>
         <label>Phone<input type="tel" maxLength={30}
           value={newPhone} onChange={event => setNewPhone(event.target.value)} /></label>
+        <CustomerBillingFields value={newBilling} onChange={setNewBilling} />
         <div><button className="primary" disabled={working}>Add customer</button></div>
       </form>
     </section>
@@ -262,7 +313,7 @@ export default function CustomersPage({ token }: { token: string }) {
         event.preventDefault(); setPage(1); setQuery(search.trim());
       }}>
         <label>Search customers<input value={search} maxLength={200}
-          onChange={event => setSearch(event.target.value)} placeholder="Name, email or phone" /></label>
+          onChange={event => setSearch(event.target.value)} placeholder="Name, legal name, email, phone or GSTIN" /></label>
         <div><button type="submit">Search</button></div>
       </form>
       {error && <p className="error" role="alert">{error}
@@ -306,6 +357,7 @@ export default function CustomersPage({ token }: { token: string }) {
               value={editPhone} onChange={event => setEditPhone(event.target.value)} /></label>
             <label>Address<textarea maxLength={500}
               value={editAddress} onChange={event => setEditAddress(event.target.value)} /></label>
+            <CustomerBillingFields value={editBilling} onChange={setEditBilling} />
             <label><input type="checkbox" checked={editActive}
               onChange={event => setEditActive(event.target.checked)} /> Active customer</label>
             <button className="primary" disabled={working}>Save customer</button>
@@ -375,6 +427,17 @@ export default function CustomersPage({ token }: { token: string }) {
             <div><strong>{project.title}</strong><p>{project.status} · Project #{project.id}</p></div>
           </div>)}
           {!detail.projects.length && <p className="field-help">No linked development projects.</p>}
+        </section>
+
+        <section className="project-section" aria-label="Customer activity history">
+          <h3>Activity history ({history?.total ?? 0})</h3>
+          {history?.items.map(entry => <div key={entry.id} className="project-task">
+            <div><strong>{entry.action} · {entry.tableName}</strong>
+              <p>{new Date(entry.createdAtUtc).toLocaleString()} · User #{entry.userId}</p></div>
+          </div>)}
+          {history && history.items.length < history.total &&
+            <button type="button" onClick={() => void loadMoreHistory()}>Load more history</button>}
+          {history?.items.length === 0 && <p className="field-help">No activity recorded yet.</p>}
         </section>
       </aside>
     </div>}
