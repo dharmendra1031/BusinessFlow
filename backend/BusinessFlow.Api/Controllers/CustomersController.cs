@@ -1,3 +1,4 @@
+using System.Data;
 using BusinessFlow.Api.Contracts;
 using BusinessFlow.Api.Data;
 using BusinessFlow.Api.Models;
@@ -16,6 +17,51 @@ public sealed class CustomersController(AppDbContext db) : ControllerBase
 {
     private static string? Optional(string? value) =>
         string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+
+    private static string? PhoneKey(string? phone) =>
+        phone is null ? null : new string(phone.Where(char.IsAsciiDigit).ToArray());
+
+    private async Task<IActionResult?> CheckDuplicates(
+        SaveCustomerRequest request, long? excluding, CancellationToken ct)
+    {
+        var email = Optional(request.Email)?.ToLowerInvariant();
+        var phone = PhoneKey(Optional(request.Phone));
+        var gstin = Optional(request.Gstin)?.ToUpperInvariant();
+        if (email is null && phone is null && gstin is null) return null;
+
+        var matches = await db.Customers.AsNoTracking()
+            .Where(c => (excluding == null || c.Id != excluding) &&
+                (email != null && c.Email != null && c.Email.ToLower() == email ||
+                 phone != null && c.NormalizedPhone == phone ||
+                 gstin != null && c.Gstin == gstin))
+            .OrderBy(c => c.Id)
+            .Take(10)
+            .Select(c => new { c.Id, c.Name })
+            .ToListAsync(ct);
+        if (matches.Count == 0) return null;
+        return Conflict(new
+        {
+            message = $"Possible duplicate customer: {matches[0].Name} (#{matches[0].Id}). Review the existing record before saving.",
+            matches
+        });
+    }
+
+    private static void UpdateDetails(Customer customer, SaveCustomerRequest request)
+    {
+        customer.Name = request.Name.Trim();
+        customer.Email = Optional(request.Email);
+        customer.Phone = Optional(request.Phone);
+        customer.Address = Optional(request.Address);
+        customer.LegalName = Optional(request.LegalName);
+        customer.Gstin = Optional(request.Gstin)?.ToUpperInvariant();
+        customer.BillingAddress = Optional(request.BillingAddress);
+        customer.BillingCity = Optional(request.BillingCity);
+        customer.BillingState = Optional(request.BillingState);
+        customer.BillingPostalCode = Optional(request.BillingPostalCode);
+        customer.BillingCountry = Optional(request.BillingCountry);
+        customer.IsActive = request.IsActive;
+        customer.UpdatedAtUtc = DateTime.UtcNow;
+    }
 
     private void Audit(string action, string table, long id, string? details = null) =>
         db.AuditLogs.Add(new AuditLog
@@ -39,7 +85,9 @@ public sealed class CustomersController(AppDbContext db) : ControllerBase
             var term = search.Trim();
             customers = customers.Where(c => c.Name.Contains(term) ||
                 c.Email != null && c.Email.Contains(term) ||
-                c.Phone != null && c.Phone.Contains(term));
+                c.Phone != null && c.Phone.Contains(term) ||
+                c.Gstin != null && c.Gstin.Contains(term) ||
+                c.LegalName != null && c.LegalName.Contains(term));
         }
         var total = await customers.CountAsync(ct);
         var items = await customers.OrderBy(c => c.Name).ThenBy(c => c.Id)
@@ -60,6 +108,8 @@ public sealed class CustomersController(AppDbContext db) : ControllerBase
             .Select(c => new
             {
                 c.Id, c.Name, c.Email, c.Phone, c.Address, c.IsActive,
+                c.LegalName, c.Gstin, c.BillingAddress, c.BillingCity, c.BillingState,
+                c.BillingPostalCode, c.BillingCountry,
                 c.RowVersion, c.CreatedAtUtc, c.UpdatedAtUtc
             }).FirstOrDefaultAsync(ct);
         if (customer is null) return NotFound();
@@ -81,6 +131,30 @@ public sealed class CustomersController(AppDbContext db) : ControllerBase
             .Select(p => new { p.Id, p.Title, p.Status, p.LeadId, p.OwnerId })
             .ToListAsync(ct);
         return Ok(new { customer, contacts, leadCount, leads, projectCount, projects });
+    }
+
+
+    [HttpGet("{id:long}/history")]
+    public async Task<IActionResult> History(long id, int page = 1, int pageSize = 30,
+        CancellationToken ct = default)
+    {
+        if (page < 1 || pageSize is < 1 or > 100 || (long)(page - 1) * pageSize > int.MaxValue)
+            return BadRequest(new { message = "Invalid history pagination." });
+        if (!await db.Customers.AnyAsync(c => c.Id == id, ct)) return NotFound();
+
+        var contactIds = db.CustomerContacts.Where(c => c.CustomerId == id).Select(c => c.Id);
+        var linkMarker = "CustomerId: " + id;
+        var history = db.AuditLogs.AsNoTracking().Where(a =>
+            a.TableName == "Customers" && a.RecordId == id ||
+            a.TableName == "CustomerContacts" && contactIds.Contains(a.RecordId) ||
+            a.TableName == "Leads" && (a.Action == "Link" || a.Action == "Unlink") &&
+                a.ChangedFields == linkMarker);
+        var total = await history.CountAsync(ct);
+        var items = await history.OrderByDescending(a => a.CreatedAtUtc).ThenByDescending(a => a.Id)
+            .Skip((page - 1) * pageSize).Take(pageSize)
+            .Select(a => new { a.Id, a.Action, a.TableName, a.RecordId, a.UserId, a.CreatedAtUtc })
+            .ToListAsync(ct);
+        return Ok(new { total, page, pageSize, items });
     }
 
     [HttpGet("unlinked-leads")]
@@ -105,13 +179,12 @@ public sealed class CustomersController(AppDbContext db) : ControllerBase
         if (name.Length is < 2 or > 200)
             return BadRequest(new { message = "Customer name must contain 2 to 200 characters." });
 
-        var customer = new Customer
-        {
-            Name = name, Email = Optional(request.Email), Phone = Optional(request.Phone),
-            Address = Optional(request.Address), IsActive = request.IsActive
-        };
+        await using var transaction = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable, ct);
+        var duplicate = await CheckDuplicates(request, null, ct);
+        if (duplicate is not null) return duplicate;
+        var customer = new Customer();
+        UpdateDetails(customer, request);
         db.Customers.Add(customer);
-        await using var transaction = await db.Database.BeginTransactionAsync(ct);
         await db.SaveChangesAsync(ct);
         Audit("Create", "Customers", customer.Id);
         await db.SaveChangesAsync(ct);
@@ -131,13 +204,10 @@ public sealed class CustomersController(AppDbContext db) : ControllerBase
         if (customer is null) return NotFound();
         if (!ConcurrencyTokens.Apply(db, customer, request.RowVersion))
             return BadRequest(new { message = "A valid row version is required. Reload this customer." });
-        customer.Name = name;
-        customer.Email = Optional(request.Email);
-        customer.Phone = Optional(request.Phone);
-        customer.Address = Optional(request.Address);
-        customer.IsActive = request.IsActive;
-        customer.UpdatedAtUtc = DateTime.UtcNow;
-        Audit("Update", "Customers", customer.Id, "Customer details or active state updated");
+        var duplicate = await CheckDuplicates(request, id, ct);
+        if (duplicate is not null) return duplicate;
+        UpdateDetails(customer, request);
+        Audit("Update", "Customers", customer.Id, "Customer, billing or active state updated");
         await db.SaveChangesAsync(ct);
         await transaction.CommitAsync(ct);
         return NoContent();

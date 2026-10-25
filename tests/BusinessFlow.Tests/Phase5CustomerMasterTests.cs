@@ -114,4 +114,64 @@ public sealed class Phase5CustomerMasterTests
             (await admin.PutAsJsonAsync(root + "/" + b + "/leads/" + id,
                 new { rowVersion = linked.GetProperty("rowVersion").GetString() })).StatusCode);
     }
+
+    [Fact]
+    public async Task Billing_fields_validate_and_possible_duplicates_are_never_merged()
+    {
+        await using var fixture = await Phase1TestDatabase.CreateAsync();
+        await using var host = new Phase1ApiHost(fixture);
+        using var admin = await host.ClientAsync("Admin");
+        var root = "/api/admin/customers";
+        const string gstin = "09ABCDE1234F1Z5";
+        var initial = await admin.PostAsJsonAsync(root, new
+        {
+            name = "Billing client", legalName = "Billing Client Private Limited",
+            email = "Office@Billing.Example", phone = "+91 98765-43210",
+            gstin, billingAddress = "5 Example Road",
+            billingCity = "Kanpur", billingState = "Uttar Pradesh",
+            billingPostalCode = "208001", billingCountry = "India"
+        });
+        Assert.Equal(HttpStatusCode.Created, initial.StatusCode);
+        var id = (await initial.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetInt64();
+        var details = await admin.GetFromJsonAsync<JsonElement>(root + "/" + id);
+        var customer = details.GetProperty("customer");
+        Assert.Equal(gstin, customer.GetProperty("gstin").GetString());
+        Assert.Equal("Kanpur", customer.GetProperty("billingCity").GetString());
+
+        Assert.Equal(HttpStatusCode.Conflict,
+            (await admin.PostAsJsonAsync(root,
+                new { name = "Same phone", phone = "919876543210" })).StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict,
+            (await admin.PostAsJsonAsync(root,
+                new { name = "Same email", email = "office@billing.example" })).StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict,
+            (await admin.PostAsJsonAsync(root,
+                new { name = "Same tax id", gstin = gstin.ToLowerInvariant() })).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest,
+            (await admin.PostAsJsonAsync(root,
+                new { name = "Invalid GSTIN", gstin = "123" })).StatusCode);
+
+        var other = await admin.PostAsJsonAsync(root,
+            new { name = "Another customer", phone = "911234567890" });
+        Assert.Equal(HttpStatusCode.Created, other.StatusCode);
+        var otherId = (await other.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetInt64();
+        var otherData = await admin.GetFromJsonAsync<JsonElement>(root + "/" + otherId);
+        Assert.Equal(HttpStatusCode.Conflict, (await admin.PutAsJsonAsync(root + "/" + otherId,
+            new { name = "Another customer", phone = "919876543210",
+                rowVersion = otherData.GetProperty("customer").GetProperty("rowVersion").GetString() })).StatusCode);
+
+        Assert.Equal(HttpStatusCode.NoContent,
+            (await admin.PutAsJsonAsync(root + "/" + id, new {
+                name = "Billing client", email = "Office@Billing.Example", phone = "+91 98765-43210",
+                gstin, legalName = "Billing Client Private Limited",
+                billingCountry = "India", billingCity = "Kanpur",
+                rowVersion = customer.GetProperty("rowVersion").GetString() })).StatusCode);
+        var history = await admin.GetFromJsonAsync<JsonElement>(root + "/" + id + "/history");
+        Assert.True(history.GetProperty("total").GetInt32() >= 2);
+        Assert.Contains(history.GetProperty("items").EnumerateArray(),
+            item => item.GetProperty("action").GetString() == "Update");
+
+        await using var check = fixture.CreateContext();
+        Assert.Equal(2, await check.Customers.CountAsync());
+    }
 }

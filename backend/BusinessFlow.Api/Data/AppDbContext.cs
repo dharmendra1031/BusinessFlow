@@ -106,7 +106,19 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
             entity.Property(x => x.Phone).HasMaxLength(30);
             entity.Property(x => x.Email).HasMaxLength(256);
             entity.Property(x => x.Address).HasMaxLength(500);
+            entity.Property(x => x.LegalName).HasMaxLength(200);
+            entity.Property(x => x.Gstin).HasMaxLength(15);
+            entity.Property(x => x.BillingAddress).HasMaxLength(500);
+            entity.Property(x => x.BillingCity).HasMaxLength(100);
+            entity.Property(x => x.BillingState).HasMaxLength(100);
+            entity.Property(x => x.BillingPostalCode).HasMaxLength(20);
+            entity.Property(x => x.BillingCountry).HasMaxLength(100);
+            entity.Property(x => x.NormalizedPhone).HasMaxLength(30)
+                .HasComputedColumnSql("REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE([Phone], N' ', N''), N'-', N''), N'+', N''), N'(', N''), N')', N''), N'.', N''), NCHAR(9), N'')", stored: true);
             entity.HasIndex(x => x.Name);
+            entity.HasIndex(x => x.Email);
+            entity.HasIndex(x => x.NormalizedPhone);
+            entity.HasIndex(x => x.Gstin);
         });
         modelBuilder.Entity<CustomerContact>(entity =>
         {
