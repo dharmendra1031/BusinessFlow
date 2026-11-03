@@ -64,4 +64,24 @@ public sealed class CustomerDirectoryController(
             .ToListAsync(ct);
         return Ok(new { customer, leadCount, leads });
     }
+
+    [HttpGet("{id:long}/leads")]
+    [RequirePermission(Action)]
+    public async Task<IActionResult> LinkedLeads(long id, int page = 1, int pageSize = 30,
+        CancellationToken ct = default)
+    {
+        if (!await permissions.AllowedAsync(User, Action)) return Forbid();
+        if (page < 1 || pageSize is < 1 or > 100 || (long)(page - 1) * pageSize > int.MaxValue)
+            return BadRequest(new { message = "Invalid pagination." });
+
+        var visibleLeads = (await access.LeadsAsync(User, Action, ct)).AsNoTracking()
+            .Where(l => l.CustomerId == id);
+        var total = await visibleLeads.CountAsync(ct);
+        if (total == 0) return NotFound();
+        var items = await visibleLeads.OrderByDescending(l => l.CreatedAtUtc).ThenByDescending(l => l.Id)
+            .Skip((page - 1) * pageSize).Take(pageSize)
+            .Select(l => new { l.Id, l.Name, Status = l.Status.Name })
+            .ToListAsync(ct);
+        return Ok(new { total, page, pageSize, items });
+    }
 }

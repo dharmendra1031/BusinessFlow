@@ -21,6 +21,17 @@ public sealed class CustomersController(AppDbContext db) : ControllerBase
     private static string? PhoneKey(string? phone) =>
         phone is null ? null : new string(phone.Where(char.IsAsciiDigit).ToArray());
 
+    // The duplicate review is advisory rather than a unique index: existing customers may
+    // share identifiers. Serialize API writes so two reviews cannot both pass at once.
+    private Task LockDuplicateReview(CancellationToken ct) => db.Database.ExecuteSqlRawAsync(
+        """
+        DECLARE @result int;
+        EXEC @result = sp_getapplock
+            @Resource = 'BusinessFlow.CustomerDuplicateReview',
+            @LockMode = 'Exclusive', @LockOwner = 'Transaction', @LockTimeout = 10000;
+        IF @result < 0 THROW 51000, 'Customer duplicate review lock unavailable.', 1;
+        """, ct);
+
     private async Task<IActionResult?> CheckDuplicates(
         SaveCustomerRequest request, long? excluding, CancellationToken ct)
     {
@@ -133,6 +144,39 @@ public sealed class CustomersController(AppDbContext db) : ControllerBase
         return Ok(new { customer, contacts, leadCount, leads, projectCount, projects });
     }
 
+    [HttpGet("{id:long}/leads")]
+    public async Task<IActionResult> LinkedLeads(long id, int page = 1, int pageSize = 30,
+        CancellationToken ct = default)
+    {
+        if (!ValidPage(page, pageSize)) return BadRequest(new { message = "Invalid pagination." });
+        if (!await db.Customers.AnyAsync(c => c.Id == id, ct)) return NotFound();
+        var query = db.Leads.AsNoTracking().Where(l => l.CustomerId == id);
+        var total = await query.CountAsync(ct);
+        var items = await query.OrderByDescending(l => l.CreatedAtUtc).ThenByDescending(l => l.Id)
+            .Skip((page - 1) * pageSize).Take(pageSize)
+            .Select(l => new { l.Id, l.Name, Status = l.Status.Name, l.RowVersion })
+            .ToListAsync(ct);
+        return Ok(new { total, page, pageSize, items });
+    }
+
+    [HttpGet("{id:long}/projects")]
+    public async Task<IActionResult> LinkedProjects(long id, int page = 1, int pageSize = 30,
+        CancellationToken ct = default)
+    {
+        if (!ValidPage(page, pageSize)) return BadRequest(new { message = "Invalid pagination." });
+        if (!await db.Customers.AnyAsync(c => c.Id == id, ct)) return NotFound();
+        var query = db.DevelopmentProjects.AsNoTracking().Where(p => p.Lead.CustomerId == id);
+        var total = await query.CountAsync(ct);
+        var items = await query.OrderByDescending(p => p.CreatedAtUtc).ThenByDescending(p => p.Id)
+            .Skip((page - 1) * pageSize).Take(pageSize)
+            .Select(p => new { p.Id, p.Title, p.Status, p.LeadId, p.OwnerId })
+            .ToListAsync(ct);
+        return Ok(new { total, page, pageSize, items });
+    }
+
+    private static bool ValidPage(int page, int pageSize) =>
+        page >= 1 && pageSize is >= 1 and <= 100 && (long)(page - 1) * pageSize <= int.MaxValue;
+
 
     [HttpGet("{id:long}/history")]
     public async Task<IActionResult> History(long id, int page = 1, int pageSize = 30,
@@ -180,6 +224,7 @@ public sealed class CustomersController(AppDbContext db) : ControllerBase
             return BadRequest(new { message = "Customer name must contain 2 to 200 characters." });
 
         await using var transaction = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable, ct);
+        await LockDuplicateReview(ct);
         var duplicate = await CheckDuplicates(request, null, ct);
         if (duplicate is not null) return duplicate;
         var customer = new Customer();
@@ -200,6 +245,7 @@ public sealed class CustomersController(AppDbContext db) : ControllerBase
             return BadRequest(new { message = "Customer name must contain 2 to 200 characters." });
 
         await using var transaction = await db.Database.BeginTransactionAsync(ct);
+        await LockDuplicateReview(ct);
         var customer = await db.Customers.FirstOrDefaultAsync(c => c.Id == id, ct);
         if (customer is null) return NotFound();
         if (!ConcurrencyTokens.Apply(db, customer, request.RowVersion))

@@ -10,6 +10,49 @@ namespace BusinessFlow.Tests;
 public sealed class Phase5CustomerMasterTests
 {
     [Fact]
+    public async Task Linked_leads_and_projects_can_be_read_beyond_first_page()
+    {
+        await using var fixture = await Phase1TestDatabase.CreateAsync();
+        await using var host = new Phase1ApiHost(fixture);
+        using var admin = await host.ClientAsync("Admin");
+        var me = await admin.GetFromJsonAsync<JsonElement>("/api/auth/me");
+        var ownerId = me.GetProperty("id").GetInt64();
+        long customerId;
+        await using (var db = fixture.CreateContext())
+        {
+            var customer = new Customer { Name = "Paged client" };
+            db.Customers.Add(customer);
+            await db.SaveChangesAsync();
+            customerId = customer.Id;
+            for (var i = 0; i < 3; i++)
+            {
+                var lead = new Lead { Name = "Paged lead " + i, Phone = "1234567890",
+                    SourceId = 1, StatusId = 5, CreatedById = ownerId, CustomerId = customerId };
+                db.Leads.Add(lead);
+                await db.SaveChangesAsync();
+                db.DevelopmentProjects.Add(new DevelopmentProject { LeadId = lead.Id,
+                    Title = "Paged project " + i, OwnerId = ownerId, CreatedById = ownerId });
+            }
+            await db.SaveChangesAsync();
+        }
+
+        foreach (var kind in new[] { "leads", "projects" })
+        {
+            var first = await admin.GetFromJsonAsync<JsonElement>(
+                $"/api/admin/customers/{customerId}/{kind}?page=1&pageSize=2");
+            var second = await admin.GetFromJsonAsync<JsonElement>(
+                $"/api/admin/customers/{customerId}/{kind}?page=2&pageSize=2");
+            Assert.Equal(3, first.GetProperty("total").GetInt32());
+            Assert.Equal(2, first.GetProperty("items").GetArrayLength());
+            Assert.Single(second.GetProperty("items").EnumerateArray());
+            Assert.NotEqual(first.GetProperty("items")[0].GetProperty("id").GetInt64(),
+                second.GetProperty("items")[0].GetProperty("id").GetInt64());
+            Assert.Equal(HttpStatusCode.BadRequest,
+                (await admin.GetAsync($"/api/admin/customers/{customerId}/{kind}?pageSize=101")).StatusCode);
+        }
+    }
+
+    [Fact]
     public async Task Admin_manages_multiple_contacts_and_links_two_projects_without_changing_lead_flow()
     {
         await using var fixture = await Phase1TestDatabase.CreateAsync();
@@ -173,5 +216,50 @@ public sealed class Phase5CustomerMasterTests
 
         await using var check = fixture.CreateContext();
         Assert.Equal(2, await check.Customers.CountAsync());
+    }
+
+    [Fact]
+    public async Task Concurrent_updates_cannot_claim_the_same_customer_phone()
+    {
+        await using var fixture = await Phase1TestDatabase.CreateAsync();
+        await using var host = new Phase1ApiHost(fixture);
+        using var admin = await host.ClientAsync("Admin");
+        const string root = "/api/admin/customers";
+        var first = await admin.PostAsJsonAsync(root, new { name = "Concurrent first" });
+        var second = await admin.PostAsJsonAsync(root, new { name = "Concurrent second" });
+        var firstId = (await first.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetInt64();
+        var secondId = (await second.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetInt64();
+        var firstDetails = await admin.GetFromJsonAsync<JsonElement>($"{root}/{firstId}");
+        var secondDetails = await admin.GetFromJsonAsync<JsonElement>($"{root}/{secondId}");
+
+        var responses = await Task.WhenAll(
+            admin.PutAsJsonAsync($"{root}/{firstId}", new { name = "Concurrent first",
+                phone = "+91 98765 43210",
+                rowVersion = firstDetails.GetProperty("customer").GetProperty("rowVersion").GetString() }),
+            admin.PutAsJsonAsync($"{root}/{secondId}", new { name = "Concurrent second",
+                phone = "919876543210",
+                rowVersion = secondDetails.GetProperty("customer").GetProperty("rowVersion").GetString() }));
+        Assert.Contains(responses, response => response.StatusCode == HttpStatusCode.NoContent);
+        Assert.Contains(responses, response => response.StatusCode == HttpStatusCode.Conflict);
+        await using var check = fixture.CreateContext();
+        Assert.Equal(1, await check.Customers.CountAsync(c => c.NormalizedPhone == "919876543210"));
+    }
+
+    [Fact]
+    public async Task Concurrent_creates_return_one_conflict_for_matching_email()
+    {
+        await using var fixture = await Phase1TestDatabase.CreateAsync();
+        await using var host = new Phase1ApiHost(fixture);
+        using var admin = await host.ClientAsync("Admin");
+        var responses = await Task.WhenAll(
+            admin.PostAsJsonAsync("/api/admin/customers", new {
+                name = "Parallel first", email = "same@example.test" }),
+            admin.PostAsJsonAsync("/api/admin/customers", new {
+                name = "Parallel second", email = "SAME@example.test" }));
+        Assert.Contains(responses, response => response.StatusCode == HttpStatusCode.Created);
+        Assert.Contains(responses, response => response.StatusCode == HttpStatusCode.Conflict);
+        await using var check = fixture.CreateContext();
+        Assert.Equal(1, await check.Customers.CountAsync(c => c.Email != null &&
+            c.Email.ToLower() == "same@example.test"));
     }
 }

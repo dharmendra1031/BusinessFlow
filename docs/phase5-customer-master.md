@@ -16,7 +16,11 @@ GitHub CI uses temporary disposable SQL Server databases; do not apply migration
 
 ## Next increments
 
-Customer-specific data scope and role matrix, complete paginated linked history, customer merge governance, direct commercial quotations and contracts, invoice/payment integration, and client support/AMC.
+Customer-specific edit permissions and role matrix, customer merge governance, direct commercial quotations and contracts, invoice/payment integration, and client support/AMC.
+
+Linked lead and project history is now paginated for Admin: the customer detail initially shows the latest 100 of each, and separate read endpoints plus Load more controls expose older records. Each endpoint caps page size at 100 and retains the full count. Customer merge governance and commercial modules remain pending.
+
+The scoped read-only directory also paginates visible leads. Each page is filtered through the existing `customers.view` record scope before counting and selecting records; private lead details and customer billing/contact data stay out of the response.
 
 ## Billing details and duplicate checks — incremental update
 
@@ -25,7 +29,7 @@ Customer-specific data scope and role matrix, complete paginated linked history,
 - Admin customer creation/update returns HTTP 409 with matching customer identifiers if email (case-insensitive), normalized phone, or GSTIN matches another customer. It does **not** automatically merge records. Contact persons can legitimately share contact information.
 - Customer audit history is paginated and contains Customer/Contact actions plus explicit lead link/unlink events; the UI can load earlier entries.
 - Existing one-project-per-Won-lead semantics and employee access restrictions remain unchanged. Customer roles and data-scope permissions need separate reviewed design.
-- Duplicate matching is an application-level review check, not a global uniqueness guarantee under simultaneous requests. Manual exception/merge policy and stress tests are pending.
+- Duplicate matching remains an application-level review check. Admin API create/update transactions use a SQL Server application lock so simultaneous requests cannot both pass the same review; this does not constrain direct database writes or replace a governed merge policy. Manual exception/merge policy and stress tests are pending.
 - Real IIS staging migration and backup/restore acceptance are still pending.
 
 ## Customer read-only permission model

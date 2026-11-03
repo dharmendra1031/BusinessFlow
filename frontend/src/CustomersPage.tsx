@@ -69,6 +69,9 @@ export default function CustomersPage({ token }: { token: string }) {
   const [editBilling, setEditBilling] = useState<CustomerBilling>(emptyCustomerBilling);
   const [history, setHistory] = useState<Paged<CustomerHistory> | null>(null);
   const [historyPage, setHistoryPage] = useState(1);
+  const [leadPage, setLeadPage] = useState(1);
+  const [projectPage, setProjectPage] = useState(1);
+  const [loadingLinked, setLoadingLinked] = useState(false);
   const [editName, setEditName] = useState('');
   const [editEmail, setEditEmail] = useState('');
   const [editPhone, setEditPhone] = useState('');
@@ -104,6 +107,8 @@ export default function CustomersPage({ token }: { token: string }) {
       setDetail(current);
       setHistory(recentHistory);
       setHistoryPage(1);
+      setLeadPage(1);
+      setProjectPage(1);
       setEditBilling(currentBilling(current.customer));
       setEditName(current.customer.name);
       setEditEmail(current.customer.email ?? '');
@@ -119,6 +124,8 @@ export default function CustomersPage({ token }: { token: string }) {
     setDetail(null);
     setHistory(null);
     setHistoryPage(1);
+    setLeadPage(1);
+    setProjectPage(1);
     setEditingContact(null);
     setContact(blankContact());
     setLeadSearch('');
@@ -286,6 +293,30 @@ export default function CustomersPage({ token }: { token: string }) {
     }
   }
 
+  async function loadMoreLinked(kind: 'leads' | 'projects') {
+    if (!detail || loadingLinked) return;
+    const id = detail.customer.id;
+    const next = (kind === 'leads' ? leadPage : projectPage) + 1;
+    setLoadingLinked(true);
+    try {
+      if (kind === 'leads') {
+        const result = await api<Paged<LinkedLead>>(
+          `/api/admin/customers/${id}/leads?page=${next}&pageSize=100`, token);
+        setDetail(current => current && current.customer.id === id
+          ? { ...current, leads: [...current.leads, ...result.items], leadCount: result.total } : current);
+        setLeadPage(next);
+      } else {
+        const result = await api<Paged<LinkedProject>>(
+          `/api/admin/customers/${id}/projects?page=${next}&pageSize=100`, token);
+        setDetail(current => current && current.customer.id === id
+          ? { ...current, projects: [...current.projects, ...result.items], projectCount: result.total } : current);
+        setProjectPage(next);
+      }
+    } catch (err) {
+      notify('error', 'Unable to load linked ' + kind, err instanceof Error ? err.message : undefined);
+    } finally { setLoadingLinked(false); }
+  }
+
   return <section>
     <header className="page-header"><div>
       <span className="section-kicker">CLIENT RELATIONSHIPS</span>
@@ -404,11 +435,13 @@ export default function CustomersPage({ token }: { token: string }) {
 
         <section className="project-section" aria-label="Linked leads">
           <h3>Linked leads ({detail.leadCount})</h3>
-          <p className="field-help">Showing latest 100 leads. Linking does not change the lead status or owner.</p>
+          <p className="field-help">Linking does not change the lead status or owner.</p>
           {detail.leads.map(item => <div className="project-task" key={item.id}>
             <div><strong>{item.name}</strong><p>{item.status} · Lead #{item.id}</p></div>
             <button type="button" disabled={working} onClick={() => void unlinkLead(item)}>Unlink</button>
           </div>)}
+          {detail.leads.length < detail.leadCount && <button type="button" disabled={loadingLinked}
+            onClick={() => void loadMoreLinked('leads')}>Load more leads</button>}
           <form className="drawer-form" onSubmit={findLeads}>
             <label>Find existing unlinked lead<input maxLength={150} value={leadSearch}
               placeholder="Name, phone or lead code" onChange={event => setLeadSearch(event.target.value)} /></label>
@@ -422,10 +455,12 @@ export default function CustomersPage({ token }: { token: string }) {
 
         <section className="project-section" aria-label="Customer projects">
           <h3>Projects ({detail.projectCount})</h3>
-          <p className="field-help">Showing latest 100 projects through linked Won leads.</p>
+          <p className="field-help">Projects are shown through linked Won leads.</p>
           {detail.projects.map(project => <div className="project-task" key={project.id}>
             <div><strong>{project.title}</strong><p>{project.status} · Project #{project.id}</p></div>
           </div>)}
+          {detail.projects.length < detail.projectCount && <button type="button" disabled={loadingLinked}
+            onClick={() => void loadMoreLinked('projects')}>Load more projects</button>}
           {!detail.projects.length && <p className="field-help">No linked development projects.</p>}
         </section>
 

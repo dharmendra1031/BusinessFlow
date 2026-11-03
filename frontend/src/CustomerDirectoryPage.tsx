@@ -18,6 +18,8 @@ export default function CustomerDirectoryPage({ token }: { token: string }) {
   const [search, setSearch] = useState('');
   const [query, setQuery] = useState('');
   const [selected, setSelected] = useState<CustomerDetails | null>(null);
+  const [leadPage, setLeadPage] = useState(1);
+  const [loadingLeads, setLoadingLeads] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
@@ -41,9 +43,26 @@ export default function CustomerDirectoryPage({ token }: { token: string }) {
   async function openCustomer(id: number) {
     try {
       setSelected(await api<CustomerDetails>('/api/customers/' + id, token));
+      setLeadPage(1);
     } catch (err) {
       notify('error', 'Unable to open customer', err instanceof Error ? err.message : undefined);
     }
+  }
+
+  async function loadMoreLeads() {
+    if (!selected || loadingLeads) return;
+    const id = selected.customer.id;
+    const next = leadPage + 1;
+    setLoadingLeads(true);
+    try {
+      const result = await api<Paged<CustomerDetails['leads'][number]>>(
+        `/api/customers/${id}/leads?page=${next}&pageSize=100`, token);
+      setSelected(current => current && current.customer.id === id
+        ? { ...current, leads: [...current.leads, ...result.items], leadCount: result.total } : current);
+      setLeadPage(next);
+    } catch (err) {
+      notify('error', 'Unable to load customer leads', err instanceof Error ? err.message : undefined);
+    } finally { setLoadingLeads(false); }
   }
 
   return <section>
@@ -81,7 +100,8 @@ export default function CustomerDirectoryPage({ token }: { token: string }) {
         <div><strong>{lead.name}</strong><p>{lead.status}</p></div>
       </div>)}
       {selected.leadCount > selected.leads.length &&
-        <p className="field-help">Showing latest 100 permitted leads.</p>}
+        <button type="button" disabled={loadingLeads} onClick={() => void loadMoreLeads()}>
+          Load more leads</button>}
     </section>}
   </section>;
 }

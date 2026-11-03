@@ -14,6 +14,44 @@ public sealed class Phase5CustomerDirectoryAccessTests
         (await client.GetFromJsonAsync<JsonElement>("/api/auth/me")).GetProperty("id").GetInt64();
 
     [Fact]
+    public async Task Scoped_customer_lead_pages_exclude_other_users_leads()
+    {
+        await using var fixture = await Phase1TestDatabase.CreateAsync();
+        await using var host = new Phase1ApiHost(fixture);
+        using var manager = await host.ClientAsync("Manager");
+        using var outsider = await host.ClientAsync("Employee");
+        var managerId = await CurrentUserId(manager);
+        var outsiderId = await CurrentUserId(outsider);
+        long customerId;
+        await using (var db = fixture.CreateContext())
+        {
+            var customer = new Customer { Name = "Shared client" };
+            db.Customers.Add(customer);
+            await db.SaveChangesAsync();
+            customerId = customer.Id;
+            db.Leads.AddRange(
+                new Lead { Name = "Visible one", Phone = "1234567890", SourceId = 1,
+                    CreatedById = managerId, AssignedToId = managerId, CustomerId = customerId },
+                new Lead { Name = "Visible two", Phone = "1234567891", SourceId = 1,
+                    CreatedById = managerId, AssignedToId = managerId, CustomerId = customerId },
+                new Lead { Name = "Private lead", Phone = "1234567892", SourceId = 1,
+                    CreatedById = outsiderId, AssignedToId = outsiderId, CustomerId = customerId });
+            await db.SaveChangesAsync();
+        }
+
+        var url = $"/api/customers/{customerId}/leads";
+        var first = await manager.GetFromJsonAsync<JsonElement>(url + "?page=1&pageSize=1");
+        var second = await manager.GetFromJsonAsync<JsonElement>(url + "?page=2&pageSize=1");
+        Assert.Equal(2, first.GetProperty("total").GetInt32());
+        Assert.Equal(2, second.GetProperty("total").GetInt32());
+        Assert.NotEqual(first.GetProperty("items")[0].GetProperty("id").GetInt64(),
+            second.GetProperty("items")[0].GetProperty("id").GetInt64());
+        Assert.DoesNotContain("Private lead", first.ToString() + second.ToString());
+        Assert.False(first.GetProperty("items")[0].TryGetProperty("phone", out _));
+        Assert.Equal(HttpStatusCode.BadRequest, (await manager.GetAsync(url + "?pageSize=101")).StatusCode);
+    }
+
+    [Fact]
     public async Task Customer_directory_is_scoped_and_does_not_expose_billing_or_contacts()
     {
         await using var fixture = await Phase1TestDatabase.CreateAsync();
@@ -69,6 +107,10 @@ public sealed class Phase5CustomerDirectoryAccessTests
 
         Assert.Equal(HttpStatusCode.NotFound,
             (await manager.GetAsync("/api/customers/" + privateCustomer)).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound,
+            (await manager.GetAsync($"/api/customers/{privateCustomer}/leads")).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden,
+            (await employee.GetAsync($"/api/customers/{visibleCustomer}/leads")).StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden,
             (await manager.GetAsync("/api/admin/customers")).StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden,
