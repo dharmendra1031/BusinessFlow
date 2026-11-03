@@ -102,6 +102,9 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
 
         modelBuilder.Entity<Customer>(entity =>
         {
+            entity.HasOne<Customer>().WithMany().HasForeignKey(x => x.MergedIntoCustomerId)
+                .OnDelete(DeleteBehavior.NoAction);
+            entity.HasIndex(x => x.MergedIntoCustomerId);
             entity.Property(x => x.Name).HasMaxLength(200).IsRequired();
             entity.Property(x => x.Phone).HasMaxLength(30);
             entity.Property(x => x.Email).HasMaxLength(256);

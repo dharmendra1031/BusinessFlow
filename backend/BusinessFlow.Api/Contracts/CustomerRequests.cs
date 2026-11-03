@@ -27,3 +27,9 @@ public sealed record SaveCustomerContactRequest(
     bool IsActive = true);
 
 public sealed record LinkCustomerLeadRequest([Required] string RowVersion);
+
+public sealed record MergeCustomerRequest(
+    long SourceId,
+    [Required] string TargetRowVersion,
+    [Required] string SourceRowVersion,
+    [Required, MinLength(10), MaxLength(500)] string Reason);

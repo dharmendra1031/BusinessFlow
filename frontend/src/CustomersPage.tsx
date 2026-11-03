@@ -13,6 +13,7 @@ type Customer = {
   billingCity?: string | null; billingState?: string | null;
   billingPostalCode?: string | null; billingCountry?: string | null;
   leadCount?: number; projectCount?: number;
+  mergedIntoCustomerId?: number | null; mergedAtUtc?: string | null;
 };
 type Contact = {
   id: number; name: string; designation: string | null; email: string | null;
@@ -81,6 +82,9 @@ export default function CustomersPage({ token }: { token: string }) {
   const [editingContact, setEditingContact] = useState<number | null>(null);
   const [leadSearch, setLeadSearch] = useState('');
   const [foundLeads, setFoundLeads] = useState<LeadSearch[]>([]);
+  const [mergeSourceId, setMergeSourceId] = useState('');
+  const [mergeSource, setMergeSource] = useState<Detail | null>(null);
+  const [mergeReason, setMergeReason] = useState('');
 
   const load = useCallback(async () => {
     try {
@@ -105,6 +109,9 @@ export default function CustomersPage({ token }: { token: string }) {
         api<Paged<CustomerHistory>>('/api/admin/customers/' + id + '/history', token),
       ]);
       setDetail(current);
+      setMergeSource(null);
+      setMergeSourceId('');
+      setMergeReason('');
       setHistory(recentHistory);
       setHistoryPage(1);
       setLeadPage(1);
@@ -130,6 +137,9 @@ export default function CustomersPage({ token }: { token: string }) {
     setContact(blankContact());
     setLeadSearch('');
     setFoundLeads([]);
+    setMergeSource(null);
+    setMergeSourceId('');
+    setMergeReason('');
   }
 
   async function createCustomer(event: FormEvent<HTMLFormElement>) {

@@ -18,6 +18,8 @@ public sealed class Customer
     public string? BillingCountry { get; set; }
     public string? NormalizedPhone { get; private set; }
     public bool IsActive { get; set; } = true;
+    public long? MergedIntoCustomerId { get; set; }
+    public DateTime? MergedAtUtc { get; set; }
     [Timestamp]
     public byte[] RowVersion { get; set; } = [];
     public DateTime CreatedAtUtc { get; set; } = DateTime.UtcNow;

@@ -10,6 +10,63 @@ namespace BusinessFlow.Tests;
 public sealed class Phase5CustomerMasterTests
 {
     [Fact]
+    public async Task Admin_merge_preserves_target_details_and_moves_linked_history()
+    {
+        await using var fixture = await Phase1TestDatabase.CreateAsync();
+        await using var host = new Phase1ApiHost(fixture);
+        using var admin = await host.ClientAsync("Admin");
+        using var employee = await host.ClientAsync("Employee");
+        var ownerId = (await admin.GetFromJsonAsync<JsonElement>("/api/auth/me"))
+            .GetProperty("id").GetInt64();
+        const string root = "/api/admin/customers";
+        var targetResponse = await admin.PostAsJsonAsync(root,
+            new { name = "Canonical client", gstin = "09ABCDE1234F1Z5" });
+        var sourceResponse = await admin.PostAsJsonAsync(root,
+            new { name = "Duplicate client", phone = "919876543210" });
+        var targetId = (await targetResponse.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetInt64();
+        var sourceId = (await sourceResponse.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetInt64();
+        await using (var db = fixture.CreateContext())
+        {
+            db.CustomerContacts.AddRange(
+                new CustomerContact { CustomerId = targetId, Name = "Target primary", IsPrimary = true },
+                new CustomerContact { CustomerId = sourceId, Name = "Source primary", IsPrimary = true });
+            var lead = new Lead { Name = "Source lead", Phone = "1234567890", SourceId = 1,
+                StatusId = 5, CreatedById = ownerId, CustomerId = sourceId };
+            db.Leads.Add(lead);
+            await db.SaveChangesAsync();
+            db.DevelopmentProjects.Add(new DevelopmentProject { LeadId = lead.Id,
+                Title = "Source project", OwnerId = ownerId, CreatedById = ownerId });
+            await db.SaveChangesAsync();
+        }
+        var target = await admin.GetFromJsonAsync<JsonElement>($"{root}/{targetId}");
+        var source = await admin.GetFromJsonAsync<JsonElement>($"{root}/{sourceId}");
+        var request = new { sourceId, reason = "Duplicate account verified by administrator",
+            targetRowVersion = target.GetProperty("customer").GetProperty("rowVersion").GetString(),
+            sourceRowVersion = source.GetProperty("customer").GetProperty("rowVersion").GetString() };
+        Assert.Equal(HttpStatusCode.Forbidden,
+            (await employee.PostAsJsonAsync($"{root}/{targetId}/merge", request)).StatusCode);
+        Assert.Equal(HttpStatusCode.OK,
+            (await admin.PostAsJsonAsync($"{root}/{targetId}/merge", request)).StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict,
+            (await admin.PostAsJsonAsync($"{root}/{targetId}/merge", request)).StatusCode);
+
+        var merged = await admin.GetFromJsonAsync<JsonElement>($"{root}/{targetId}");
+        Assert.Equal("09ABCDE1234F1Z5", merged.GetProperty("customer").GetProperty("gstin").GetString());
+        Assert.Equal(1, merged.GetProperty("leadCount").GetInt32());
+        Assert.Equal(1, merged.GetProperty("projectCount").GetInt32());
+        Assert.Equal(2, merged.GetProperty("contacts").GetArrayLength());
+        Assert.Single(merged.GetProperty("contacts").EnumerateArray(),
+            c => c.GetProperty("isPrimary").GetBoolean());
+        var retired = await admin.GetFromJsonAsync<JsonElement>($"{root}/{sourceId}");
+        Assert.False(retired.GetProperty("customer").GetProperty("isActive").GetBoolean());
+        Assert.Equal(targetId, retired.GetProperty("customer").GetProperty("mergedIntoCustomerId").GetInt64());
+        Assert.Equal(0, retired.GetProperty("leadCount").GetInt32());
+        await using var check = fixture.CreateContext();
+        Assert.True(await check.AuditLogs.AnyAsync(a => a.TableName == "Customers" &&
+            a.RecordId == sourceId && a.Action == "Merge"));
+    }
+
+    [Fact]
     public async Task Linked_leads_and_projects_can_be_read_beyond_first_page()
     {
         await using var fixture = await Phase1TestDatabase.CreateAsync();

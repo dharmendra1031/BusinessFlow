@@ -41,7 +41,7 @@ public sealed class CustomersController(AppDbContext db) : ControllerBase
         if (email is null && phone is null && gstin is null) return null;
 
         var matches = await db.Customers.AsNoTracking()
-            .Where(c => (excluding == null || c.Id != excluding) &&
+            .Where(c => c.MergedIntoCustomerId == null && (excluding == null || c.Id != excluding) &&
                 (email != null && c.Email != null && c.Email.ToLower() == email ||
                  phone != null && c.NormalizedPhone == phone ||
                  gstin != null && c.Gstin == gstin))
@@ -105,7 +105,7 @@ public sealed class CustomersController(AppDbContext db) : ControllerBase
             .Skip((page - 1) * pageSize).Take(pageSize)
             .Select(c => new
             {
-                c.Id, c.Name, c.Email, c.Phone, c.IsActive, c.RowVersion,
+                c.Id, c.Name, c.Email, c.Phone, c.IsActive, c.MergedIntoCustomerId, c.RowVersion,
                 LeadCount = db.Leads.Count(l => l.CustomerId == c.Id),
                 ProjectCount = db.DevelopmentProjects.Count(p => p.Lead.CustomerId == c.Id)
             }).ToListAsync(ct);
@@ -119,6 +119,7 @@ public sealed class CustomersController(AppDbContext db) : ControllerBase
             .Select(c => new
             {
                 c.Id, c.Name, c.Email, c.Phone, c.Address, c.IsActive,
+                c.MergedIntoCustomerId, c.MergedAtUtc,
                 c.LegalName, c.Gstin, c.BillingAddress, c.BillingCity, c.BillingState,
                 c.BillingPostalCode, c.BillingCountry,
                 c.RowVersion, c.CreatedAtUtc, c.UpdatedAtUtc
@@ -248,6 +249,8 @@ public sealed class CustomersController(AppDbContext db) : ControllerBase
         await LockDuplicateReview(ct);
         var customer = await db.Customers.FirstOrDefaultAsync(c => c.Id == id, ct);
         if (customer is null) return NotFound();
+        if (customer.MergedIntoCustomerId.HasValue)
+            return Conflict(new { message = "Merged customer is read-only. Open its target record." });
         if (!ConcurrencyTokens.Apply(db, customer, request.RowVersion))
             return BadRequest(new { message = "A valid row version is required. Reload this customer." });
         var duplicate = await CheckDuplicates(request, id, ct);
@@ -257,6 +260,51 @@ public sealed class CustomersController(AppDbContext db) : ControllerBase
         await db.SaveChangesAsync(ct);
         await transaction.CommitAsync(ct);
         return NoContent();
+    }
+
+    [HttpPost("{id:long}/merge")]
+    public async Task<IActionResult> Merge(long id, MergeCustomerRequest request, CancellationToken ct)
+    {
+        if (id <= 0 || request.SourceId <= 0 || id == request.SourceId ||
+            string.IsNullOrWhiteSpace(request.Reason) || request.Reason.Trim().Length is < 10 or > 500)
+            return BadRequest(new { message = "Choose two distinct customers and give a merge reason." });
+
+        await using var transaction = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable, ct);
+        await LockDuplicateReview(ct);
+        var target = await db.Customers.FirstOrDefaultAsync(c => c.Id == id, ct);
+        var source = await db.Customers.FirstOrDefaultAsync(c => c.Id == request.SourceId, ct);
+        if (target is null || source is null) return NotFound();
+        if (!target.IsActive || !source.IsActive || target.MergedIntoCustomerId.HasValue ||
+            source.MergedIntoCustomerId.HasValue)
+            return Conflict(new { message = "Both customers must be active, unmerged records." });
+        if (!ConcurrencyTokens.Apply(db, target, request.TargetRowVersion) ||
+            !ConcurrencyTokens.Apply(db, source, request.SourceRowVersion))
+            return BadRequest(new { message = "Reload both customers before merging." });
+
+        var targetHasPrimary = await db.CustomerContacts.AnyAsync(c =>
+            c.CustomerId == id && c.IsPrimary && c.IsActive, ct);
+        if (targetHasPrimary)
+            await db.CustomerContacts.Where(c => c.CustomerId == source.Id && c.IsPrimary)
+                .ExecuteUpdateAsync(setters => setters.SetProperty(c => c.IsPrimary, false), ct);
+        var contactCount = await db.CustomerContacts.Where(c => c.CustomerId == source.Id)
+            .ExecuteUpdateAsync(setters => setters.SetProperty(c => c.CustomerId, id), ct);
+        var leadCount = await db.Leads.Where(l => l.CustomerId == source.Id)
+            .ExecuteUpdateAsync(setters => setters.SetProperty(l => l.CustomerId, id)
+                .SetProperty(l => l.UpdatedAtUtc, DateTime.UtcNow), ct);
+
+        var now = DateTime.UtcNow;
+        source.IsActive = false;
+        source.MergedIntoCustomerId = id;
+        source.MergedAtUtc = now;
+        source.UpdatedAtUtc = now;
+        target.UpdatedAtUtc = now;
+        var summary = $"SourceId: {source.Id}; TargetId: {id}; Leads: {leadCount}; " +
+            $"Contacts: {contactCount}; Reason: {request.Reason.Trim()}";
+        Audit("Merge", "Customers", source.Id, summary);
+        Audit("Merge", "Customers", target.Id, summary);
+        await db.SaveChangesAsync(ct);
+        await transaction.CommitAsync(ct);
+        return Ok(new { sourceId = source.Id, targetId = target.Id, leadCount, contactCount });
     }
 
     [HttpPost("{id:long}/contacts")]
@@ -277,7 +325,8 @@ public sealed class CustomersController(AppDbContext db) : ControllerBase
 
         await using var transaction = await db.Database.BeginTransactionAsync(
             System.Data.IsolationLevel.Serializable, ct);
-        if (!await db.Customers.AnyAsync(c => c.Id == id, ct)) return NotFound();
+        if (!await db.Customers.AnyAsync(c => c.Id == id && c.MergedIntoCustomerId == null, ct))
+            return NotFound();
 
         CustomerContact? contact = null;
         if (contactId.HasValue)
@@ -318,7 +367,7 @@ public sealed class CustomersController(AppDbContext db) : ControllerBase
         LinkCustomerLeadRequest request, CancellationToken ct)
     {
         await using var transaction = await db.Database.BeginTransactionAsync(ct);
-        if (!await db.Customers.AnyAsync(c => c.Id == id && c.IsActive, ct))
+        if (!await db.Customers.AnyAsync(c => c.Id == id && c.IsActive && c.MergedIntoCustomerId == null, ct))
             return NotFound(new { message = "Active customer not found." });
         var lead = await db.Leads.FirstOrDefaultAsync(l => l.Id == leadId, ct);
         if (lead is null) return NotFound();

@@ -145,6 +145,145 @@ namespace BusinessFlow.Api.Migrations
                     b.ToTable("AuditLogs");
                 });
 
+            modelBuilder.Entity("BusinessFlow.Api.Models.Customer", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<string>("Address")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<string>("BillingAddress")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<string>("BillingCity")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("BillingCountry")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("BillingPostalCode")
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<string>("BillingState")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Email")
+                        .HasMaxLength(256)
+                        .HasColumnType("nvarchar(256)");
+
+                    b.Property<string>("Gstin")
+                        .HasMaxLength(15)
+                        .HasColumnType("nvarchar(15)");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("LegalName")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<DateTime?>("MergedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<long?>("MergedIntoCustomerId")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("NormalizedPhone")
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)")
+                        .HasComputedColumnSql("REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE([Phone], N' ', N''), N'-', N''), N'+', N''), N'(', N''), N')', N''), N'.', N''), NCHAR(9), N'')", true);
+
+                    b.Property<string>("Phone")
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<DateTime>("UpdatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Email");
+
+                    b.HasIndex("Gstin");
+
+                    b.HasIndex("MergedIntoCustomerId");
+
+                    b.HasIndex("Name");
+
+                    b.HasIndex("NormalizedPhone");
+
+                    b.ToTable("Customers");
+                });
+
+            modelBuilder.Entity("BusinessFlow.Api.Models.CustomerContact", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<long>("CustomerId")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("Designation")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("Email")
+                        .HasMaxLength(256)
+                        .HasColumnType("nvarchar(256)");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsPrimary")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
+                    b.Property<string>("Phone")
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CustomerId", "IsPrimary");
+
+                    b.ToTable("CustomerContacts");
+                });
+
             modelBuilder.Entity("BusinessFlow.Api.Models.Department", b =>
                 {
                     b.Property<long>("Id")
@@ -210,137 +349,6 @@ namespace BusinessFlow.Api.Migrations
                     b.HasIndex("UserId", "WorkDate");
 
                     b.ToTable("DeveloperWorklogs");
-                });
-
-            modelBuilder.Entity("BusinessFlow.Api.Models.Customer", b =>
-                {
-                    b.Property<long>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("bigint");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
-
-                    b.Property<string>("Address")
-                        .HasMaxLength(500)
-                        .HasColumnType("nvarchar(500)");
-
-                    b.Property<string>("BillingAddress")
-                        .HasMaxLength(500)
-                        .HasColumnType("nvarchar(500)");
-
-                    b.Property<string>("BillingCity")
-                        .HasMaxLength(100)
-                        .HasColumnType("nvarchar(100)");
-
-                    b.Property<string>("BillingCountry")
-                        .HasMaxLength(100)
-                        .HasColumnType("nvarchar(100)");
-
-                    b.Property<string>("BillingPostalCode")
-                        .HasMaxLength(20)
-                        .HasColumnType("nvarchar(20)");
-
-                    b.Property<string>("BillingState")
-                        .HasMaxLength(100)
-                        .HasColumnType("nvarchar(100)");
-
-                    b.Property<DateTime>("CreatedAtUtc")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("Gstin")
-                        .HasMaxLength(15)
-                        .HasColumnType("nvarchar(15)");
-
-                    b.Property<string>("LegalName")
-                        .HasMaxLength(200)
-                        .HasColumnType("nvarchar(200)");
-
-                    b.Property<string>("Email")
-                        .HasMaxLength(256)
-                        .HasColumnType("nvarchar(256)");
-
-                    b.Property<bool>("IsActive")
-                        .HasColumnType("bit");
-
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasMaxLength(200)
-                        .HasColumnType("nvarchar(200)");
-
-                    b.Property<string>("NormalizedPhone")
-                        .ValueGeneratedOnAddOrUpdate()
-                        .HasMaxLength(30)
-                        .HasColumnType("nvarchar(30)")
-                        .HasComputedColumnSql("REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE([Phone], N' ', N''), N'-', N''), N'+', N''), N'(', N''), N')', N''), N'.', N''), NCHAR(9), N'')", true);
-
-                    b.Property<string>("Phone")
-                        .HasMaxLength(30)
-                        .HasColumnType("nvarchar(30)");
-
-                    b.Property<byte[]>("RowVersion")
-                        .IsConcurrencyToken()
-                        .IsRequired()
-                        .ValueGeneratedOnAddOrUpdate()
-                        .HasColumnType("rowversion");
-
-                    b.Property<DateTime>("UpdatedAtUtc")
-                        .HasColumnType("datetime2");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("Email");
-
-                    b.HasIndex("Gstin");
-
-                    b.HasIndex("Name");
-
-                    b.HasIndex("NormalizedPhone");
-
-                    b.ToTable("Customers");
-                });
-
-            modelBuilder.Entity("BusinessFlow.Api.Models.CustomerContact", b =>
-                {
-                    b.Property<long>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("bigint");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
-
-                    b.Property<DateTime>("CreatedAtUtc")
-                        .HasColumnType("datetime2");
-
-                    b.Property<long>("CustomerId")
-                        .HasColumnType("bigint");
-
-                    b.Property<string>("Designation")
-                        .HasMaxLength(100)
-                        .HasColumnType("nvarchar(100)");
-
-                    b.Property<string>("Email")
-                        .HasMaxLength(256)
-                        .HasColumnType("nvarchar(256)");
-
-                    b.Property<bool>("IsActive")
-                        .HasColumnType("bit");
-
-                    b.Property<bool>("IsPrimary")
-                        .HasColumnType("bit");
-
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasMaxLength(150)
-                        .HasColumnType("nvarchar(150)");
-
-                    b.Property<string>("Phone")
-                        .HasMaxLength(30)
-                        .HasColumnType("nvarchar(30)");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("CustomerId", "IsPrimary");
-
-                    b.ToTable("CustomerContacts");
                 });
 
             modelBuilder.Entity("BusinessFlow.Api.Models.DevelopmentProject", b =>
@@ -499,18 +507,12 @@ namespace BusinessFlow.Api.Migrations
                     b.Property<long>("CreatedById")
                         .HasColumnType("bigint");
 
-                    b.Property<long?>("CustomerId")
-                        .HasColumnType("bigint");
-
                     b.Property<string>("CustomerCode")
                         .HasMaxLength(30)
                         .HasColumnType("nvarchar(30)");
 
-                    b.Property<string>("NormalizedEmail")
-                        .ValueGeneratedOnAddOrUpdate()
-                        .HasMaxLength(256)
-                        .HasColumnType("nvarchar(256)")
-                        .HasComputedColumnSql("NULLIF(LOWER(LTRIM(RTRIM([Email]))), N'')", true);
+                    b.Property<long?>("CustomerId")
+                        .HasColumnType("bigint");
 
                     b.Property<string>("Email")
                         .HasMaxLength(256)
@@ -533,6 +535,12 @@ namespace BusinessFlow.Api.Migrations
 
                     b.Property<DateTime?>("NextFollowUpDate")
                         .HasColumnType("datetime2");
+
+                    b.Property<string>("NormalizedEmail")
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasMaxLength(256)
+                        .HasColumnType("nvarchar(256)")
+                        .HasComputedColumnSql("NULLIF(LOWER(LTRIM(RTRIM([Email]))), N'')", true);
 
                     b.Property<string>("NormalizedPhone")
                         .IsRequired()
@@ -573,19 +581,19 @@ namespace BusinessFlow.Api.Migrations
 
                     b.HasIndex("CreatedById");
 
-                    b.HasIndex("CustomerId");
-
                     b.HasIndex("CustomerCode")
                         .IsUnique()
                         .HasFilter("[CustomerCode] IS NOT NULL");
+
+                    b.HasIndex("CustomerId");
 
                     b.HasIndex("LeadGivenBy");
 
                     b.HasIndex("ModifiedByUserId");
 
-                    b.HasIndex("NormalizedPhone");
-
                     b.HasIndex("NormalizedEmail");
+
+                    b.HasIndex("NormalizedPhone");
 
                     b.HasIndex("Phone");
 
@@ -649,29 +657,29 @@ namespace BusinessFlow.Api.Migrations
                     b.Property<long>("LeftLeadId")
                         .HasColumnType("bigint");
 
-                    b.Property<long>("ReviewedById")
-                        .HasColumnType("bigint");
-
                     b.Property<DateTime>("ReviewedAtUtc")
                         .HasColumnType("datetime2");
+
+                    b.Property<long>("ReviewedById")
+                        .HasColumnType("bigint");
 
                     b.Property<long>("RightLeadId")
                         .HasColumnType("bigint");
 
                     b.HasKey("Id");
 
-                    b.HasIndex("LeftLeadId", "RightLeadId")
-                        .IsUnique();
+                    b.HasIndex("ReviewedById");
 
                     b.HasIndex("RightLeadId");
 
-                    b.HasIndex("ReviewedById");
+                    b.HasIndex("LeftLeadId", "RightLeadId")
+                        .IsUnique();
 
                     b.ToTable("LeadDuplicateReviews", t =>
                         {
-                            t.HasCheckConstraint("CK_LeadDuplicateReviews_Order", "[LeftLeadId] < [RightLeadId]");
-
                             t.HasCheckConstraint("CK_LeadDuplicateReviews_Decision", "[Decision] IN (N'Confirmed', N'NotDuplicate')");
+
+                            t.HasCheckConstraint("CK_LeadDuplicateReviews_Order", "[LeftLeadId] < [RightLeadId]");
                         });
                 });
 
@@ -719,19 +727,35 @@ namespace BusinessFlow.Api.Migrations
 
             modelBuilder.Entity("BusinessFlow.Api.Models.LeadRoutingRule", b =>
                 {
-                    b.Property<long>("Id").ValueGeneratedOnAdd().HasColumnType("bigint");
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
-                    b.Property<bool>("IsActive").HasColumnType("bit");
-                    b.Property<int>("MaxOpenLeads").HasColumnType("int");
-                    b.Property<long>("SourceId").HasColumnType("bigint");
-                    b.Property<long>("TeamId").HasColumnType("bigint");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<int>("MaxOpenLeads")
+                        .HasColumnType("int");
+
+                    b.Property<long>("SourceId")
+                        .HasColumnType("bigint");
+
+                    b.Property<long>("TeamId")
+                        .HasColumnType("bigint");
+
                     b.HasKey("Id");
-                    b.HasIndex("SourceId").IsUnique();
+
+                    b.HasIndex("SourceId")
+                        .IsUnique();
+
                     b.HasIndex("TeamId");
+
                     b.ToTable("LeadRoutingRules", t =>
-                    {
-                        t.HasCheckConstraint("CK_LeadRoutingRules_Capacity", "[MaxOpenLeads] BETWEEN 1 AND 500");
-                    });
+                        {
+                            t.HasCheckConstraint("CK_LeadRoutingRules_Capacity", "[MaxOpenLeads] BETWEEN 1 AND 500");
+                        });
                 });
 
             modelBuilder.Entity("BusinessFlow.Api.Models.LeadSource", b =>
@@ -859,20 +883,6 @@ namespace BusinessFlow.Api.Migrations
                             Name = "Not Interested",
                             SortOrder = 9
                         });
-                });
-
-            modelBuilder.Entity("BusinessFlow.Api.Models.WebsiteLeadSubmission", b =>
-                {
-                    b.Property<long>("Id").ValueGeneratedOnAdd().HasColumnType("bigint");
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
-                    b.Property<DateTime>("CreatedAtUtc").HasColumnType("datetime2");
-                    b.Property<long>("LeadId").HasColumnType("bigint");
-                    b.Property<string>("PayloadHash").IsRequired().HasMaxLength(64).HasColumnType("nvarchar(64)");
-                    b.Property<string>("SubmissionHash").IsRequired().HasMaxLength(64).HasColumnType("nvarchar(64)");
-                    b.HasKey("Id");
-                    b.HasIndex("LeadId");
-                    b.HasIndex("SubmissionHash").IsUnique();
-                    b.ToTable("WebsiteLeadSubmissions");
                 });
 
             modelBuilder.Entity("BusinessFlow.Api.Models.LeadStatusApproval", b =>
@@ -1243,6 +1253,40 @@ namespace BusinessFlow.Api.Migrations
                     b.ToTable("UserPermissionRestrictions");
                 });
 
+            modelBuilder.Entity("BusinessFlow.Api.Models.WebsiteLeadSubmission", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<long>("LeadId")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("PayloadHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<string>("SubmissionHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("LeadId");
+
+                    b.HasIndex("SubmissionHash")
+                        .IsUnique();
+
+                    b.ToTable("WebsiteLeadSubmissions");
+                });
+
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityRole<long>", b =>
                 {
                     b.Property<long>("Id")
@@ -1389,6 +1433,23 @@ namespace BusinessFlow.Api.Migrations
                         .OnDelete(DeleteBehavior.NoAction);
                 });
 
+            modelBuilder.Entity("BusinessFlow.Api.Models.Customer", b =>
+                {
+                    b.HasOne("BusinessFlow.Api.Models.Customer", null)
+                        .WithMany()
+                        .HasForeignKey("MergedIntoCustomerId")
+                        .OnDelete(DeleteBehavior.NoAction);
+                });
+
+            modelBuilder.Entity("BusinessFlow.Api.Models.CustomerContact", b =>
+                {
+                    b.HasOne("BusinessFlow.Api.Models.Customer", null)
+                        .WithMany()
+                        .HasForeignKey("CustomerId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("BusinessFlow.Api.Models.DeveloperWorklog", b =>
                 {
                     b.HasOne("BusinessFlow.Api.Models.DevelopmentProject", "Project")
@@ -1413,15 +1474,6 @@ namespace BusinessFlow.Api.Migrations
                     b.Navigation("Task");
 
                     b.Navigation("User");
-                });
-
-            modelBuilder.Entity("BusinessFlow.Api.Models.CustomerContact", b =>
-                {
-                    b.HasOne("BusinessFlow.Api.Models.Customer", null)
-                        .WithMany()
-                        .HasForeignKey("CustomerId")
-                        .OnDelete(DeleteBehavior.NoAction)
-                        .IsRequired();
                 });
 
             modelBuilder.Entity("BusinessFlow.Api.Models.DevelopmentProject", b =>
@@ -1483,11 +1535,6 @@ namespace BusinessFlow.Api.Migrations
 
             modelBuilder.Entity("BusinessFlow.Api.Models.Lead", b =>
                 {
-                    b.HasOne("BusinessFlow.Api.Models.Customer", null)
-                        .WithMany()
-                        .HasForeignKey("CustomerId")
-                        .OnDelete(DeleteBehavior.NoAction);
-
                     b.HasOne("BusinessFlow.Api.Models.ApplicationUser", "AssignedTo")
                         .WithMany()
                         .HasForeignKey("AssignedToId")
@@ -1498,6 +1545,11 @@ namespace BusinessFlow.Api.Migrations
                         .HasForeignKey("CreatedById")
                         .OnDelete(DeleteBehavior.NoAction)
                         .IsRequired();
+
+                    b.HasOne("BusinessFlow.Api.Models.Customer", null)
+                        .WithMany()
+                        .HasForeignKey("CustomerId")
+                        .OnDelete(DeleteBehavior.NoAction);
 
                     b.HasOne("BusinessFlow.Api.Models.ApplicationUser", null)
                         .WithMany()
@@ -1540,15 +1592,15 @@ namespace BusinessFlow.Api.Migrations
                         .OnDelete(DeleteBehavior.NoAction)
                         .IsRequired();
 
-                    b.HasOne("BusinessFlow.Api.Models.Lead", null)
-                        .WithMany()
-                        .HasForeignKey("RightLeadId")
-                        .OnDelete(DeleteBehavior.NoAction)
-                        .IsRequired();
-
                     b.HasOne("BusinessFlow.Api.Models.ApplicationUser", null)
                         .WithMany()
                         .HasForeignKey("ReviewedById")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.HasOne("BusinessFlow.Api.Models.Lead", null)
+                        .WithMany()
+                        .HasForeignKey("RightLeadId")
                         .OnDelete(DeleteBehavior.NoAction)
                         .IsRequired();
                 });
@@ -1576,15 +1628,6 @@ namespace BusinessFlow.Api.Migrations
                     b.Navigation("Lead");
                 });
 
-            modelBuilder.Entity("BusinessFlow.Api.Models.WebsiteLeadSubmission", b =>
-                {
-                    b.HasOne("BusinessFlow.Api.Models.Lead", null)
-                        .WithMany()
-                        .HasForeignKey("LeadId")
-                        .OnDelete(DeleteBehavior.NoAction)
-                        .IsRequired();
-                });
-
             modelBuilder.Entity("BusinessFlow.Api.Models.LeadRoutingRule", b =>
                 {
                     b.HasOne("BusinessFlow.Api.Models.LeadSource", null)
@@ -1592,6 +1635,7 @@ namespace BusinessFlow.Api.Migrations
                         .HasForeignKey("SourceId")
                         .OnDelete(DeleteBehavior.NoAction)
                         .IsRequired();
+
                     b.HasOne("BusinessFlow.Api.Models.Team", null)
                         .WithMany()
                         .HasForeignKey("TeamId")
@@ -1727,6 +1771,15 @@ namespace BusinessFlow.Api.Migrations
                     b.HasOne("BusinessFlow.Api.Models.ApplicationUser", null)
                         .WithMany()
                         .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("BusinessFlow.Api.Models.WebsiteLeadSubmission", b =>
+                {
+                    b.HasOne("BusinessFlow.Api.Models.Lead", null)
+                        .WithMany()
+                        .HasForeignKey("LeadId")
                         .OnDelete(DeleteBehavior.NoAction)
                         .IsRequired();
                 });
