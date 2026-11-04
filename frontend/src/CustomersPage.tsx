@@ -288,6 +288,64 @@ export default function CustomersPage({ token }: { token: string }) {
     } finally { setWorking(false); }
   }
 
+  async function reviewMergeSource(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (working || !detail || !validateForm(event.currentTarget)) return;
+    const sourceId = Number(mergeSourceId);
+    if (!Number.isSafeInteger(sourceId) || sourceId <= 0 || sourceId === detail.customer.id) {
+      notify('warning', 'Choose a different source customer ID.');
+      return;
+    }
+    setWorking(true);
+    setMergeSource(null);
+    setMergeReason('');
+    try {
+      const source = await api<Detail>('/api/admin/customers/' + sourceId, token);
+      if (!source.customer.isActive || source.customer.mergedIntoCustomerId != null) {
+        notify('warning', 'The source customer must be active and not previously merged.');
+        return;
+      }
+      setMergeSource(source);
+    } catch (err) {
+      notify('error', 'Unable to review source customer', err instanceof Error ? err.message : undefined);
+    } finally { setWorking(false); }
+  }
+
+  async function mergeCustomers(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (working || !detail || !mergeSource || !detail.customer.isActive ||
+        detail.customer.mergedIntoCustomerId != null || !validateForm(event.currentTarget)) return;
+    const target = detail.customer;
+    const source = mergeSource.customer;
+    const reason = mergeReason.trim();
+    if (source.id === target.id || reason.length < 10 || reason.length > 500) return;
+    if (!(await confirm({
+      title: 'Merge customer records?',
+      message: source.name + ' (#' + source.id + ') will be merged into ' +
+        target.name + ' (#' + target.id + '). ' + mergeSource.leadCount +
+        ' leads and ' + mergeSource.contacts.length +
+        ' contacts will move. Source will become read-only. This cannot be undone.',
+      confirmText: 'Merge customers',
+      danger: true,
+    }))) return;
+
+    setWorking(true);
+    try {
+      await api('/api/admin/customers/' + target.id + '/merge', token, {
+        method: 'POST',
+        body: JSON.stringify({
+          sourceId: source.id,
+          targetRowVersion: target.rowVersion,
+          sourceRowVersion: source.rowVersion,
+          reason,
+        }),
+      });
+      await Promise.all([load(), openCustomer(target.id)]);
+      notify('success', 'Customers merged');
+    } catch (err) {
+      notify('error', 'Unable to merge customers', err instanceof Error ? err.message : undefined);
+    } finally { setWorking(false); }
+  }
 
   async function loadMoreHistory() {
     if (!detail || !history || history.items.length >= history.total) return;
@@ -366,7 +424,7 @@ export default function CustomersPage({ token }: { token: string }) {
             <td><strong>{customer.name}</strong></td>
             <td>{customer.email || customer.phone || '—'}</td>
             <td>{customer.leadCount}</td><td>{customer.projectCount}</td>
-            <td>{customer.isActive ? 'Active' : 'Inactive'}</td>
+            <td>{customer.mergedIntoCustomerId != null ? 'Merged' : customer.isActive ? 'Active' : 'Inactive'}</td>
             <td><button type="button" onClick={() => void openCustomer(customer.id)}>View customer</button></td>
           </tr>)}</tbody>
         </table></div> : <p className="empty-state">No customers found.</p>}
@@ -381,11 +439,20 @@ export default function CustomersPage({ token }: { token: string }) {
         onKeyDown={event => handleDialogKeyDown(event, () => { if (!working) close(); })}>
         <div className="drawer-header"><div><span className="section-kicker">CUSTOMER DETAILS</span>
           <h2>{detail.customer.name}</h2>
-          <p>{detail.customer.isActive ? 'Active' : 'Inactive'} · Customer #{detail.customer.id}</p></div>
+          <p>{detail.customer.mergedIntoCustomerId != null ? 'Merged' : detail.customer.isActive ? 'Active' : 'Inactive'} · Customer #{detail.customer.id}</p></div>
           <button className="icon-button" aria-label="Close customer" disabled={working}
             onClick={close}><Icon name="close" /></button>
         </div>
 
+        {detail.customer.mergedIntoCustomerId != null && <section className="project-section">
+          <h3>Merged customer</h3>
+          <p className="field-help">This record is read-only. Leads and contacts moved to customer
+            #{detail.customer.mergedIntoCustomerId}.</p>
+          <button type="button" disabled={working}
+            onClick={() => void openCustomer(detail.customer.mergedIntoCustomerId!)}>
+            Open current customer</button>
+        </section>}
+        {detail.customer.mergedIntoCustomerId == null && <>
         <details className="project-section">
           <summary>Edit customer</summary>
           <form className="drawer-form" onSubmit={saveCustomer} onInput={clearFieldError}
@@ -473,6 +540,36 @@ export default function CustomersPage({ token }: { token: string }) {
             onClick={() => void loadMoreLinked('projects')}>Load more projects</button>}
           {!detail.projects.length && <p className="field-help">No linked development projects.</p>}
         </section>
+
+        {detail.customer.isActive && <section className="project-section" aria-label="Merge customers">
+          <h3>Merge another customer</h3>
+          <p className="field-help">Keep this customer's details. Move the other customer's
+            contacts and linked leads here; their projects stay linked to the same leads.
+            The source record becomes read-only. This cannot be undone.</p>
+          <form className="drawer-form" onSubmit={reviewMergeSource}
+            onInput={clearFieldError} onKeyDown={handleFormKeyDown}>
+            <label>Source customer ID *<input type="number" min="1" step="1" required
+              value={mergeSourceId} disabled={working} onChange={event => {
+                setMergeSourceId(event.target.value);
+                setMergeSource(null);
+                setMergeReason('');
+              }} /></label>
+            <button type="submit" disabled={working || !mergeSourceId.trim()}>Review source</button>
+          </form>
+          {mergeSource && <div className="project-task">
+            <div><strong>{mergeSource.customer.name} · #{mergeSource.customer.id}</strong>
+              <p>{mergeSource.leadCount} leads · {mergeSource.contacts.length} contacts ·
+                {mergeSource.projectCount} projects</p></div>
+          </div>}
+          {mergeSource && <form className="drawer-form" onSubmit={mergeCustomers}
+            onInput={clearFieldError} onKeyDown={handleFormKeyDown}>
+            <label>Reason for merge *<textarea required minLength={10} maxLength={500}
+              value={mergeReason} onChange={event => setMergeReason(event.target.value)} /></label>
+            <button type="submit" className="primary" disabled={working || mergeReason.trim().length < 10}>
+              Merge into this customer</button>
+          </form>}
+        </section>}
+        </>}
 
         <section className="project-section" aria-label="Customer activity history">
           <h3>Activity history ({history?.total ?? 0})</h3>
