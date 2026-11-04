@@ -16,12 +16,13 @@ import LeadSourcesPage from './LeadSourcesPage';
 import LeadDuplicatesPage from './LeadDuplicatesPage';
 import LeadRoutingPage from './LeadRoutingPage';
 import CustomersPage from './CustomersPage';
+import QuotationsPage from './QuotationsPage';
 import CustomerDirectoryPage from './CustomerDirectoryPage';
 import type { User } from './types';
 
 type Session = { token: string; user: User };
 type CurrentSession = User & { csrfToken: string };
-type Screen = 'dashboard' | 'leads' | 'projects' | 'followups' | 'employees' | 'reports' | 'audit' | 'permissions' | 'roles' | 'organization' | 'approvals' | 'sources' | 'duplicates' | 'routing' | 'customers' | 'settings';
+type Screen = 'dashboard' | 'leads' | 'projects' | 'followups' | 'employees' | 'reports' | 'audit' | 'permissions' | 'roles' | 'organization' | 'approvals' | 'sources' | 'duplicates' | 'routing' | 'customers' | 'quotations' | 'settings';
 
 const navigation = [
   { id: 'dashboard', label: 'Dashboard', icon: 'grid' },
@@ -29,6 +30,7 @@ const navigation = [
   { id: 'leads', label: 'All leads', icon: 'clipboard' },
   { id: 'projects', label: 'Development projects', icon: 'briefcase' },
   { id: 'customers', label: 'Customer master', icon: 'users' },
+  { id: 'quotations', label: 'Sales quotations', icon: 'clipboard' },
   { id: 'followups', label: 'Follow-ups', icon: 'calendar' },
   { id: 'employees', label: 'Team', icon: 'users' },
   { id: 'reports', label: 'Reports', icon: 'clipboard' },
@@ -157,10 +159,10 @@ function Workspace() {
   const items = navigation.filter(item =>
     (item.id !== 'approvals' || allowed?.['leads.approve'] === true) &&
     (item.id !== 'employees' || canSeeTeam) &&
-    (item.id !== 'audit' && item.id !== 'permissions' && item.id !== 'organization' && item.id !== 'roles' && item.id !== 'sources' && item.id !== 'duplicates' && item.id !== 'routing' || user.roles.includes('Admin')) &&
+    (item.id !== 'audit' && item.id !== 'permissions' && item.id !== 'organization' && item.id !== 'roles' && item.id !== 'sources' && item.id !== 'duplicates' && item.id !== 'routing' && item.id !== 'quotations' || user.roles.includes('Admin')) &&
     (item.id !== 'customers' || allowed?.['customers.view'] === true) &&
     (allowed?.[moduleAccess[item.id] || ''] !== false));
-  const pageTitle = { dashboard: 'Dashboard', leads: 'All leads', projects: 'Development projects', followups: 'Follow-ups', employees: 'Team', reports: 'Reports', audit: 'Audit history', permissions: 'Role permissions', roles: 'Custom roles', organization: 'Organization', sources: 'Lead sources', duplicates: 'Duplicate review', routing: 'Lead routing', customers: 'Customer master', approvals: 'Lead approvals', settings: 'Change password' }[screen];
+  const pageTitle = { dashboard: 'Dashboard', leads: 'All leads', projects: 'Development projects', followups: 'Follow-ups', employees: 'Team', reports: 'Reports', audit: 'Audit history', permissions: 'Role permissions', roles: 'Custom roles', organization: 'Organization', sources: 'Lead sources', duplicates: 'Duplicate review', routing: 'Lead routing', customers: 'Customer master', quotations: 'Sales quotations', approvals: 'Lead approvals', settings: 'Change password' }[screen];
 
   return <div className="app-shell">
     <a className="skip-link" href="#main-content">Skip to main content</a>
@@ -225,6 +227,7 @@ function Workspace() {
         {screen === 'sources' && user.roles.includes('Admin') && <LeadSourcesPage token={session.token} />}
         {screen === 'duplicates' && user.roles.includes('Admin') && <LeadDuplicatesPage token={session.token} />}
         {screen === 'routing' && user.roles.includes('Admin') && <LeadRoutingPage token={session.token} />}
+        {screen === 'quotations' && user.roles.includes('Admin') && <QuotationsPage token={session.token} />}
         {screen === 'customers' && allowed?.['customers.view'] === true &&
           (user.roles.includes('Admin') ? <CustomersPage token={session.token} /> :
             <CustomerDirectoryPage token={session.token} />)}
