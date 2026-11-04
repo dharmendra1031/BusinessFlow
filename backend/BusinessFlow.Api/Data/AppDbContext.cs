@@ -8,6 +8,8 @@ namespace BusinessFlow.Api.Data;
 public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
     : IdentityDbContext<ApplicationUser, IdentityRole<long>, long>(options)
 {
+    public DbSet<SalesQuotation> SalesQuotations => Set<SalesQuotation>();
+    public DbSet<SalesQuotationRevision> SalesQuotationRevisions => Set<SalesQuotationRevision>();
     public DbSet<Customer> Customers => Set<Customer>();
     public DbSet<CustomerContact> CustomerContacts => Set<CustomerContact>();
     public DbSet<Lead> Leads => Set<Lead>();
@@ -99,6 +101,28 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
             .WithMany()
             .HasForeignKey(u => u.ManagerId)
             .OnDelete(DeleteBehavior.NoAction);
+
+        modelBuilder.Entity<SalesQuotation>(entity =>
+        {
+            entity.Property(x => x.Status).HasMaxLength(20).IsRequired();
+            entity.HasIndex(x => x.LeadId).IsUnique();
+            entity.HasOne<Lead>().WithMany().HasForeignKey(x => x.LeadId).OnDelete(DeleteBehavior.NoAction);
+            entity.HasOne<ApplicationUser>().WithMany().HasForeignKey(x => x.CreatedById).OnDelete(DeleteBehavior.NoAction);
+            entity.ToTable(t => t.HasCheckConstraint("CK_SalesQuotations_Status",
+                "[Status] IN (N'Draft', N'Sent', N'Accepted', N'Rejected')"));
+        });
+        modelBuilder.Entity<SalesQuotationRevision>(entity =>
+        {
+            entity.Property(x => x.Title).HasMaxLength(150).IsRequired();
+            entity.Property(x => x.Scope).HasMaxLength(2000);
+            entity.Property(x => x.Amount).HasPrecision(18, 3);
+            entity.Property(x => x.Currency).HasMaxLength(3).IsRequired();
+            entity.Property(x => x.PaymentTerms).HasMaxLength(1000);
+            entity.HasIndex(x => new { x.QuotationId, x.Revision }).IsUnique();
+            entity.HasOne<SalesQuotation>().WithMany().HasForeignKey(x => x.QuotationId).OnDelete(DeleteBehavior.NoAction);
+            entity.HasOne<ApplicationUser>().WithMany().HasForeignKey(x => x.CreatedById).OnDelete(DeleteBehavior.NoAction);
+            entity.ToTable(t => t.HasCheckConstraint("CK_SalesQuotationRevisions_Amount", "[Amount] > 0"));
+        });
 
         modelBuilder.Entity<Customer>(entity =>
         {
