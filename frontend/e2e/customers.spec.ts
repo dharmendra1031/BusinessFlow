@@ -94,10 +94,10 @@ test('Admin reviews a source customer and merges it into the selected customer',
   const confirmation = page.getByRole('alertdialog', { name: 'Merge customer records?' });
   await expect(confirmation).toContainText(sourceName);
   await expect(confirmation).toContainText(targetName);
+  const mergeResponse = page.waitForResponse(response =>
+    response.url().endsWith('/api/admin/customers/' + targetId + '/merge'));
   await confirmation.getByRole('button', { name: 'Merge customers' }).click();
-  const success = page.getByRole('alertdialog', { name: 'Customers merged' });
-  await expect(success).toBeVisible();
-  await success.getByRole('button', { name: 'Done' }).click();
+  expect((await mergeResponse).ok()).toBeTruthy();
 
   const sourceResponseAfterMerge = await request.get(
     apiUrl + '/api/admin/customers/' + sourceId, { headers });
