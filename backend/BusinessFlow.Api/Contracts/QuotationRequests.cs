@@ -28,6 +28,23 @@ public sealed record ReviseQuotationRequest(
 
 public sealed record ChangeQuotationStatusRequest(
     [Required] string Status,
+    [Required] string RowVersion,
+    [MaxLength(150)] string? ClientResponseBy = null,
+    [MaxLength(500)] string? ClientResponseReference = null);
+
+public sealed record ReviewQuotationRequest(
+    bool Approve,
+    [Required, MinLength(10), MaxLength(500)] string Comment,
+    [Required] string RowVersion);
+
+public sealed record CreateSalesContractRequest(
+    [Required, MinLength(10), MaxLength(2000)] string Terms,
+    [Required] string RowVersion);
+
+public sealed record SignSalesContractRequest(
+    [Required, MinLength(2), MaxLength(150)] string SignedBy,
+    [Required, MinLength(5), MaxLength(500)] string SignatureReference,
+    DateOnly SignedOn,
     [Required] string RowVersion);
 
 public sealed record SubmitQuotationRequest([Required] string RowVersion);

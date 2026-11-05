@@ -2,7 +2,7 @@ import { expect, test } from './fixtures';
 
 const apiUrl = 'http://localhost:5081';
 
-test('Admin creates a quotation through lead search and preserves revisions', async ({ page, request }) => {
+test('Admin completes quotation, contract, invoice and partial payment', async ({ page, request }) => {
   const token = process.env.E2E_ADMIN_TOKEN!;
   const headers = { Authorization: 'Bearer ' + token };
   const leadName = 'Quotation lead ' + Date.now();
@@ -61,10 +61,33 @@ test('Admin creates a quotation through lead search and preserves revisions', as
   await contract.getByRole('textbox', { name: 'Signed by' }).fill('Customer director');
   await contract.getByRole('textbox', { name: 'Signature evidence reference' })
     .fill('Document signed and verified');
-  await contract.getByRole('textbox', { name: 'Signed on' })
+  await contract.getByLabel('Signed on')
     .fill(new Date().toISOString().slice(0, 10));
   await contract.getByRole('button', { name: 'Record signature' }).click();
   await page.getByRole('alertdialog', { name: 'Record signed contract?' })
     .getByRole('button', { name: 'Record signature' }).click();
   await expect(contract).toContainText('Signed');
+
+  await page.getByRole('navigation', { name: 'Main navigation' })
+    .getByRole('button', { name: 'Invoices & collections' }).click();
+  const editorBilling = page.getByRole('region', { name: 'New invoice' });
+  await editorBilling.getByRole('textbox', { name: 'Find signed contract' }).fill(leadName);
+  await editorBilling.getByRole('button', { name: 'Find contracts' }).click();
+  await editorBilling.getByRole('button', { name: 'Choose contract' }).click();
+  await editorBilling.getByRole('textbox', { name: 'Description' })
+    .fill('Advance payment for website project');
+  await editorBilling.getByRole('spinbutton', { name: 'Amount' }).fill('300');
+  await editorBilling.getByRole('button', { name: 'Create invoice' }).click();
+  const invoice = page.getByRole('region', { name: 'Invoice details' });
+  await expect(invoice).toContainText('Outstanding: INR 300.000');
+
+  const paymentForm = invoice.locator('form[aria-label="Record payment"]');
+  await paymentForm.getByRole('spinbutton', { name: 'Amount' }).fill('200');
+  await paymentForm.getByRole('textbox', { name: 'Unique payment reference' })
+    .fill('AUTOTEST-' + Date.now());
+  await paymentForm.getByRole('button', { name: 'Record payment' }).click();
+  await expect(invoice).toContainText('Outstanding: INR 100.000');
+  await invoice.getByRole('button', { name: 'View contract ledger' }).click();
+  await expect(page.getByRole('region', { name: 'Contract ledger' }))
+    .toContainText('Invoice outstanding: INR 100.000');
 });
