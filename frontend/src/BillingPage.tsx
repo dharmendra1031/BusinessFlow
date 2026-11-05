@@ -52,7 +52,10 @@ type CollectionRow = {
 };
 type CollectionReport = {
   from: string; to: string; total: number; page: number;
-  summary: { currency: string; paymentCount: number; collected: number }[];
+  summary: {
+    currency: string; paymentCount: number; refundCount: number;
+    collected: number; refunded: number; netCollected: number;
+  }[];
   items: CollectionRow[];
 };
 type ReportMode = 'outstanding' | 'collections';
@@ -562,8 +565,10 @@ export default function BillingPage({ token }: { token: string }) {
       {collections && <>
         <h3>Collections ({collections.total})</h3>
         {collections.summary.map(item => <p className="field-help" key={item.currency}>
-          {item.currency}: {item.paymentCount} payments ·
-          Collected <strong>{money(item.collected, item.currency)}</strong></p>)}
+          {item.currency}: {item.paymentCount} receipts · {item.refundCount} refunds ·
+          Gross receipts {money(item.collected, item.currency)} ·
+          Refunded {money(item.refunded, item.currency)} ·
+          Net cash collected <strong>{money(item.netCollected, item.currency)}</strong></p>)}
         {collections.items.length ? <div className="table-scroll"><table>
           <thead><tr><th>Date</th><th>Invoice</th><th>Client</th>
             <th>Method</th><th>Reference</th><th>Amount</th></tr></thead>

@@ -120,6 +120,12 @@ public sealed class BillingAdjustmentTests
         Assert.Equal(400m, (await check.SalesInvoices.SingleAsync(x => x.Id == invoiceId)).Amount);
         Assert.Equal(300m, (await check.SalesPayments.SingleAsync(x => x.Id == paymentId)).Amount);
         Assert.Equal(2, await check.SalesRefunds.CountAsync(x => x.InvoiceId == invoiceId));
+        var collection = await admin.GetFromJsonAsync<JsonElement>(
+            Root + $"/reports/collections?from={date:yyyy-MM-dd}&to={date:yyyy-MM-dd}");
+        var totals = collection.GetProperty("summary")[0];
+        Assert.Equal(300m, totals.GetProperty("collected").GetDecimal());
+        Assert.Equal(100m, totals.GetProperty("refunded").GetDecimal());
+        Assert.Equal(200m, totals.GetProperty("netCollected").GetDecimal());
     }
 
     [Fact]

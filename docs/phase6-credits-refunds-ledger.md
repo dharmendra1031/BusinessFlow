@@ -28,3 +28,7 @@
 - Verify EF snapshot consistency, SQL integration and browser tests.
 - Before production: database backup, staging migration and rollback rehearsal.
 - This is **commercial recordkeeping, not statutory GST/VAT tax invoicing**.
+
+## Collection report after refunds
+
+Collection reporting distinguishes **gross receipts**, **refunds actually returned within the selected refund date range**, and **net cash collected**. Refunds are grouped by invoice currency. An interval with refunds but no receipts may show negative net cash movement. The receipt table continues to list gross receipts; each refund's evidence is available in the invoice refund history.

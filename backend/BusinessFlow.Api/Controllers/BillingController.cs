@@ -158,7 +158,9 @@ public sealed class BillingController(AppDbContext db) : ControllerBase
                 issueDate = invoice.CreatedAtUtc.ToString("yyyy-MM-dd"),
                 dueDate = invoice.DueDate.ToString("yyyy-MM-dd"),
                 taxNote = $"Commercial copy; not a tax invoice. Credit notes: {invoice.CreditedAmount:N3}; " +
-                    $"Refunds: {invoice.RefundedAmount:N3}. Tax breakdown not configured.",
+                    $"Refunds: {invoice.RefundedAmount:N3}; " +
+                    $"Refund due: {Math.Max(0m, invoice.PaidAmount - (invoice.Amount - invoice.CreditedAmount)):N3}. " +
+                    "Tax breakdown not configured.",
                 description = invoice.Type + ": " + invoice.Description,
                 amount = invoice.Amount - invoice.CreditedAmount,
                 received = invoice.PaidAmount,
@@ -425,13 +427,57 @@ public sealed class BillingController(AppDbContext db) : ControllerBase
             query = query.Where(x => x.BillToName.Contains(term) || x.Reference.Contains(term));
         }
 
-        var summary = await query.GroupBy(x => x.Currency)
+        var receipts = await query.GroupBy(x => x.Currency)
             .Select(group => new
             {
                 currency = group.Key,
                 paymentCount = group.Count(),
                 collected = group.Sum(x => x.Amount)
-            }).OrderBy(x => x.currency).ToListAsync(ct);
+            }).ToListAsync(ct);
+
+        var refundQuery = from refund in db.SalesRefunds.AsNoTracking()
+                          join invoice in db.SalesInvoices.AsNoTracking() on refund.InvoiceId equals invoice.Id
+                          where refund.RefundedOn >= first && refund.RefundedOn <= last
+                          select new
+                          {
+                              refund.Amount, refund.Reference, invoice.BillToName, invoice.Currency
+                          };
+        if (!string.IsNullOrWhiteSpace(currency))
+        {
+            var code = currency.Trim().ToUpperInvariant();
+            refundQuery = refundQuery.Where(x => x.Currency == code);
+        }
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            var term = search.Trim();
+            refundQuery = refundQuery.Where(x =>
+                x.BillToName.Contains(term) || x.Reference.Contains(term));
+        }
+
+        var returns = await refundQuery.GroupBy(x => x.Currency)
+            .Select(group => new
+            {
+                currency = group.Key,
+                refundCount = group.Count(),
+                refunded = group.Sum(x => x.Amount)
+            }).ToListAsync(ct);
+        var summary = receipts.Select(x => new
+        {
+            x.currency, x.paymentCount, refundCount = 0, x.collected, refunded = 0m
+        }).Concat(returns.Select(x => new
+        {
+            x.currency, paymentCount = 0, x.refundCount, collected = 0m, x.refunded
+        })).GroupBy(x => x.currency)
+          .Select(group => new
+          {
+              currency = group.Key,
+              paymentCount = group.Sum(x => x.paymentCount),
+              refundCount = group.Sum(x => x.refundCount),
+              collected = group.Sum(x => x.collected),
+              refunded = group.Sum(x => x.refunded),
+              netCollected = group.Sum(x => x.collected - x.refunded)
+          }).OrderBy(x => x.currency).ToList();
+
         var total = await query.CountAsync(ct);
         var items = await query.OrderByDescending(x => x.ReceivedOn).ThenByDescending(x => x.Id)
             .Skip((page - 1) * pageSize).Take(pageSize).ToListAsync(ct);
