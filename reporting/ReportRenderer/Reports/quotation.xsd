@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:msdata="urn:schemas-microsoft-com:xml-msdata" id="quotationReportDataSet">
+<xs:element name="quotationReportDataSet" msdata:IsDataSet="true" msdata:UseCurrentLocale="true"><xs:complexType><xs:choice minOccurs="0" maxOccurs="unbounded"><xs:element name="Items"><xs:complexType><xs:sequence>
+<xs:element name="quoteRef" type="xs:string" minOccurs="0" />
+<xs:element name="revision" type="xs:long" minOccurs="0" />
+<xs:element name="clientName" type="xs:string" minOccurs="0" />
+<xs:element name="status" type="xs:string" minOccurs="0" />
+<xs:element name="currency" type="xs:string" minOccurs="0" />
+<xs:element name="validUntil" type="xs:string" minOccurs="0" />
+<xs:element name="description" type="xs:string" minOccurs="0" />
+<xs:element name="quantity" type="xs:decimal" minOccurs="0" />
+<xs:element name="unitPrice" type="xs:decimal" minOccurs="0" />
+<xs:element name="discount" type="xs:decimal" minOccurs="0" />
+<xs:element name="tax" type="xs:decimal" minOccurs="0" />
+<xs:element name="lineTotal" type="xs:decimal" minOccurs="0" />
+</xs:sequence></xs:complexType></xs:element></xs:choice></xs:complexType></xs:element></xs:schema>

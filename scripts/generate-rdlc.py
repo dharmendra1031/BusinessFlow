@@ -19,7 +19,7 @@ def child(parent, name, value=None, namespace=RDL, **attributes):
     return element
 
 
-def textbox(parent, name, value, bold=False, header=False):
+def textbox(parent, name, value, bold=False, header=False, plain=False):
     box = child(parent, "Textbox", Name=name)
     child(box, "CanGrow", "true")
     paragraphs = child(box, "Paragraphs")
@@ -33,9 +33,10 @@ def textbox(parent, name, value, bold=False, header=False):
         child(style, "FontWeight", "Bold")
     child(paragraph, "Style")
     style = child(box, "Style")
-    border = child(style, "Border")
-    child(border, "Style", "Solid")
-    child(border, "Color", "#D1D5DB")
+    if not plain:
+        border = child(style, "Border")
+        child(border, "Style", "Solid")
+        child(border, "Color", "#D1D5DB")
     for side in ("Left", "Right", "Top", "Bottom"):
         child(style, f"Padding{side}", "3pt")
     return box
@@ -43,6 +44,10 @@ def textbox(parent, name, value, bold=False, header=False):
 
 def make_report(report_type, definition):
     columns = definition["Columns"]
+    quotation = report_type == "quotation"
+    display = (["description", "quantity", "unitPrice", "discount", "tax", "lineTotal"]
+               if quotation else list(columns))
+    report_width = 17 if quotation else 25
     root = ET.Element(f"{{{RDL}}}Report")
     child(root, "AutoRefresh", 0)
     source = child(child(root, "DataSources"), "DataSource", Name="LocalSource")
@@ -67,19 +72,31 @@ def make_report(report_type, definition):
     child(title, "Top", "0cm")
     child(title, "Left", "0cm")
     child(title, "Height", "1cm")
-    child(title, "Width", "25cm")
+    child(title, "Width", f"{report_width}cm")
+    if quotation:
+        headings = [
+            ("QuoteCustomer", "=\"Client: \" & First(Fields!clientName.Value, \"Items\")", "1.05cm"),
+            ("QuoteReference", "=\"Reference: \" & First(Fields!quoteRef.Value, \"Items\") & \"  |  Revision: \" & First(Fields!revision.Value, \"Items\")", "1.7cm"),
+            ("QuoteStatus", "=\"Status: \" & First(Fields!status.Value, \"Items\") & \"  |  Currency: \" & First(Fields!currency.Value, \"Items\") & \"  |  Valid until: \" & First(Fields!validUntil.Value, \"Items\")", "2.35cm"),
+        ]
+        for name, expression, top in headings:
+            box = textbox(items, name, expression, plain=True)
+            child(box, "Top", top)
+            child(box, "Left", "0cm")
+            child(box, "Height", "0.65cm")
+            child(box, "Width", "17cm")
     table = child(items, "Tablix", Name="ReportTable")
     table_body = child(table, "TablixBody")
     widths = child(table_body, "TablixColumns")
-    width = 25 / len(columns)
-    for _ in columns:
+    widths_cm = [6.0, 1.9, 2.3, 2.2, 2.0, 2.6] if quotation else [25 / len(columns)] * len(columns)
+    for width in widths_cm:
         child(child(widths, "TablixColumn"), "Width", f"{width:.3f}cm")
     rows = child(table_body, "TablixRows")
     for row_index in range(2):
         row = child(rows, "TablixRow")
         child(row, "Height", "0.65cm")
         cells = child(row, "TablixCells")
-        for index, name in enumerate(columns):
+        for index, name in enumerate(display):
             cell = child(child(cells, "TablixCell"), "CellContents")
             labels = {
                 "sourceId": "Source ID", "sourceName": "Lead Source",
@@ -89,6 +106,12 @@ def make_report(report_type, definition):
             }
             label = labels.get(name, name.replace("AtUtc", " Date").replace("Id", " ID"))
             expression = f"=Fields!{name}.Value"
+            if quotation and row_index == 1 and name != "description":
+                expression = f'=If(IsNothing(Fields!{name}.Value), "", Format(Fields!{name}.Value, "N3"))'
+            if quotation:
+                label = {"description": "ITEM / DESCRIPTION", "quantity": "QTY",
+                         "unitPrice": "UNIT PRICE", "discount": "DISCOUNT",
+                         "tax": "TAX", "lineTotal": "TOTAL"}[name]
             if report_type == "source-wise" and name == "conversionRate":
                 expression = '=Format(Fields!conversionRate.Value, "N1") & "%"'
             elif report_type == "source-wise" and name in ("pipelineAmount", "wonAmount"):
@@ -96,7 +119,7 @@ def make_report(report_type, definition):
             textbox(cell, f"Cell_{row_index}_{index}", label if row_index == 0 else expression,
                     bold=row_index == 0)
     hierarchy = child(child(table, "TablixColumnHierarchy"), "TablixMembers")
-    for _ in columns:
+    for _ in display:
         child(hierarchy, "TablixMember")
     hierarchy = child(child(table, "TablixRowHierarchy"), "TablixMembers")
     header_member = child(hierarchy, "TablixMember")
@@ -105,14 +128,15 @@ def make_report(report_type, definition):
         child(header_member, "RepeatOnNewPage", "true")
     child(child(hierarchy, "TablixMember"), "Group", Name="Details")
     child(table, "DataSetName", "Items")
-    child(table, "Top", "1.2cm")
+    child(table, "Top", "3.2cm" if quotation else "1.2cm")
     child(table, "Left", "0cm")
     child(table, "Height", "1.3cm")
-    child(table, "Width", "25cm")
-    child(body, "Height", "3cm")
-    child(section, "Width", "25cm")
+    child(table, "Width", f"{report_width}cm")
+    child(body, "Height", "5cm" if quotation else "3cm")
+    child(section, "Width", f"{report_width}cm")
     page = child(section, "Page")
-    for name, value in {"PageHeight": "21cm", "PageWidth": "29.7cm",
+    for name, value in {"PageHeight": "29.7cm" if quotation else "21cm",
+                        "PageWidth": "21cm" if quotation else "29.7cm",
                         "LeftMargin": "2cm", "RightMargin": "2cm",
                         "TopMargin": "2cm", "BottomMargin": "2cm"}.items():
         child(page, name, value)

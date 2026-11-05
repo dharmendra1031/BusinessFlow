@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using System.Text;
 using System.Text.Json;
 using BusinessFlow.Api.Data;
@@ -46,43 +45,24 @@ public sealed class ReportsController(AppDbContext db, IConfiguration configurat
             }
             rows.AddRange(data.GetProperty("rows").EnumerateArray());
         }
-        var renderer = configuration["Reports:RendererPath"];
-        if (string.IsNullOrWhiteSpace(renderer))
-            renderer = Path.Combine(Directory.GetCurrentDirectory(), "ReportRenderer", "ReportRenderer.exe");
+        var renderer = ReportPdfRenderer.Path(configuration);
         if (!System.IO.File.Exists(renderer))
             return StatusCode(StatusCodes.Status503ServiceUnavailable,
                 new { message = "PDF report renderer is unavailable." });
-        var output = Path.Combine(Path.GetTempPath(), "crm-report-" + Guid.NewGuid().ToString("N") + ".pdf");
         try
         {
-            using var process = new Process
-            {
-                StartInfo = new ProcessStartInfo(renderer)
-                {
-                    ArgumentList = { type, output },
-                    RedirectStandardInput = true,
-                    RedirectStandardError = true,
-                    UseShellExecute = false,
-                    CreateNoWindow = true
-                }
-            };
-            process.Start();
-            await process.StandardInput.WriteAsync(JsonSerializer.Serialize(rows));
-            process.StandardInput.Close();
-            using var timeout = CancellationTokenSource.CreateLinkedTokenSource(HttpContext.RequestAborted);
-            timeout.CancelAfter(TimeSpan.FromSeconds(60));
-            try { await process.WaitForExitAsync(timeout.Token); }
-            catch (OperationCanceledException) { process.Kill(entireProcessTree: true); throw; }
-            if (process.ExitCode != 0 || !System.IO.File.Exists(output))
-            {
-                HttpContext.RequestServices.GetRequiredService<ILogger<ReportsController>>()
-                    .LogError("PDF renderer failed for {ReportType} with exit code {ExitCode}", type, process.ExitCode);
-                return StatusCode(StatusCodes.Status502BadGateway,
-                    new { message = "PDF report generation failed." });
-            }
-            return File(await System.IO.File.ReadAllBytesAsync(output), "application/pdf", enableRangeProcessing: false);
+            var pdf = await ReportPdfRenderer.RenderAsync(
+                renderer, type, JsonSerializer.Serialize(rows), HttpContext.RequestAborted);
+            return File(pdf, "application/pdf", enableRangeProcessing: false);
         }
-        finally { if (System.IO.File.Exists(output)) System.IO.File.Delete(output); }
+        catch (OperationCanceledException) { throw; }
+        catch (Exception error)
+        {
+            HttpContext.RequestServices.GetRequiredService<ILogger<ReportsController>>()
+                .LogError(error, "PDF renderer failed for {ReportType}", type);
+            return StatusCode(StatusCodes.Status502BadGateway,
+                new { message = "PDF report generation failed." });
+        }
     }
 
     [HttpGet("export")]

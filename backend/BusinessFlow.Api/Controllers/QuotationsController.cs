@@ -158,6 +158,75 @@ public sealed class QuotationsController(AppDbContext db) : ControllerBase
         return Ok(new { quotation, revisions });
     }
 
+    [HttpGet("{id:long}/pdf")]
+    public async Task<IActionResult> Pdf(long id, int? revision = null, CancellationToken ct = default)
+    {
+        var header = await (from quotation in db.SalesQuotations.AsNoTracking()
+            join lead in db.Leads.AsNoTracking() on quotation.LeadId equals lead.Id
+            join customer in db.Customers.AsNoTracking() on lead.CustomerId equals customer.Id into customers
+            from customer in customers.DefaultIfEmpty()
+            where quotation.Id == id
+            select new
+            {
+                quotation.Id, quotation.Status, quotation.CurrentRevision,
+                ClientName = customer == null ? (lead.CompanyName ?? lead.Name) :
+                    (customer.LegalName ?? customer.Name)
+            }).FirstOrDefaultAsync(ct);
+        if (header is null) return NotFound();
+        var number = revision ?? header.CurrentRevision;
+        if (number < 1 || number > header.CurrentRevision) return NotFound();
+        var current = await db.SalesQuotationRevisions.AsNoTracking()
+            .Include(r => r.Items)
+            .FirstOrDefaultAsync(r => r.QuotationId == id && r.Revision == number, ct);
+        if (current is null) return NotFound();
+
+        var renderer = ReportPdfRenderer.Path(HttpContext.RequestServices.GetRequiredService<IConfiguration>());
+        if (!System.IO.File.Exists(renderer))
+            return StatusCode(StatusCodes.Status503ServiceUnavailable,
+                new { message = "PDF renderer is unavailable." });
+
+        Dictionary<string, object?> Row(string description, decimal? quantity = null,
+            decimal? price = null, decimal? discount = null, decimal? tax = null, decimal? total = null) => new()
+        {
+            ["quoteRef"] = $"Q-{header.Id:D6}",
+            ["revision"] = (long)number,
+            ["clientName"] = header.ClientName,
+            ["status"] = number == header.CurrentRevision ? header.Status : "Superseded",
+            ["currency"] = current.Currency,
+            ["validUntil"] = current.ValidUntil?.ToString("yyyy-MM-dd") ?? "Not specified",
+            ["description"] = description,
+            ["quantity"] = quantity, ["unitPrice"] = price, ["discount"] = discount,
+            ["tax"] = tax, ["lineTotal"] = total
+        };
+
+        var rows = current.Items.OrderBy(x => x.Position)
+            .Select(x => Row(x.Description, x.Quantity, x.UnitPrice,
+                x.DiscountAmount, x.TaxAmount, x.TotalAmount)).ToList();
+        if (rows.Count == 0)
+            rows.Add(Row(current.Title, 1m, current.Amount, 0, 0, current.Amount));
+        rows.Add(Row("SUBTOTAL", total: current.Subtotal));
+        if (current.DiscountAmount > 0) rows.Add(Row("DISCOUNT", total: -current.DiscountAmount));
+        if (current.TaxAmount > 0) rows.Add(Row("TAX", total: current.TaxAmount));
+        rows.Add(Row("GRAND TOTAL", total: current.Amount));
+        if (!string.IsNullOrWhiteSpace(current.Scope)) rows.Add(Row("SCOPE: " + current.Scope));
+        if (!string.IsNullOrWhiteSpace(current.PaymentTerms)) rows.Add(Row("PAYMENT TERMS: " + current.PaymentTerms));
+
+        try
+        {
+            var pdf = await ReportPdfRenderer.RenderAsync(renderer, "quotation",
+                System.Text.Json.JsonSerializer.Serialize(rows), ct);
+            return File(pdf, "application/pdf", $"Quotation-{id}-R{number}.pdf");
+        }
+        catch (OperationCanceledException) { throw; }
+        catch (Exception error)
+        {
+            HttpContext.RequestServices.GetRequiredService<ILogger<QuotationsController>>()
+                .LogError(error, "Quotation PDF generation failed for {QuotationId}", id);
+            return StatusCode(StatusCodes.Status502BadGateway,
+                new { message = "Quotation PDF generation failed." });
+        }
+    }
+
     [HttpPost]
     public async Task<IActionResult> Create(CreateQuotationRequest request, CancellationToken ct)
     {

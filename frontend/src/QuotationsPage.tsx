@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
-import { api } from './api';
+import { api, apiBlob } from './api';
 import { useFeedback } from './Feedback';
 import { clearFieldError, handleFormKeyDown, validateForm } from './formUtils';
 import type { Paged } from './types';
@@ -158,6 +158,20 @@ export default function QuotationsPage({ token }: { token: string }) {
     } finally { setWorking(false); }
   }
 
+  async function downloadPdf(id: number, revision: number) {
+    try {
+      const blob = await apiBlob('/api/admin/quotations/' + id + '/pdf?revision=' + revision, token);
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = 'Quotation-' + id + '-R' + revision + '.pdf';
+      link.click();
+      window.setTimeout(() => URL.revokeObjectURL(url), 30000);
+    } catch (err) {
+      notify('error', 'Unable to download quotation PDF', err instanceof Error ? err.message : undefined);
+    }
+  }
+
   async function changeStatus(status: 'Sent' | 'Accepted' | 'Rejected') {
     if (working || !selected) return;
     const approved = await confirm({
@@ -241,6 +255,9 @@ export default function QuotationsPage({ token }: { token: string }) {
         {lead && <p className="field-help">Selected lead: {lead.name} (#{lead.id})</p>}
       </>}
 
+      {selected && <button type="button" disabled={working}
+        onClick={() => void downloadPdf(selected.quotation.id, selected.quotation.currentRevision)}>
+        Download quotation PDF</button>}
       {selected && <p className="field-help">
         Lead: {selected.quotation.leadName} (#{selected.quotation.leadId}) ·
         Status: {selected.quotation.status} · Revision {selected.quotation.currentRevision}
@@ -301,6 +318,8 @@ export default function QuotationsPage({ token }: { token: string }) {
         <h3>Revision history ({selected.revisions.length})</h3>
         {selected.revisions.map(revision => <div className="project-task" key={revision.id}>
           <div><strong>Revision {revision.revision} · {revision.title}</strong>
+            <button type="button" onClick={() => void downloadPdf(selected.quotation.id, revision.revision)}>
+              PDF revision {revision.revision}</button>
             <p>{revision.currency} {revision.amount.toFixed(3)} ·
               {revision.validUntil ? ' Valid until ' + revision.validUntil : ' No expiry'}</p>
             <p>Subtotal {revision.subtotal.toFixed(3)} · Discount {revision.discountAmount.toFixed(3)} ·
