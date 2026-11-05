@@ -15,28 +15,82 @@ namespace BusinessFlow.Api.Controllers;
 [Route("api/admin/quotations")]
 public sealed class QuotationsController(AppDbContext db) : ControllerBase
 {
-    private static bool Valid(QuotationDetails? details) =>
-        details is not null &&
-        !string.IsNullOrWhiteSpace(details.Title) && details.Title.Trim().Length is >= 2 and <= 150 &&
-        (details.Scope?.Trim().Length ?? 0) <= 2000 &&
-        (details.PaymentTerms?.Trim().Length ?? 0) <= 1000 &&
-        details.Amount > 0 && decimal.Round(details.Amount, 3) == details.Amount &&
-        details.Currency is not null && details.Currency.Length == 3 &&
-        details.Currency.All(c => c is >= 'A' and <= 'Z' or >= 'a' and <= 'z');
+    private const decimal MaxAmount = 999999999999999.999m;
+
+    private sealed record LineAmount(QuotationLineRequest Source, decimal Base, decimal Discount, decimal Tax, decimal Total);
+    private sealed record QuotationAmount(decimal Subtotal, decimal Discount, decimal Tax, decimal Total, List<LineAmount> Lines);
+
+    private static decimal Round(decimal value) => decimal.Round(value, 3, MidpointRounding.AwayFromZero);
+
+    private static QuotationAmount? Calculate(QuotationDetails? details)
+    {
+        if (details is null || string.IsNullOrWhiteSpace(details.Title) ||
+            details.Title.Trim().Length is < 2 or > 150 ||
+            (details.Scope?.Trim().Length ?? 0) > 2000 ||
+            (details.PaymentTerms?.Trim().Length ?? 0) > 1000 ||
+            details.Currency is null || details.Currency.Length != 3 ||
+            !details.Currency.All(c => c is >= 'A' and <= 'Z' or >= 'a' and <= 'z')) return null;
+
+        if (details.Items is null)
+        {
+            if (details.Amount <= 0 || details.Amount > MaxAmount || Round(details.Amount) != details.Amount)
+                return null;
+            return new(details.Amount, 0, 0, details.Amount, []);
+        }
+
+        if (details.Items.Count is < 1 or > 100) return null;
+        var lines = new List<LineAmount>(details.Items.Count);
+        decimal subtotal = 0, discount = 0, tax = 0, total = 0;
+        try
+        {
+            foreach (var line in details.Items)
+            {
+                if (line is null || string.IsNullOrWhiteSpace(line.Description) ||
+                    line.Description.Trim().Length is < 2 or > 250 ||
+                    line.Quantity <= 0 || line.Quantity > 999999999.999m ||
+                    line.UnitPrice < 0 || line.UnitPrice > MaxAmount ||
+                    line.DiscountRate is < 0 or > 100 || line.TaxRate is < 0 or > 100 ||
+                    Round(line.Quantity) != line.Quantity || Round(line.UnitPrice) != line.UnitPrice ||
+                    decimal.Round(line.DiscountRate, 2) != line.DiscountRate ||
+                    decimal.Round(line.TaxRate, 2) != line.TaxRate) return null;
+
+                var basis = Round(line.Quantity * line.UnitPrice);
+                var disc = Round(basis * line.DiscountRate / 100m);
+                var levy = Round((basis - disc) * line.TaxRate / 100m);
+                var gross = basis - disc + levy;
+                subtotal += basis; discount += disc; tax += levy; total += gross;
+                if (subtotal > MaxAmount || total > MaxAmount) return null;
+                lines.Add(new(line, basis, disc, levy, gross));
+            }
+        }
+        catch (OverflowException) { return null; }
+        return total <= 0 ? null : new(subtotal, discount, tax, total, lines);
+    }
 
     private static SalesQuotationRevision Revision(long quotationId, int number,
-        QuotationDetails details, long userId) => new()
+        QuotationDetails details, QuotationAmount values, long userId) => new()
+    {
+        QuotationId = quotationId,
+        Revision = number,
+        Title = details.Title.Trim(),
+        Scope = string.IsNullOrWhiteSpace(details.Scope) ? null : details.Scope.Trim(),
+        Amount = values.Total,
+        Subtotal = values.Subtotal,
+        DiscountAmount = values.Discount,
+        TaxAmount = values.Tax,
+        Currency = details.Currency.ToUpperInvariant(),
+        ValidUntil = details.ValidUntil,
+        PaymentTerms = string.IsNullOrWhiteSpace(details.PaymentTerms) ? null : details.PaymentTerms.Trim(),
+        CreatedById = userId,
+        Items = values.Lines.Select((x, i) => new SalesQuotationLineItem
         {
-            QuotationId = quotationId,
-            Revision = number,
-            Title = details.Title.Trim(),
-            Scope = string.IsNullOrWhiteSpace(details.Scope) ? null : details.Scope.Trim(),
-            Amount = details.Amount,
-            Currency = details.Currency.ToUpperInvariant(),
-            ValidUntil = details.ValidUntil,
-            PaymentTerms = string.IsNullOrWhiteSpace(details.PaymentTerms) ? null : details.PaymentTerms.Trim(),
-            CreatedById = userId
-        };
+            Position = i + 1, Description = x.Source.Description.Trim(),
+            Quantity = x.Source.Quantity, UnitPrice = x.Source.UnitPrice,
+            DiscountRate = x.Source.DiscountRate, TaxRate = x.Source.TaxRate,
+            BaseAmount = x.Base, DiscountAmount = x.Discount,
+            TaxAmount = x.Tax, TotalAmount = x.Total
+        }).ToList()
+    };
 
     private void Audit(string action, long quotationId, string fields) =>
         db.AuditLogs.Add(new AuditLog
@@ -62,7 +116,7 @@ public sealed class QuotationsController(AppDbContext db) : ControllerBase
                     {
                         quote.Id, quote.LeadId, LeadName = lead.Name, quote.Status,
                         quote.CurrentRevision, quote.RowVersion, quote.UpdatedAtUtc,
-                        revision.Title, revision.Amount, revision.Currency, revision.ValidUntil
+                        revision.Title, revision.Amount, revision.Subtotal, revision.DiscountAmount, revision.TaxAmount, revision.Currency, revision.ValidUntil
                     };
         if (!string.IsNullOrWhiteSpace(search))
         {
@@ -92,8 +146,14 @@ public sealed class QuotationsController(AppDbContext db) : ControllerBase
             .Where(x => x.QuotationId == id).OrderByDescending(x => x.Revision)
             .Select(x => new
             {
-                x.Id, x.Revision, x.Title, x.Scope, x.Amount, x.Currency,
-                x.ValidUntil, x.PaymentTerms, x.CreatedById, x.CreatedAtUtc
+                x.Id, x.Revision, x.Title, x.Scope, x.Amount, x.Subtotal, x.DiscountAmount,
+                x.TaxAmount, x.Currency, x.ValidUntil, x.PaymentTerms, x.CreatedById, x.CreatedAtUtc,
+                Items = x.Items.OrderBy(i => i.Position).Select(i => new
+                {
+                    i.Id, i.Position, i.Description, i.Quantity, i.UnitPrice,
+                    i.DiscountRate, i.TaxRate, i.BaseAmount, i.DiscountAmount,
+                    i.TaxAmount, i.TotalAmount
+                }).ToList()
             }).ToListAsync(ct);
         return Ok(new { quotation, revisions });
     }
@@ -101,7 +161,8 @@ public sealed class QuotationsController(AppDbContext db) : ControllerBase
     [HttpPost]
     public async Task<IActionResult> Create(CreateQuotationRequest request, CancellationToken ct)
     {
-        if (!Valid(request.Details)) return BadRequest(new { message = "Enter valid quotation details and an amount with at most three decimals." });
+        var amount = Calculate(request.Details);
+        if (amount is null) return BadRequest(new { message = "Invalid quotation line items or total." });
         if (!await db.Leads.AnyAsync(x => x.Id == request.LeadId, ct)) return NotFound();
         if (await db.SalesQuotations.AnyAsync(x => x.LeadId == request.LeadId, ct))
             return Conflict(new { message = "This lead already has a quotation. Create a new revision instead." });
@@ -113,7 +174,7 @@ public sealed class QuotationsController(AppDbContext db) : ControllerBase
         try
         {
             await db.SaveChangesAsync(ct);
-            db.SalesQuotationRevisions.Add(Revision(quote.Id, 1, request.Details, userId));
+            db.SalesQuotationRevisions.Add(Revision(quote.Id, 1, request.Details, amount, userId));
             Audit("Create", quote.Id, "Revision: 1; LeadId: " + quote.LeadId);
             await db.SaveChangesAsync(ct);
             await transaction.CommitAsync(ct);
@@ -128,7 +189,8 @@ public sealed class QuotationsController(AppDbContext db) : ControllerBase
     [HttpPost("{id:long}/revisions")]
     public async Task<IActionResult> Revise(long id, ReviseQuotationRequest request, CancellationToken ct)
     {
-        if (!Valid(request.Details)) return BadRequest(new { message = "Invalid quotation details." });
+        var amount = Calculate(request.Details);
+        if (amount is null) return BadRequest(new { message = "Invalid quotation line items or total." });
         await using var transaction = await db.Database.BeginTransactionAsync(ct);
         var quote = await db.SalesQuotations.FirstOrDefaultAsync(x => x.Id == id, ct);
         if (quote is null) return NotFound();
@@ -140,7 +202,7 @@ public sealed class QuotationsController(AppDbContext db) : ControllerBase
         quote.CurrentRevision++;
         quote.Status = "Draft";
         quote.UpdatedAtUtc = DateTime.UtcNow;
-        db.SalesQuotationRevisions.Add(Revision(id, quote.CurrentRevision, request.Details, LeadAccess.UserId(User)));
+        db.SalesQuotationRevisions.Add(Revision(id, quote.CurrentRevision, request.Details, amount, LeadAccess.UserId(User)));
         Audit("Revise", id, "Revision: " + quote.CurrentRevision);
         await db.SaveChangesAsync(ct);
         await transaction.CommitAsync(ct);

@@ -8,7 +8,15 @@ public sealed record QuotationDetails(
     decimal Amount,
     [Required, RegularExpression("^[a-zA-Z]{3}$")] string Currency,
     DateOnly? ValidUntil,
-    [MaxLength(1000)] string? PaymentTerms);
+    [MaxLength(1000)] string? PaymentTerms,
+    List<QuotationLineRequest>? Items = null);
+
+public sealed record QuotationLineRequest(
+    [Required, MinLength(2), MaxLength(250)] string Description,
+    decimal Quantity,
+    decimal UnitPrice,
+    decimal DiscountRate = 0,
+    decimal TaxRate = 0);
 
 public sealed record CreateQuotationRequest(
     [Range(1, long.MaxValue)] long LeadId,

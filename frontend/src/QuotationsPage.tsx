@@ -9,10 +9,30 @@ type Quote = {
   amount: number; currency: string; currentRevision: number; rowVersion: string;
   updatedAtUtc: string;
 };
+type QuoteLine = {
+  id?: number; description: string; quantity: number; unitPrice: number;
+  discountRate: number; taxRate: number; totalAmount?: number;
+};
+type LineForm = {
+  description: string; quantity: string; unitPrice: string; discountRate: string; taxRate: string;
+};
+const blankLine = (): LineForm => ({ description: '', quantity: '1', unitPrice: '', discountRate: '0', taxRate: '0' });
+const round = (value: number) => Math.round((value + Number.EPSILON) * 1000) / 1000;
+function totals(lines: LineForm[]) {
+  return lines.reduce((sum, line) => {
+    const base = round(Number(line.quantity) * Number(line.unitPrice));
+    const discount = round(base * Number(line.discountRate) / 100);
+    const tax = round((base - discount) * Number(line.taxRate) / 100);
+    return { subtotal: sum.subtotal + base, discount: sum.discount + discount,
+      tax: sum.tax + tax, total: sum.total + base - discount + tax };
+  }, { subtotal: 0, discount: 0, tax: 0, total: 0 });
+}
+
 type Revision = {
   id: number; revision: number; title: string; scope: string | null;
   amount: number; currency: string; validUntil: string | null;
   paymentTerms: string | null; createdAtUtc: string;
+  subtotal: number; discountAmount: number; taxAmount: number; items: QuoteLine[];
 };
 type QuoteDetail = {
   quotation: Pick<Quote, 'id' | 'leadId' | 'leadName' | 'status' | 'currentRevision' | 'rowVersion'>;
@@ -36,6 +56,7 @@ export default function QuotationsPage({ token }: { token: string }) {
   const [query, setQuery] = useState('');
   const [selected, setSelected] = useState<QuoteDetail | null>(null);
   const [form, setForm] = useState<Form>(blank);
+  const [lines, setLines] = useState<LineForm[]>([blankLine()]);
   const [leadQuery, setLeadQuery] = useState('');
   const [leads, setLeads] = useState<Lead[]>([]);
   const [lead, setLead] = useState<Lead | null>(null);
@@ -63,6 +84,11 @@ export default function QuotationsPage({ token }: { token: string }) {
       const result = await api<QuoteDetail>('/api/admin/quotations/' + id, token);
       setSelected(result);
       const latest = result.revisions[0];
+      setLines(latest.items.map(item => ({
+        description: item.description, quantity: String(item.quantity),
+        unitPrice: String(item.unitPrice), discountRate: String(item.discountRate),
+        taxRate: String(item.taxRate),
+      })));
       setForm({
         title: latest.title, scope: latest.scope ?? '', amount: String(latest.amount),
         currency: latest.currency, validUntil: latest.validUntil ?? '',
@@ -77,10 +103,20 @@ export default function QuotationsPage({ token }: { token: string }) {
     setForm(previous => ({ ...previous, [field]: value }));
   }
 
+  function updateLine(index: number, field: keyof LineForm, value: string) {
+    setLines(rows => rows.map((row, i) => i === index ? { ...row, [field]: value } : row));
+  }
+
   function details() {
     return {
       title: form.title.trim(), scope: form.scope.trim() || null,
-      amount: Number(form.amount), currency: form.currency.toUpperCase().trim(),
+      amount: lines.length ? totals(lines).total : Number(form.amount),
+      items: lines.length ? lines.map(row => ({
+        description: row.description.trim(), quantity: Number(row.quantity),
+        unitPrice: Number(row.unitPrice), discountRate: Number(row.discountRate),
+        taxRate: Number(row.taxRate),
+      })) : null,
+      currency: form.currency.toUpperCase().trim(),
       validUntil: form.validUntil || null, paymentTerms: form.paymentTerms.trim() || null,
     };
   }
@@ -186,7 +222,7 @@ export default function QuotationsPage({ token }: { token: string }) {
       <div className="panel-heading">
         <h2>{selected ? 'Quotation #' + selected.quotation.id : 'New quotation'}</h2>
         {selected && <button type="button" disabled={working} onClick={() => {
-          setSelected(null); setForm(blank()); setLead(null);
+          setSelected(null); setForm(blank()); setLines([blankLine()]); setLead(null);
         }}>New quotation</button>}
       </div>
 
@@ -222,14 +258,42 @@ export default function QuotationsPage({ token }: { token: string }) {
           value={form.title} onChange={event => update('title', event.target.value)} /></label>
         <label>Currency *<input required minLength={3} maxLength={3} pattern="[A-Za-z]{3}"
           value={form.currency} onChange={event => update('currency', event.target.value)} /></label>
-        <label>Amount *<input required type="number" min="0.001" max="999999999999.999" step="0.001"
-          value={form.amount} onChange={event => update('amount', event.target.value)} /></label>
+        {!lines.length && <label>Amount *<input required type="number" min="0.001"
+          max="999999999999999.999" step="0.001" value={form.amount}
+          onChange={event => update('amount', event.target.value)} /></label>}
         <label>Valid until<input type="date" value={form.validUntil}
           onChange={event => update('validUntil', event.target.value)} /></label>
         <label>Scope<textarea maxLength={2000} value={form.scope}
           onChange={event => update('scope', event.target.value)} /></label>
         <label>Payment terms<textarea maxLength={1000} value={form.paymentTerms}
           onChange={event => update('paymentTerms', event.target.value)} /></label>
+        <div className="form-grid" style={{ gridColumn: '1 / -1' }}>
+          <h3>Quotation items</h3>
+          {lines.map((row, index) => <div className="project-section" key={index}>
+            <div className="form-grid">
+              <label>Description *<input required minLength={2} maxLength={250}
+                value={row.description} onChange={event => updateLine(index, 'description', event.target.value)} /></label>
+              <label>Quantity *<input type="number" required min="0.001" step="0.001"
+                value={row.quantity} onChange={event => updateLine(index, 'quantity', event.target.value)} /></label>
+              <label>Unit price *<input type="number" required min="0" step="0.001"
+                value={row.unitPrice} onChange={event => updateLine(index, 'unitPrice', event.target.value)} /></label>
+              <label>Discount %<input type="number" required min="0" max="100" step="0.01"
+                value={row.discountRate} onChange={event => updateLine(index, 'discountRate', event.target.value)} /></label>
+              <label>Tax %<input type="number" required min="0" max="100" step="0.01"
+                value={row.taxRate} onChange={event => updateLine(index, 'taxRate', event.target.value)} /></label>
+            </div>
+            <button type="button" disabled={working} onClick={() => setLines(rows => rows.filter((_, i) => i !== index))}>
+              Remove item</button>
+          </div>)}
+          {lines.length < 100 && <button type="button" disabled={working}
+            onClick={() => setLines(rows => [...rows, blankLine()])}>Add item</button>}
+          {!!lines.length && <p className="field-help">
+            Subtotal: {totals(lines).subtotal.toFixed(3)} · Discount: {totals(lines).discount.toFixed(3)} ·
+            Tax: {totals(lines).tax.toFixed(3)} · Total: {totals(lines).total.toFixed(3)} {form.currency.toUpperCase()}
+          </p>}
+          {!lines.length && <p className="field-help">
+            Legacy amount-only quotation. Add items to enable item-level tax and discount calculation.</p>}
+        </div>
         <div><button className="primary" disabled={working || (!selected && !lead)}>
           {selected ? 'Save new revision' : 'Create quotation'}</button></div>
       </form>}
@@ -239,6 +303,16 @@ export default function QuotationsPage({ token }: { token: string }) {
           <div><strong>Revision {revision.revision} · {revision.title}</strong>
             <p>{revision.currency} {revision.amount.toFixed(3)} ·
               {revision.validUntil ? ' Valid until ' + revision.validUntil : ' No expiry'}</p>
+            <p>Subtotal {revision.subtotal.toFixed(3)} · Discount {revision.discountAmount.toFixed(3)} ·
+              Tax {revision.taxAmount.toFixed(3)}</p>
+            {!!revision.items.length && <div className="table-scroll"><table>
+              <thead><tr><th>Item</th><th>Quantity</th><th>Rate</th><th>Discount %</th>
+                <th>Tax %</th><th>Total</th></tr></thead>
+              <tbody>{revision.items.map(line => <tr key={line.id}>
+                <td>{line.description}</td><td>{line.quantity}</td><td>{line.unitPrice.toFixed(3)}</td>
+                <td>{line.discountRate}</td><td>{line.taxRate}</td>
+                <td>{line.totalAmount?.toFixed(3)}</td>
+              </tr>)}</tbody></table></div>}
             {revision.scope && <p>{revision.scope}</p>}
             {revision.paymentTerms && <p>Terms: {revision.paymentTerms}</p>}
           </div>

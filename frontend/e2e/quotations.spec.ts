@@ -23,7 +23,8 @@ test('Admin creates a quotation through lead search and preserves revisions', as
   await editor.getByRole('button', { name: 'Find leads' }).click();
   await editor.getByRole('button', { name: 'Choose lead' }).click();
   await editor.getByRole('textbox', { name: 'Quotation title' }).fill('Initial proposal');
-  await editor.getByRole('spinbutton', { name: 'Amount' }).fill('2500.500');
+  await editor.getByRole('textbox', { name: 'Description' }).fill('Website build');
+  await editor.getByRole('spinbutton', { name: 'Unit price' }).fill('2500.500');
   await editor.getByRole('button', { name: 'Create quotation' }).click();
   await expect(editor.getByRole('heading', { name: /Quotation #/ })).toBeVisible();
   await expect(editor.getByRole('heading', { name: 'Revision history (1)' })).toBeVisible();

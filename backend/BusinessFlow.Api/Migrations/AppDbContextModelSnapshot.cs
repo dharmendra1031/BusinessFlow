@@ -1225,6 +1225,30 @@ namespace BusinessFlow.Api.Migrations
                         });
                 });
 
+            modelBuilder.Entity("BusinessFlow.Api.Models.SalesQuotationLineItem", b =>
+                {
+                    b.Property<long>("Id").ValueGeneratedOnAdd().HasColumnType("bigint");
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
+                    b.Property<decimal>("BaseAmount").HasPrecision(18, 3).HasColumnType("decimal(18,3)");
+                    b.Property<string>("Description").IsRequired().HasMaxLength(250).HasColumnType("nvarchar(250)");
+                    b.Property<decimal>("DiscountAmount").HasPrecision(18, 3).HasColumnType("decimal(18,3)");
+                    b.Property<decimal>("DiscountRate").HasPrecision(5, 2).HasColumnType("decimal(5,2)");
+                    b.Property<int>("Position").HasColumnType("int");
+                    b.Property<decimal>("Quantity").HasPrecision(12, 3).HasColumnType("decimal(12,3)");
+                    b.Property<long>("RevisionId").HasColumnType("bigint");
+                    b.Property<decimal>("TaxAmount").HasPrecision(18, 3).HasColumnType("decimal(18,3)");
+                    b.Property<decimal>("TaxRate").HasPrecision(5, 2).HasColumnType("decimal(5,2)");
+                    b.Property<decimal>("TotalAmount").HasPrecision(18, 3).HasColumnType("decimal(18,3)");
+                    b.Property<decimal>("UnitPrice").HasPrecision(18, 3).HasColumnType("decimal(18,3)");
+                    b.HasKey("Id");
+                    b.HasIndex("RevisionId", "Position").IsUnique();
+                    b.ToTable("SalesQuotationLineItems", t =>
+                        {
+                            t.HasCheckConstraint("CK_SalesQuotationLineItems_Values",
+                                "[Quantity] > 0 AND [UnitPrice] >= 0 AND [DiscountRate] BETWEEN 0 AND 100 AND [TaxRate] BETWEEN 0 AND 100");
+                        });
+                });
+
             modelBuilder.Entity("BusinessFlow.Api.Models.SalesQuotationRevision", b =>
                 {
                     b.Property<long>("Id")
@@ -1232,6 +1256,10 @@ namespace BusinessFlow.Api.Migrations
                         .HasColumnType("bigint");
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<decimal>("Subtotal").HasPrecision(18, 3).HasColumnType("decimal(18,3)");
+                    b.Property<decimal>("DiscountAmount").HasPrecision(18, 3).HasColumnType("decimal(18,3)");
+                    b.Property<decimal>("TaxAmount").HasPrecision(18, 3).HasColumnType("decimal(18,3)");
 
                     b.Property<decimal>("Amount")
                         .HasPrecision(18, 3)
@@ -1862,6 +1890,15 @@ namespace BusinessFlow.Api.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("BusinessFlow.Api.Models.SalesQuotationLineItem", b =>
+                {
+                    b.HasOne("BusinessFlow.Api.Models.SalesQuotationRevision", null)
+                        .WithMany("Items")
+                        .HasForeignKey("RevisionId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("BusinessFlow.Api.Models.SalesQuotationRevision", b =>
                 {
                     b.HasOne("BusinessFlow.Api.Models.ApplicationUser", null)
@@ -1973,6 +2010,11 @@ namespace BusinessFlow.Api.Migrations
             modelBuilder.Entity("BusinessFlow.Api.Models.DevelopmentProject", b =>
                 {
                     b.Navigation("Tasks");
+                });
+
+            modelBuilder.Entity("BusinessFlow.Api.Models.SalesQuotationRevision", b =>
+                {
+                    b.Navigation("Items");
                 });
 #pragma warning restore 612, 618
         }

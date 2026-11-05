@@ -69,4 +69,51 @@ public sealed class SalesQuotationTests
         Assert.Equal(2, await check.SalesQuotationRevisions.CountAsync(r => r.QuotationId == id));
         Assert.True(await check.AuditLogs.AnyAsync(a => a.TableName == "SalesQuotations" && a.RecordId == id && a.Action == "Status"));
     }
+    [Fact]
+    public async Task Itemized_quotation_calculates_discounts_and_taxes_without_trusting_client_amount()
+    {
+        await using var fixture = await Phase1TestDatabase.CreateAsync();
+        await using var host = new Phase1ApiHost(fixture);
+        using var admin = await host.ClientAsync("Admin");
+        var userId = (await admin.GetFromJsonAsync<JsonElement>("/api/auth/me"))
+            .GetProperty("id").GetInt64();
+        long leadId;
+        await using (var db = fixture.CreateContext())
+        {
+            var lead = new Lead { Name = "Itemized quote", Phone = "1234567890",
+                SourceId = 1, StatusId = 3, CreatedById = userId };
+            db.Leads.Add(lead);
+            await db.SaveChangesAsync();
+            leadId = lead.Id;
+        }
+        var details = new
+        {
+            title = "Website implementation", currency = "INR", amount = 1m,
+            items = new[]
+            {
+                new { description = "UI", quantity = 2m, unitPrice = 1000m, discountRate = 10m, taxRate = 18m },
+                new { description = "API", quantity = 1m, unitPrice = 500m, discountRate = 0m, taxRate = 0m }
+            }
+        };
+        var response = await admin.PostAsJsonAsync("/api/admin/quotations", new { leadId, details });
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        var id = (await response.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetInt64();
+        var result = await admin.GetFromJsonAsync<JsonElement>($"/api/admin/quotations/{id}");
+        var revision = result.GetProperty("revisions")[0];
+        Assert.Equal(2624m, revision.GetProperty("amount").GetDecimal());
+        Assert.Equal(2500m, revision.GetProperty("subtotal").GetDecimal());
+        Assert.Equal(200m, revision.GetProperty("discountAmount").GetDecimal());
+        Assert.Equal(324m, revision.GetProperty("taxAmount").GetDecimal());
+        Assert.Equal(2, revision.GetProperty("items").GetArrayLength());
+
+        var invalid = await admin.PostAsJsonAsync($"/api/admin/quotations/{id}/revisions",
+            new { rowVersion = result.GetProperty("quotation").GetProperty("rowVersion").GetString(),
+                details = new { title = "Bad quote", currency = "INR", items = new[]
+                {
+                    new { description = "Invalid", quantity = 1m, unitPrice = 100m, taxRate = 120m }
+                } } });
+        Assert.Equal(HttpStatusCode.BadRequest, invalid.StatusCode);
+        await using var check = fixture.CreateContext();
+        Assert.Equal(2, await check.SalesQuotationLineItems.CountAsync());
+    }
 }

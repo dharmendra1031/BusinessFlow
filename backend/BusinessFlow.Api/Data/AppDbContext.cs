@@ -10,6 +10,7 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
 {
     public DbSet<SalesQuotation> SalesQuotations => Set<SalesQuotation>();
     public DbSet<SalesQuotationRevision> SalesQuotationRevisions => Set<SalesQuotationRevision>();
+    public DbSet<SalesQuotationLineItem> SalesQuotationLineItems => Set<SalesQuotationLineItem>();
     public DbSet<Customer> Customers => Set<Customer>();
     public DbSet<CustomerContact> CustomerContacts => Set<CustomerContact>();
     public DbSet<Lead> Leads => Set<Lead>();
@@ -116,12 +117,33 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
             entity.Property(x => x.Title).HasMaxLength(150).IsRequired();
             entity.Property(x => x.Scope).HasMaxLength(2000);
             entity.Property(x => x.Amount).HasPrecision(18, 3);
+            entity.Property(x => x.Subtotal).HasPrecision(18, 3);
+            entity.Property(x => x.DiscountAmount).HasPrecision(18, 3);
+            entity.Property(x => x.TaxAmount).HasPrecision(18, 3);
             entity.Property(x => x.Currency).HasMaxLength(3).IsRequired();
             entity.Property(x => x.PaymentTerms).HasMaxLength(1000);
             entity.HasIndex(x => new { x.QuotationId, x.Revision }).IsUnique();
             entity.HasOne<SalesQuotation>().WithMany().HasForeignKey(x => x.QuotationId).OnDelete(DeleteBehavior.NoAction);
             entity.HasOne<ApplicationUser>().WithMany().HasForeignKey(x => x.CreatedById).OnDelete(DeleteBehavior.NoAction);
             entity.ToTable(t => t.HasCheckConstraint("CK_SalesQuotationRevisions_Amount", "[Amount] > 0"));
+        });
+
+        modelBuilder.Entity<SalesQuotationLineItem>(entity =>
+        {
+            entity.Property(x => x.Description).HasMaxLength(250).IsRequired();
+            entity.Property(x => x.Quantity).HasPrecision(12, 3);
+            entity.Property(x => x.UnitPrice).HasPrecision(18, 3);
+            entity.Property(x => x.DiscountRate).HasPrecision(5, 2);
+            entity.Property(x => x.TaxRate).HasPrecision(5, 2);
+            entity.Property(x => x.BaseAmount).HasPrecision(18, 3);
+            entity.Property(x => x.DiscountAmount).HasPrecision(18, 3);
+            entity.Property(x => x.TaxAmount).HasPrecision(18, 3);
+            entity.Property(x => x.TotalAmount).HasPrecision(18, 3);
+            entity.HasIndex(x => new { x.RevisionId, x.Position }).IsUnique();
+            entity.HasOne<SalesQuotationRevision>().WithMany(x => x.Items)
+                .HasForeignKey(x => x.RevisionId).OnDelete(DeleteBehavior.NoAction);
+            entity.ToTable(t => t.HasCheckConstraint("CK_SalesQuotationLineItems_Values",
+                "[Quantity] > 0 AND [UnitPrice] >= 0 AND [DiscountRate] BETWEEN 0 AND 100 AND [TaxRate] BETWEEN 0 AND 100"));
         });
 
         modelBuilder.Entity<Customer>(entity =>
