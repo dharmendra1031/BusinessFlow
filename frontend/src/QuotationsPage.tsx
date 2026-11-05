@@ -34,9 +34,17 @@ type Revision = {
   paymentTerms: string | null; createdAtUtc: string;
   subtotal: number; discountAmount: number; taxAmount: number; items: QuoteLine[];
 };
+type Contract = {
+  id: number; quotationRevision: number; status: string; terms: string;
+  signedBy: string | null; signatureReference: string | null; signedOn: string | null; rowVersion: string;
+};
 type QuoteDetail = {
-  quotation: Pick<Quote, 'id' | 'leadId' | 'leadName' | 'status' | 'currentRevision' | 'rowVersion'>;
+  quotation: Pick<Quote, 'id' | 'leadId' | 'leadName' | 'status' | 'currentRevision' | 'rowVersion'> & {
+    approvalComment: string | null; approvedAtUtc: string | null;
+    clientResponseBy: string | null; clientResponseReference: string | null;
+  };
   revisions: Revision[];
+  contract: Contract | null;
 };
 type Lead = { id: number; name: string; companyName: string | null };
 type Form = {
@@ -57,6 +65,13 @@ export default function QuotationsPage({ token }: { token: string }) {
   const [selected, setSelected] = useState<QuoteDetail | null>(null);
   const [form, setForm] = useState<Form>(blank);
   const [lines, setLines] = useState<LineForm[]>([blankLine()]);
+  const [reviewComment, setReviewComment] = useState('');
+  const [responseBy, setResponseBy] = useState('');
+  const [responseReference, setResponseReference] = useState('');
+  const [contractTerms, setContractTerms] = useState('');
+  const [signedBy, setSignedBy] = useState('');
+  const [signatureReference, setSignatureReference] = useState('');
+  const [signedOn, setSignedOn] = useState('');
   const [leadQuery, setLeadQuery] = useState('');
   const [leads, setLeads] = useState<Lead[]>([]);
   const [lead, setLead] = useState<Lead | null>(null);
@@ -83,6 +98,7 @@ export default function QuotationsPage({ token }: { token: string }) {
     try {
       const result = await api<QuoteDetail>('/api/admin/quotations/' + id, token);
       setSelected(result);
+      setContractTerms(result.revisions[0].paymentTerms ?? '');
       const latest = result.revisions[0];
       setLines(latest.items.map(item => ({
         description: item.description, quantity: String(item.quantity),
@@ -172,8 +188,64 @@ export default function QuotationsPage({ token }: { token: string }) {
     }
   }
 
+  async function postChange(path: string, body: object, message: string) {
+    if (!selected || working) return;
+    setWorking(true);
+    try {
+      await api('/api/admin/quotations/' + selected.quotation.id + path, token, {
+        method: 'POST', body: JSON.stringify(body),
+      });
+      await open(selected.quotation.id);
+      await load();
+      notify('success', message);
+    } catch (err) {
+      notify('error', 'Unable to update quotation', err instanceof Error ? err.message : undefined);
+    } finally { setWorking(false); }
+  }
+
+  async function submitForApproval() {
+    if (!selected) return;
+    await postChange('/submit', { rowVersion: selected.quotation.rowVersion }, 'Quotation submitted for review');
+  }
+
+  async function review(approve: boolean) {
+    if (!selected || reviewComment.trim().length < 10) {
+      notify('warning', 'Enter a review comment of at least 10 characters.');
+      return;
+    }
+    await postChange('/review', {
+      approve, comment: reviewComment.trim(), rowVersion: selected.quotation.rowVersion,
+    }, approve ? 'Quotation approved' : 'Quotation returned to draft');
+  }
+
+  async function createContract(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!selected || !validateForm(event.currentTarget) || contractTerms.trim().length < 10) return;
+    await postChange('/contract', {
+      terms: contractTerms.trim(), rowVersion: selected.quotation.rowVersion,
+    }, 'Contract draft created');
+  }
+
+  async function signContract(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!selected?.contract || !validateForm(event.currentTarget)) return;
+    if (!(await confirm({
+      title: 'Record signed contract?',
+      message: 'Make sure the signature evidence is available. This records the signature details, it does not sign the document.',
+      confirmText: 'Record signature',
+    }))) return;
+    await postChange('/contract/sign', {
+      signedBy: signedBy.trim(), signatureReference: signatureReference.trim(),
+      signedOn, rowVersion: selected.contract.rowVersion,
+    }, 'Contract signature recorded');
+  }
+
   async function changeStatus(status: 'Sent' | 'Accepted' | 'Rejected') {
     if (working || !selected) return;
+    if (status !== 'Sent' && (responseBy.trim().length < 2 || responseReference.trim().length < 5)) {
+      notify('warning', 'Enter the client contact and response reference.');
+      return;
+    }
     const approved = await confirm({
       title: status === 'Sent' ? 'Mark quotation as sent?' : 'Record client response?',
       message: status === 'Sent'
@@ -187,7 +259,11 @@ export default function QuotationsPage({ token }: { token: string }) {
     try {
       const id = selected.quotation.id;
       await api('/api/admin/quotations/' + id + '/status', token, {
-        method: 'POST', body: JSON.stringify({ status, rowVersion: selected.quotation.rowVersion }),
+        method: 'POST', body: JSON.stringify({
+          status, rowVersion: selected.quotation.rowVersion,
+          clientResponseBy: status === 'Sent' ? null : responseBy.trim(),
+          clientResponseReference: status === 'Sent' ? null : responseReference.trim(),
+        }),
       });
       await open(id);
       await load();
@@ -263,13 +339,37 @@ export default function QuotationsPage({ token }: { token: string }) {
         Status: {selected.quotation.status} · Revision {selected.quotation.currentRevision}
       </p>}
       {selected?.quotation.status === 'Draft' && <div className="drawer-actions">
+        <button disabled={working} onClick={() => void submitForApproval()}>Submit for approval</button>
+      </div>}
+      {selected?.quotation.status === 'PendingApproval' && <section className="project-section">
+        <h3>Internal quotation review</h3>
+        <label>Review comment *<textarea required minLength={10} maxLength={500}
+          value={reviewComment} onChange={event => setReviewComment(event.target.value)} /></label>
+        <div className="drawer-actions">
+          <button type="button" className="primary" disabled={working || reviewComment.trim().length < 10}
+            onClick={() => void review(true)}>Approve quotation</button>
+          <button type="button" disabled={working || reviewComment.trim().length < 10}
+            onClick={() => void review(false)}>Return to draft</button>
+        </div>
+      </section>}
+      {selected?.quotation.status === 'Approved' && <div className="drawer-actions">
         <button disabled={working} onClick={() => void changeStatus('Sent')}>Mark as sent</button>
       </div>}
-      {selected?.quotation.status === 'Sent' && <div className="drawer-actions">
-        <button disabled={working} onClick={() => void changeStatus('Accepted')}>Record accepted</button>
-        <button disabled={working} onClick={() => void changeStatus('Rejected')}>Record rejected</button>
-      </div>}
-      {(!selected || ['Draft', 'Sent'].includes(selected.quotation.status)) && <form
+      {selected?.quotation.status === 'Sent' && <section className="project-section">
+        <h3>Record client response</h3>
+        <p className="field-help">Enter who replied and the email or document reference. This is not a digital signature.</p>
+        <div className="form-grid">
+          <label>Client contact *<input required minLength={2} maxLength={150}
+            value={responseBy} onChange={event => setResponseBy(event.target.value)} /></label>
+          <label>Response reference *<input required minLength={5} maxLength={500}
+            value={responseReference} onChange={event => setResponseReference(event.target.value)} /></label>
+        </div>
+        <div className="drawer-actions">
+          <button disabled={working} onClick={() => void changeStatus('Accepted')}>Record accepted</button>
+          <button disabled={working} onClick={() => void changeStatus('Rejected')}>Record rejected</button>
+        </div>
+      </section>}
+      {(!selected || ['Draft', 'Approved', 'Sent'].includes(selected.quotation.status)) && <form
         className="form-grid" onSubmit={save} onInput={clearFieldError} onKeyDown={handleFormKeyDown}>
         <label>Quotation title *<input required minLength={2} maxLength={150}
           value={form.title} onChange={event => update('title', event.target.value)} /></label>
@@ -314,6 +414,40 @@ export default function QuotationsPage({ token }: { token: string }) {
         <div><button className="primary" disabled={working || (!selected && !lead)}>
           {selected ? 'Save new revision' : 'Create quotation'}</button></div>
       </form>}
+      {selected?.quotation.approvalComment && <p className="field-help">
+        Latest internal review: {selected.quotation.approvalComment}</p>}
+      {selected?.quotation.clientResponseReference && <p className="field-help">
+        Client response: {selected.quotation.clientResponseBy} ·
+        {selected.quotation.clientResponseReference}</p>}
+      {selected?.quotation.status === 'Accepted' && !selected.contract && <section
+        className="project-section" aria-label="Contract handoff">
+        <h3>Create contract draft</h3>
+        <p className="field-help">Only the accepted quotation revision can be handed off to a contract.</p>
+        <form className="form-grid" onSubmit={createContract} onInput={clearFieldError}
+          onKeyDown={handleFormKeyDown}>
+          <label>Contract terms *<textarea required minLength={10} maxLength={2000}
+            value={contractTerms} onChange={event => setContractTerms(event.target.value)} /></label>
+          <div><button className="primary" disabled={working}>Create contract draft</button></div>
+        </form>
+      </section>}
+      {selected?.contract && <section className="project-section" aria-label="Contract details">
+        <h3>Contract #{selected.contract.id} · {selected.contract.status}</h3>
+        <p>Linked to quotation revision {selected.contract.quotationRevision}</p>
+        <p>{selected.contract.terms}</p>
+        {selected.contract.status === 'Signed' ? <p className="field-help">
+          Signed by {selected.contract.signedBy} on {selected.contract.signedOn} ·
+          Reference: {selected.contract.signatureReference}</p> :
+          <form className="form-grid" onSubmit={signContract} onInput={clearFieldError}
+            onKeyDown={handleFormKeyDown}>
+            <label>Signed by *<input required minLength={2} maxLength={150}
+              value={signedBy} onChange={event => setSignedBy(event.target.value)} /></label>
+            <label>Signature evidence reference *<input required minLength={5} maxLength={500}
+              value={signatureReference} onChange={event => setSignatureReference(event.target.value)} /></label>
+            <label>Signed on *<input type="date" required value={signedOn}
+              onChange={event => setSignedOn(event.target.value)} /></label>
+            <div><button className="primary" disabled={working}>Record signature</button></div>
+          </form>}
+      </section>}
       {selected && <section className="project-section" aria-label="Quotation revision history">
         <h3>Revision history ({selected.revisions.length})</h3>
         {selected.revisions.map(revision => <div className="project-task" key={revision.id}>

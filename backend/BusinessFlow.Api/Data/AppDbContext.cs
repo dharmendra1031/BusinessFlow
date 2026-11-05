@@ -11,6 +11,7 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
     public DbSet<SalesQuotation> SalesQuotations => Set<SalesQuotation>();
     public DbSet<SalesQuotationRevision> SalesQuotationRevisions => Set<SalesQuotationRevision>();
     public DbSet<SalesQuotationLineItem> SalesQuotationLineItems => Set<SalesQuotationLineItem>();
+    public DbSet<SalesContract> SalesContracts => Set<SalesContract>();
     public DbSet<Customer> Customers => Set<Customer>();
     public DbSet<CustomerContact> CustomerContacts => Set<CustomerContact>();
     public DbSet<Lead> Leads => Set<Lead>();
@@ -106,11 +107,15 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
         modelBuilder.Entity<SalesQuotation>(entity =>
         {
             entity.Property(x => x.Status).HasMaxLength(20).IsRequired();
+            entity.Property(x => x.ApprovalComment).HasMaxLength(500);
+            entity.Property(x => x.ClientResponseBy).HasMaxLength(150);
+            entity.Property(x => x.ClientResponseReference).HasMaxLength(500);
+            entity.HasOne<ApplicationUser>().WithMany().HasForeignKey(x => x.ApprovedById).OnDelete(DeleteBehavior.NoAction);
             entity.HasIndex(x => x.LeadId).IsUnique();
             entity.HasOne<Lead>().WithMany().HasForeignKey(x => x.LeadId).OnDelete(DeleteBehavior.NoAction);
             entity.HasOne<ApplicationUser>().WithMany().HasForeignKey(x => x.CreatedById).OnDelete(DeleteBehavior.NoAction);
             entity.ToTable(t => t.HasCheckConstraint("CK_SalesQuotations_Status",
-                "[Status] IN (N'Draft', N'Sent', N'Accepted', N'Rejected')"));
+                "[Status] IN (N'Draft', N'PendingApproval', N'Approved', N'Sent', N'Accepted', N'Rejected')"));
         });
         modelBuilder.Entity<SalesQuotationRevision>(entity =>
         {
@@ -128,6 +133,20 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
             entity.ToTable(t => t.HasCheckConstraint("CK_SalesQuotationRevisions_Amount", "[Amount] > 0"));
         });
 
+        modelBuilder.Entity<SalesContract>(entity =>
+        {
+            entity.Property(x => x.Status).HasMaxLength(20).IsRequired();
+            entity.Property(x => x.Terms).HasMaxLength(2000).IsRequired();
+            entity.Property(x => x.SignedBy).HasMaxLength(150);
+            entity.Property(x => x.SignatureReference).HasMaxLength(500);
+            entity.HasIndex(x => x.QuotationId).IsUnique();
+            entity.HasOne<SalesQuotation>().WithMany().HasForeignKey(x => x.QuotationId)
+                .OnDelete(DeleteBehavior.NoAction);
+            entity.HasOne<ApplicationUser>().WithMany().HasForeignKey(x => x.CreatedById)
+                .OnDelete(DeleteBehavior.NoAction);
+            entity.ToTable(t => t.HasCheckConstraint("CK_SalesContracts_Status",
+                "[Status] IN (N'Draft', N'Signed')"));
+        });
         modelBuilder.Entity<SalesQuotationLineItem>(entity =>
         {
             entity.Property(x => x.Description).HasMaxLength(250).IsRequired();

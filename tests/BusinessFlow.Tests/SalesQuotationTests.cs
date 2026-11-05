@@ -57,14 +57,67 @@ public sealed class SalesQuotationTests
         Assert.Equal(2, detail.GetProperty("quotation").GetProperty("currentRevision").GetInt32());
         Assert.Equal("Website", detail.GetProperty("revisions")[1].GetProperty("title").GetString());
         var currentVersion = detail.GetProperty("quotation").GetProperty("rowVersion").GetString();
+        Assert.Equal(HttpStatusCode.Conflict,
+            (await admin.PostAsJsonAsync($"{root}/{id}/status",
+                new { status = "Sent", rowVersion = currentVersion })).StatusCode);
         Assert.Equal(HttpStatusCode.NoContent,
-            (await admin.PostAsJsonAsync($"{root}/{id}/status", new { status = "Sent", rowVersion = currentVersion })).StatusCode);
+            (await admin.PostAsJsonAsync($"{root}/{id}/submit",
+                new { rowVersion = currentVersion })).StatusCode);
+        detail = await admin.GetFromJsonAsync<JsonElement>($"{root}/{id}");
+        currentVersion = detail.GetProperty("quotation").GetProperty("rowVersion").GetString();
+        Assert.Equal(HttpStatusCode.BadRequest,
+            (await admin.PostAsJsonAsync($"{root}/{id}/review",
+                new { approve = true, comment = "Too short", rowVersion = currentVersion })).StatusCode);
+        Assert.Equal(HttpStatusCode.NoContent,
+            (await admin.PostAsJsonAsync($"{root}/{id}/review",
+                new { approve = true, comment = "Validated by commercial administrator",
+                    rowVersion = currentVersion })).StatusCode);
         detail = await admin.GetFromJsonAsync<JsonElement>($"{root}/{id}");
         currentVersion = detail.GetProperty("quotation").GetProperty("rowVersion").GetString();
         Assert.Equal(HttpStatusCode.NoContent,
-            (await admin.PostAsJsonAsync($"{root}/{id}/status", new { status = "Accepted", rowVersion = currentVersion })).StatusCode);
+            (await admin.PostAsJsonAsync($"{root}/{id}/status",
+                new { status = "Sent", rowVersion = currentVersion })).StatusCode);
+        detail = await admin.GetFromJsonAsync<JsonElement>($"{root}/{id}");
+        currentVersion = detail.GetProperty("quotation").GetProperty("rowVersion").GetString();
+        Assert.Equal(HttpStatusCode.BadRequest,
+            (await admin.PostAsJsonAsync($"{root}/{id}/status",
+                new { status = "Accepted", rowVersion = currentVersion })).StatusCode);
+        Assert.Equal(HttpStatusCode.NoContent,
+            (await admin.PostAsJsonAsync($"{root}/{id}/status",
+                new { status = "Accepted", rowVersion = currentVersion,
+                    clientResponseBy = "Client owner", clientResponseReference = "Email dated 2026-11-05" })).StatusCode);
         Assert.Equal(HttpStatusCode.Conflict,
             (await admin.PostAsJsonAsync($"{root}/{id}/revisions", new { rowVersion = currentVersion, details = create.details })).StatusCode);
+        var accepted = await admin.GetFromJsonAsync<JsonElement>($"{root}/{id}");
+        var acceptedVersion = accepted.GetProperty("quotation").GetProperty("rowVersion").GetString();
+        var contractRequest = new { terms = "Delivery scope and payment milestones agreed in writing",
+            rowVersion = acceptedVersion };
+        Assert.Equal(HttpStatusCode.Forbidden,
+            (await employee.PostAsJsonAsync($"{root}/{id}/contract", contractRequest)).StatusCode);
+        Assert.Equal(HttpStatusCode.OK,
+            (await admin.PostAsJsonAsync($"{root}/{id}/contract", contractRequest)).StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict,
+            (await admin.PostAsJsonAsync($"{root}/{id}/contract", contractRequest)).StatusCode);
+        var withContract = await admin.GetFromJsonAsync<JsonElement>($"{root}/{id}");
+        var contract = withContract.GetProperty("contract");
+        Assert.Equal("Draft", contract.GetProperty("status").GetString());
+        Assert.Equal(2, contract.GetProperty("quotationRevision").GetInt32());
+        var contractVersion = contract.GetProperty("rowVersion").GetString();
+        Assert.Equal(HttpStatusCode.BadRequest,
+            (await admin.PostAsJsonAsync($"{root}/{id}/contract/sign",
+                new { signedBy = "Client", signatureReference = "bad", signedOn = DateOnly.FromDateTime(DateTime.UtcNow),
+                    rowVersion = contractVersion })).StatusCode);
+        Assert.Equal(HttpStatusCode.NoContent,
+            (await admin.PostAsJsonAsync($"{root}/{id}/contract/sign",
+                new { signedBy = "Client owner", signatureReference = "Signed PDF document reference",
+                    signedOn = DateOnly.FromDateTime(DateTime.UtcNow), rowVersion = contractVersion })).StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict,
+            (await admin.PostAsJsonAsync($"{root}/{id}/contract/sign",
+                new { signedBy = "Client owner", signatureReference = "Signed PDF document reference",
+                    signedOn = DateOnly.FromDateTime(DateTime.UtcNow), rowVersion = contractVersion })).StatusCode);
+        var signed = await admin.GetFromJsonAsync<JsonElement>($"{root}/{id}");
+        Assert.Equal("Signed", signed.GetProperty("contract").GetProperty("status").GetString());
+        Assert.Equal("Client owner", signed.GetProperty("quotation").GetProperty("clientResponseBy").GetString());
         await using var check = fixture.CreateContext();
         Assert.Equal(2, await check.SalesQuotationRevisions.CountAsync(r => r.QuotationId == id));
         Assert.True(await check.AuditLogs.AnyAsync(a => a.TableName == "SalesQuotations" && a.RecordId == id && a.Action == "Status"));

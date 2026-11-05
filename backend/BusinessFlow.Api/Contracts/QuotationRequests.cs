@@ -29,3 +29,5 @@ public sealed record ReviseQuotationRequest(
 public sealed record ChangeQuotationStatusRequest(
     [Required] string Status,
     [Required] string RowVersion);
+
+public sealed record SubmitQuotationRequest([Required] string RowVersion);

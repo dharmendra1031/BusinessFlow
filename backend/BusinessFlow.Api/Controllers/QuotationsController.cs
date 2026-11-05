@@ -138,7 +138,9 @@ public sealed class QuotationsController(AppDbContext db) : ControllerBase
             select new
             {
                 quote.Id, quote.LeadId, LeadName = lead.Name, quote.Status,
-                quote.CurrentRevision, quote.RowVersion, quote.CreatedAtUtc, quote.UpdatedAtUtc
+                quote.CurrentRevision, quote.RowVersion, quote.CreatedAtUtc, quote.UpdatedAtUtc, quote.ApprovalRequestedAtUtc, quote.ApprovedById,
+                quote.ApprovedAtUtc, quote.ApprovalComment, quote.SentAtUtc, quote.ClientResponseBy,
+                quote.ClientResponseReference, quote.ClientRespondedAtUtc
             }).FirstOrDefaultAsync(ct);
         if (quotation is null) return NotFound();
 
@@ -155,7 +157,11 @@ public sealed class QuotationsController(AppDbContext db) : ControllerBase
                     i.TaxAmount, i.TotalAmount
                 }).ToList()
             }).ToListAsync(ct);
-        return Ok(new { quotation, revisions });
+        var contract = await db.SalesContracts.AsNoTracking().Where(x => x.QuotationId == id)
+            .Select(x => new { x.Id, x.QuotationId, x.QuotationRevision, x.Status, x.Terms,
+                x.CreatedAtUtc, x.SignedBy, x.SignatureReference, x.SignedOn, x.RowVersion })
+            .FirstOrDefaultAsync(ct);
+        return Ok(new { quotation, revisions, contract });
     }
 
     [HttpGet("{id:long}/pdf")]
@@ -263,19 +269,67 @@ public sealed class QuotationsController(AppDbContext db) : ControllerBase
         await using var transaction = await db.Database.BeginTransactionAsync(ct);
         var quote = await db.SalesQuotations.FirstOrDefaultAsync(x => x.Id == id, ct);
         if (quote is null) return NotFound();
-        if (quote.Status is "Accepted" or "Rejected")
-            return Conflict(new { message = "Accepted or rejected quotations cannot be revised." });
+        if (quote.Status is not ("Draft" or "Approved" or "Sent"))
+            return Conflict(new { message = "Only draft, approved or sent quotations can be revised." });
         if (!ConcurrencyTokens.Apply(db, quote, request.RowVersion))
             return BadRequest(new { message = "Reload this quotation before editing." });
 
         quote.CurrentRevision++;
         quote.Status = "Draft";
+        quote.ApprovalRequestedAtUtc = null;
+        quote.ApprovedById = null;
+        quote.ApprovedAtUtc = null;
+        quote.ApprovalComment = null;
+        quote.SentAtUtc = null;
+        quote.ClientResponseBy = null;
+        quote.ClientResponseReference = null;
+        quote.ClientRespondedAtUtc = null;
         quote.UpdatedAtUtc = DateTime.UtcNow;
         db.SalesQuotationRevisions.Add(Revision(id, quote.CurrentRevision, request.Details, amount, LeadAccess.UserId(User)));
         Audit("Revise", id, "Revision: " + quote.CurrentRevision);
         await db.SaveChangesAsync(ct);
         await transaction.CommitAsync(ct);
         return Ok(new { quote.Id, quote.CurrentRevision });
+    }
+
+    [HttpPost("{id:long}/submit")]
+    public async Task<IActionResult> SubmitForApproval(long id, SubmitQuotationRequest request, CancellationToken ct)
+    {
+        var quote = await db.SalesQuotations.FirstOrDefaultAsync(x => x.Id == id, ct);
+        if (quote is null) return NotFound();
+        if (quote.Status != "Draft")
+            return Conflict(new { message = "Only draft quotations can be submitted for approval." });
+        if (!ConcurrencyTokens.Apply(db, quote, request.RowVersion))
+            return BadRequest(new { message = "Reload the quotation before submitting." });
+        quote.Status = "PendingApproval";
+        quote.ApprovalRequestedAtUtc = DateTime.UtcNow;
+        quote.UpdatedAtUtc = DateTime.UtcNow;
+        Audit("Submit", id, "Revision: " + quote.CurrentRevision);
+        await db.SaveChangesAsync(ct);
+        return NoContent();
+    }
+
+    [HttpPost("{id:long}/review")]
+    public async Task<IActionResult> Review(long id, ReviewQuotationRequest request, CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(request.Comment) || request.Comment.Trim().Length is < 10 or > 500)
+            return BadRequest(new { message = "Add a review comment of 10 to 500 characters." });
+        var quote = await db.SalesQuotations.FirstOrDefaultAsync(x => x.Id == id, ct);
+        if (quote is null) return NotFound();
+        if (quote.Status != "PendingApproval")
+            return Conflict(new { message = "Only pending quotations can be reviewed." });
+        if (!ConcurrencyTokens.Apply(db, quote, request.RowVersion))
+            return BadRequest(new { message = "Reload the quotation before review." });
+
+        quote.Status = request.Approve ? "Approved" : "Draft";
+        quote.ApprovalComment = request.Comment.Trim();
+        quote.ApprovedById = request.Approve ? LeadAccess.UserId(User) : null;
+        quote.ApprovedAtUtc = request.Approve ? DateTime.UtcNow : null;
+        quote.UpdatedAtUtc = DateTime.UtcNow;
+        Audit(request.Approve ? "Approve" : "Return", id,
+            "Revision: " + quote.CurrentRevision + "; " + request.Comment.Trim());
+        await db.SaveChangesAsync(ct);
+        return NoContent();
     }
 
     [HttpPost("{id:long}/status")]
@@ -285,16 +339,91 @@ public sealed class QuotationsController(AppDbContext db) : ControllerBase
             return BadRequest(new { message = "Invalid quotation status." });
         var quote = await db.SalesQuotations.FirstOrDefaultAsync(x => x.Id == id, ct);
         if (quote is null) return NotFound();
-        if (!(quote.Status == "Draft" && request.Status == "Sent" ||
+        if (!(quote.Status == "Approved" && request.Status == "Sent" ||
               quote.Status == "Sent" && request.Status is "Accepted" or "Rejected"))
-            return Conflict(new { message = "Invalid quotation transition." });
+            return Conflict(new { message = "Approval is required before sending or recording a client decision." });
         if (!ConcurrencyTokens.Apply(db, quote, request.RowVersion))
             return BadRequest(new { message = "Reload this quotation before changing status." });
+        if (request.Status != "Sent" &&
+            (string.IsNullOrWhiteSpace(request.ClientResponseBy) ||
+             request.ClientResponseBy.Trim().Length is < 2 or > 150 ||
+             string.IsNullOrWhiteSpace(request.ClientResponseReference) ||
+             request.ClientResponseReference.Trim().Length is < 5 or > 500))
+            return BadRequest(new { message = "Enter the client contact and a verifiable response reference." });
 
         var previous = quote.Status;
         quote.Status = request.Status;
         quote.UpdatedAtUtc = DateTime.UtcNow;
-        Audit("Status", id, previous + " -> " + request.Status + "; Revision: " + quote.CurrentRevision);
+        if (request.Status == "Sent") quote.SentAtUtc = DateTime.UtcNow;
+        else
+        {
+            quote.ClientResponseBy = request.ClientResponseBy!.Trim();
+            quote.ClientResponseReference = request.ClientResponseReference!.Trim();
+            quote.ClientRespondedAtUtc = DateTime.UtcNow;
+        }
+        Audit("Status", id, previous + " -> " + request.Status + "; Revision: " + quote.CurrentRevision +
+            (request.Status == "Sent" ? "" : "; Response: " + request.ClientResponseReference!.Trim()));
+        await db.SaveChangesAsync(ct);
+        return NoContent();
+    }
+
+    [HttpPost("{id:long}/contract")]
+    public async Task<IActionResult> CreateContract(long id, CreateSalesContractRequest request, CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(request.Terms) || request.Terms.Trim().Length is < 10 or > 2000)
+            return BadRequest(new { message = "Contract terms must contain 10 to 2000 characters." });
+        await using var transaction = await db.Database.BeginTransactionAsync(ct);
+        var quote = await db.SalesQuotations.FirstOrDefaultAsync(x => x.Id == id, ct);
+        if (quote is null) return NotFound();
+        if (quote.Status != "Accepted")
+            return Conflict(new { message = "Only accepted quotations can become contract drafts." });
+        if (!ConcurrencyTokens.Apply(db, quote, request.RowVersion))
+            return BadRequest(new { message = "Reload this quotation before creating a contract." });
+        if (await db.SalesContracts.AnyAsync(x => x.QuotationId == id, ct))
+            return Conflict(new { message = "A contract already exists for this quotation." });
+
+        var contract = new SalesContract
+        {
+            QuotationId = id, QuotationRevision = quote.CurrentRevision,
+            Terms = request.Terms.Trim(), CreatedById = LeadAccess.UserId(User)
+        };
+        db.SalesContracts.Add(contract);
+        try
+        {
+            await db.SaveChangesAsync(ct);
+            Audit("Contract", id, "ContractId: " + contract.Id + "; Revision: " + contract.QuotationRevision);
+            await db.SaveChangesAsync(ct);
+            await transaction.CommitAsync(ct);
+            return Ok(new { contract.Id });
+        }
+        catch (DbUpdateException error) when (error.InnerException is SqlException { Number: 2601 or 2627 })
+        {
+            return Conflict(new { message = "A contract already exists for this quotation." });
+        }
+    }
+
+    [HttpPost("{id:long}/contract/sign")]
+    public async Task<IActionResult> SignContract(long id, SignSalesContractRequest request, CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(request.SignedBy) || request.SignedBy.Trim().Length is < 2 or > 150 ||
+            string.IsNullOrWhiteSpace(request.SignatureReference) ||
+            request.SignatureReference.Trim().Length is < 5 or > 500 ||
+            request.SignedOn == default ||
+            request.SignedOn > DateOnly.FromDateTime(DateTime.UtcNow.AddDays(1)))
+            return BadRequest(new { message = "Provide the signer, evidence reference and valid signed date." });
+
+        var contract = await db.SalesContracts.FirstOrDefaultAsync(x => x.QuotationId == id, ct);
+        if (contract is null) return NotFound();
+        if (contract.Status != "Draft")
+            return Conflict(new { message = "This contract is already marked signed." });
+        if (!ConcurrencyTokens.Apply(db, contract, request.RowVersion))
+            return BadRequest(new { message = "Reload the contract before recording its signature." });
+
+        contract.Status = "Signed";
+        contract.SignedBy = request.SignedBy.Trim();
+        contract.SignatureReference = request.SignatureReference.Trim();
+        contract.SignedOn = request.SignedOn;
+        Audit("ContractSigned", id, "ContractId: " + contract.Id + "; Evidence: " + contract.SignatureReference);
         await db.SaveChangesAsync(ct);
         return NoContent();
     }

@@ -1178,6 +1178,30 @@ namespace BusinessFlow.Api.Migrations
                     b.ToTable("RolePermissionOverrides");
                 });
 
+            modelBuilder.Entity("BusinessFlow.Api.Models.SalesContract", b =>
+                {
+                    b.Property<long>("Id").ValueGeneratedOnAdd().HasColumnType("bigint");
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
+                    b.Property<DateTime>("CreatedAtUtc").HasColumnType("datetime2");
+                    b.Property<long>("CreatedById").HasColumnType("bigint");
+                    b.Property<long>("QuotationId").HasColumnType("bigint");
+                    b.Property<int>("QuotationRevision").HasColumnType("int");
+                    b.Property<byte[]>("RowVersion").IsConcurrencyToken().IsRequired()
+                        .ValueGeneratedOnAddOrUpdate().HasColumnType("rowversion");
+                    b.Property<string>("SignatureReference").HasMaxLength(500).HasColumnType("nvarchar(500)");
+                    b.Property<string>("SignedBy").HasMaxLength(150).HasColumnType("nvarchar(150)");
+                    b.Property<DateOnly?>("SignedOn").HasColumnType("date");
+                    b.Property<string>("Status").IsRequired().HasMaxLength(20).HasColumnType("nvarchar(20)");
+                    b.Property<string>("Terms").IsRequired().HasMaxLength(2000).HasColumnType("nvarchar(2000)");
+                    b.HasKey("Id");
+                    b.HasIndex("CreatedById");
+                    b.HasIndex("QuotationId").IsUnique();
+                    b.ToTable("SalesContracts", t =>
+                        {
+                            t.HasCheckConstraint("CK_SalesContracts_Status", "[Status] IN (N'Draft', N'Signed')");
+                        });
+                });
+
             modelBuilder.Entity("BusinessFlow.Api.Models.SalesQuotation", b =>
                 {
                     b.Property<long>("Id")
@@ -1191,6 +1215,15 @@ namespace BusinessFlow.Api.Migrations
 
                     b.Property<long>("CreatedById")
                         .HasColumnType("bigint");
+
+                    b.Property<DateTime?>("ApprovalRequestedAtUtc").HasColumnType("datetime2");
+                    b.Property<string>("ApprovalComment").HasMaxLength(500).HasColumnType("nvarchar(500)");
+                    b.Property<DateTime?>("ApprovedAtUtc").HasColumnType("datetime2");
+                    b.Property<long?>("ApprovedById").HasColumnType("bigint");
+                    b.Property<string>("ClientResponseBy").HasMaxLength(150).HasColumnType("nvarchar(150)");
+                    b.Property<string>("ClientResponseReference").HasMaxLength(500).HasColumnType("nvarchar(500)");
+                    b.Property<DateTime?>("ClientRespondedAtUtc").HasColumnType("datetime2");
+                    b.Property<DateTime?>("SentAtUtc").HasColumnType("datetime2");
 
                     b.Property<int>("CurrentRevision")
                         .HasColumnType("int");
@@ -1216,12 +1249,14 @@ namespace BusinessFlow.Api.Migrations
 
                     b.HasIndex("CreatedById");
 
+                    b.HasIndex("ApprovedById");
+
                     b.HasIndex("LeadId")
                         .IsUnique();
 
                     b.ToTable("SalesQuotations", t =>
                         {
-                            t.HasCheckConstraint("CK_SalesQuotations_Status", "[Status] IN (N'Draft', N'Sent', N'Accepted', N'Rejected')");
+                            t.HasCheckConstraint("CK_SalesQuotations_Status", "[Status] IN (N'Draft', N'PendingApproval', N'Approved', N'Sent', N'Accepted', N'Rejected')");
                         });
                 });
 
@@ -1875,8 +1910,28 @@ namespace BusinessFlow.Api.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("BusinessFlow.Api.Models.SalesContract", b =>
+                {
+                    b.HasOne("BusinessFlow.Api.Models.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("CreatedById")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.HasOne("BusinessFlow.Api.Models.SalesQuotation", null)
+                        .WithMany()
+                        .HasForeignKey("QuotationId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("BusinessFlow.Api.Models.SalesQuotation", b =>
                 {
+                    b.HasOne("BusinessFlow.Api.Models.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("ApprovedById")
+                        .OnDelete(DeleteBehavior.NoAction);
+
                     b.HasOne("BusinessFlow.Api.Models.ApplicationUser", null)
                         .WithMany()
                         .HasForeignKey("CreatedById")

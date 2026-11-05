@@ -8,6 +8,14 @@ public sealed class SalesQuotation
     public long LeadId { get; set; }
     public string Status { get; set; } = "Draft";
     public int CurrentRevision { get; set; } = 1;
+    public DateTime? ApprovalRequestedAtUtc { get; set; }
+    public long? ApprovedById { get; set; }
+    public DateTime? ApprovedAtUtc { get; set; }
+    public string? ApprovalComment { get; set; }
+    public DateTime? SentAtUtc { get; set; }
+    public string? ClientResponseBy { get; set; }
+    public string? ClientResponseReference { get; set; }
+    public DateTime? ClientRespondedAtUtc { get; set; }
     public long CreatedById { get; set; }
     public DateTime CreatedAtUtc { get; set; } = DateTime.UtcNow;
     public DateTime UpdatedAtUtc { get; set; } = DateTime.UtcNow;
@@ -48,4 +56,20 @@ public sealed class SalesQuotationLineItem
     public decimal DiscountAmount { get; set; }
     public decimal TaxAmount { get; set; }
     public decimal TotalAmount { get; set; }
+}
+
+public sealed class SalesContract
+{
+    public long Id { get; set; }
+    public long QuotationId { get; set; }
+    public int QuotationRevision { get; set; }
+    public string Status { get; set; } = "Draft";
+    public string Terms { get; set; } = string.Empty;
+    public long CreatedById { get; set; }
+    public DateTime CreatedAtUtc { get; set; } = DateTime.UtcNow;
+    public string? SignedBy { get; set; }
+    public string? SignatureReference { get; set; }
+    public DateOnly? SignedOn { get; set; }
+    [Timestamp]
+    public byte[] RowVersion { get; set; } = [];
 }
