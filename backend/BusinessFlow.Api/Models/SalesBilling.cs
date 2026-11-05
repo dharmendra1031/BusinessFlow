@@ -62,3 +62,25 @@ public sealed class SalesRefund
     public long CreatedById { get; set; }
     public DateTime CreatedAtUtc { get; set; } = DateTime.UtcNow;
 }
+
+public sealed class FinancialAdjustmentApproval
+{
+    public long Id { get; set; }
+    public long InvoiceId { get; set; }
+    public string Kind { get; set; } = string.Empty;
+    public decimal Amount { get; set; }
+    public long? PaymentId { get; set; }
+    public string? Method { get; set; }
+    public string? Reference { get; set; }
+    public string Reason { get; set; } = string.Empty;
+    public DateOnly EffectiveOn { get; set; }
+    public byte[] InvoiceVersion { get; set; } = [];
+    public string State { get; set; } = "Pending";
+    public long RequestedById { get; set; }
+    public DateTime RequestedAtUtc { get; set; } = DateTime.UtcNow;
+    public long? DecidedById { get; set; }
+    public DateTime? DecidedAtUtc { get; set; }
+    public string? DecisionComment { get; set; }
+    [Timestamp]
+    public byte[] RowVersion { get; set; } = [];
+}

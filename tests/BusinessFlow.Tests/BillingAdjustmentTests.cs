@@ -176,4 +176,80 @@ public sealed class BillingAdjustmentTests
         Assert.Equal(HttpStatusCode.BadRequest,
             (await admin.GetAsync($"{Root}/customers/{customerId}/ledger?pageSize=101")).StatusCode);
     }
+
+    [Fact]
+    public async Task Financial_approval_rejects_stale_invoice_and_allows_separate_reviewer_to_reject()
+    {
+        await using var database = await Phase1TestDatabase.CreateAsync();
+        await using var host = new Phase1ApiHost(database);
+        using var admin = await host.ClientAsync("Admin");
+        using var reviewer = await host.ClientAsync("Admin");
+        var userId = (await admin.GetFromJsonAsync<JsonElement>("/api/auth/me"))
+            .GetProperty("id").GetInt64();
+        var (contractId, version) = await BillingTests.SignedContract(database, userId);
+        var date = DateOnly.FromDateTime(DateTime.UtcNow);
+        var issue = await admin.PostAsJsonAsync(Root + "/invoices", new
+        {
+            contractId, contractRowVersion = version, type = "Milestone",
+            description = "Stage billing for services", amount = 200m, dueDate = date.AddDays(10)
+        });
+        Assert.Equal(HttpStatusCode.Created, issue.StatusCode);
+        var id = (await issue.Content.ReadFromJsonAsync<JsonElement>())
+            .GetProperty("id").GetInt64();
+        var detail = await admin.GetFromJsonAsync<JsonElement>($"{Root}/invoices/{id}");
+        var rowVersion = detail.GetProperty("invoice").GetProperty("rowVersion").GetString();
+        var submitted = await admin.PostAsJsonAsync($"{Root}/invoices/{id}/credits", new
+        {
+            amount = 50m, reason = "Agreed discount after original project quotation",
+            issuedOn = date, invoiceRowVersion = rowVersion
+        });
+        Assert.Equal(HttpStatusCode.Accepted, submitted.StatusCode);
+        var approvalId = (await submitted.Content.ReadFromJsonAsync<JsonElement>())
+            .GetProperty("id").GetInt64();
+
+        Assert.Equal(HttpStatusCode.Conflict,
+            (await admin.PostAsJsonAsync($"{Root}/invoices/{id}/credits", new
+            {
+                amount = 40m, reason = "Duplicate request against the same billing record",
+                issuedOn = date, invoiceRowVersion = rowVersion
+            })).StatusCode);
+
+        var pending = await reviewer.GetFromJsonAsync<JsonElement>(Root + "/adjustments");
+        var approvalVersion = pending.GetProperty("items")[0].GetProperty("rowVersion").GetString();
+        Assert.Equal(HttpStatusCode.BadRequest,
+            (await reviewer.PostAsJsonAsync($"{Root}/adjustments/{approvalId}/decision", new
+            {
+                approve = true, comment = "Verified approval with different administrator",
+                rowVersion = "bad"
+            })).StatusCode);
+
+        var payment = await admin.PostAsJsonAsync($"{Root}/invoices/{id}/payments", new
+        {
+            amount = 20m, method = "Cash", reference = "STALE-CREDIT-PAYMENT-001",
+            receivedOn = date, invoiceRowVersion = rowVersion
+        });
+        Assert.Equal(HttpStatusCode.OK, payment.StatusCode);
+
+        Assert.Equal(HttpStatusCode.Conflict,
+            (await reviewer.PostAsJsonAsync($"{Root}/adjustments/{approvalId}/decision", new
+            {
+                approve = true, comment = "Would be stale after collection",
+                rowVersion = approvalVersion
+            })).StatusCode);
+
+        Assert.Equal(HttpStatusCode.NoContent,
+            (await reviewer.PostAsJsonAsync($"{Root}/adjustments/{approvalId}/decision", new
+            {
+                approve = false, comment = "Invoice changed. Request must be reviewed again.",
+                rowVersion = approvalVersion
+            })).StatusCode);
+
+        detail = await admin.GetFromJsonAsync<JsonElement>($"{Root}/invoices/{id}");
+        Assert.Equal(0m, detail.GetProperty("invoice").GetProperty("creditedAmount").GetDecimal());
+        Assert.Equal(20m, detail.GetProperty("invoice").GetProperty("paidAmount").GetDecimal());
+        Assert.Equal(0, detail.GetProperty("credits").GetArrayLength());
+        var approved = await reviewer.GetFromJsonAsync<JsonElement>(
+            Root + "/adjustments?state=Rejected");
+        Assert.Equal(1, approved.GetProperty("total").GetInt32());
+    }
 }

@@ -16,6 +16,7 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
     public DbSet<SalesPayment> SalesPayments => Set<SalesPayment>();
     public DbSet<SalesCreditNote> SalesCreditNotes => Set<SalesCreditNote>();
     public DbSet<SalesRefund> SalesRefunds => Set<SalesRefund>();
+    public DbSet<FinancialAdjustmentApproval> FinancialAdjustmentApprovals => Set<FinancialAdjustmentApproval>();
     public DbSet<Customer> Customers => Set<Customer>();
     public DbSet<CustomerContact> CustomerContacts => Set<CustomerContact>();
     public DbSet<Lead> Leads => Set<Lead>();
@@ -177,6 +178,35 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
             {
                 t.HasCheckConstraint("CK_SalesPayments_Amount", "[Amount] > 0 AND [RefundedAmount] >= 0 AND [RefundedAmount] <= [Amount]");
                 t.HasCheckConstraint("CK_SalesPayments_Method", "[Method] IN (N'BankTransfer', N'UPI', N'Cash', N'Card', N'Other')");
+            });
+        });
+        modelBuilder.Entity<FinancialAdjustmentApproval>(entity =>
+        {
+            entity.Property(x => x.Kind).HasMaxLength(10).IsRequired();
+            entity.Property(x => x.State).HasMaxLength(12).IsRequired();
+            entity.Property(x => x.Method).HasMaxLength(20);
+            entity.Property(x => x.Reference).HasMaxLength(100);
+            entity.Property(x => x.Reason).HasMaxLength(500).IsRequired();
+            entity.Property(x => x.DecisionComment).HasMaxLength(500);
+            entity.Property(x => x.Amount).HasPrecision(18, 3);
+            entity.Property(x => x.InvoiceVersion).IsRequired();
+            entity.HasIndex(x => new { x.InvoiceId, x.Kind })
+                .IsUnique().HasFilter("[State] = N'Pending'");
+            entity.HasOne<SalesInvoice>().WithMany().HasForeignKey(x => x.InvoiceId)
+                .OnDelete(DeleteBehavior.NoAction);
+            entity.HasOne<SalesPayment>().WithMany().HasForeignKey(x => x.PaymentId)
+                .OnDelete(DeleteBehavior.NoAction);
+            entity.HasOne<ApplicationUser>().WithMany().HasForeignKey(x => x.RequestedById)
+                .OnDelete(DeleteBehavior.NoAction);
+            entity.HasOne<ApplicationUser>().WithMany().HasForeignKey(x => x.DecidedById)
+                .OnDelete(DeleteBehavior.NoAction);
+            entity.ToTable(t =>
+            {
+                t.HasCheckConstraint("CK_FinancialAdjustmentApprovals_Kind",
+                    "[Kind] IN (N'Credit', N'Refund')");
+                t.HasCheckConstraint("CK_FinancialAdjustmentApprovals_State",
+                    "[State] IN (N'Pending', N'Approved', N'Rejected')");
+                t.HasCheckConstraint("CK_FinancialAdjustmentApprovals_Amount", "[Amount] > 0");
             });
         });
         modelBuilder.Entity<SalesCreditNote>(entity =>

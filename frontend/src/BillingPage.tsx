@@ -4,6 +4,7 @@ import { useFeedback } from './Feedback';
 import { clearFieldError, handleFormKeyDown, validateForm } from './formUtils';
 import type { Paged } from './types';
 import CustomerLedgerSection from './CustomerLedgerSection';
+import FinancialApprovalsSection from './FinancialApprovalsSection';
 
 type Contract = {
   id: number; quotationId: number; rowVersion: string; clientName: string; title: string;
@@ -93,6 +94,7 @@ export default function BillingPage({ token }: { token: string }) {
   const [refundReference, setRefundReference] = useState('');
   const [refundReason, setRefundReason] = useState('');
   const [refundDate, setRefundDate] = useState(dateToday);
+  const [approvalsRefresh, setApprovalsRefresh] = useState(0);
   const [ledger, setLedger] = useState<Ledger | null>(null);
   const [reportMode, setReportMode] = useState<ReportMode>('outstanding');
   const [reportSearch, setReportSearch] = useState('');
@@ -247,9 +249,9 @@ export default function BillingPage({ token }: { token: string }) {
     event.preventDefault();
     if (busy || !selected || !validateForm(event.currentTarget)) return;
     const approved = await confirm({
-      title: 'Issue credit note?',
-      message: 'This reduces the net invoice and contract billed value. Original invoice and payment records stay unchanged.',
-      confirmText: 'Issue credit note',
+      title: 'Submit credit request?',
+      message: 'Another Admin must review this credit. Financial balances stay unchanged until approval.',
+      confirmText: 'Submit request',
     });
     if (!approved) return;
     setBusy(true);
@@ -265,7 +267,8 @@ export default function BillingPage({ token }: { token: string }) {
       await openInvoice(id); await load();
       setOutstanding(null); setCollections(null);
       if (ledger) await viewLedger(selected.invoice.contractId);
-      notify('success', 'Credit note issued');
+      setApprovalsRefresh(value => value + 1);
+      notify('success', 'Credit request submitted for independent approval');
     } catch (err) {
       notify('error', 'Cannot issue credit note', err instanceof Error ? err.message : undefined);
     } finally { setBusy(false); }
@@ -275,9 +278,9 @@ export default function BillingPage({ token }: { token: string }) {
     event.preventDefault();
     if (busy || !selected || !validateForm(event.currentTarget)) return;
     const approved = await confirm({
-      title: 'Record completed refund?',
-      message: 'Only record money actually returned to the customer, with a traceable refund reference.',
-      confirmText: 'Record refund',
+      title: 'Submit refund for approval?',
+      message: 'A second Admin must verify this completed external refund before it is posted.',
+      confirmText: 'Submit request',
     });
     if (!approved) return;
     setBusy(true);
@@ -295,7 +298,8 @@ export default function BillingPage({ token }: { token: string }) {
       await openInvoice(id); await load();
       setOutstanding(null); setCollections(null);
       if (ledger) await viewLedger(selected.invoice.contractId);
-      notify('success', 'Refund recorded');
+      setApprovalsRefresh(value => value + 1);
+      notify('success', 'Refund request submitted for independent approval');
     } catch (err) {
       notify('error', 'Cannot record refund', err instanceof Error ? err.message : undefined);
     } finally { setBusy(false); }
@@ -444,7 +448,7 @@ export default function BillingPage({ token }: { token: string }) {
       {selected.invoice.status !== 'Void' && selected.invoice.creditedAmount < selected.invoice.amount &&
         <form className="form-grid" aria-label="Issue credit note" onSubmit={issueCreditNote}
           onInput={clearFieldError} onKeyDown={handleFormKeyDown}>
-          <h3>Credit note</h3>
+          <h3>Request credit note</h3>
           <p className="field-help">Reducing the invoice may create a refund due if the customer has paid more than the revised amount.</p>
           <label>Credit amount *<input required type="number" min="0.001" step="0.001"
             max={selected.invoice.amount - selected.invoice.creditedAmount} value={creditAmount}
@@ -453,7 +457,7 @@ export default function BillingPage({ token }: { token: string }) {
             onChange={event => setCreditReason(event.target.value)} /></label>
           <label>Issue date *<input type="date" required value={creditDate}
             onChange={event => setCreditDate(event.target.value)} /></label>
-          <div><button type="submit" disabled={busy}>Issue credit note</button></div>
+          <div><button type="submit" disabled={busy}>Submit credit request</button></div>
         </form>}
       {!!selected.credits.length && <section aria-label="Credit note history">
         <h3>Credit note history</h3>
@@ -465,7 +469,7 @@ export default function BillingPage({ token }: { token: string }) {
       {selected.invoice.refundDue > 0 && <form className="form-grid"
         aria-label="Record refund" onSubmit={recordRefund}
         onInput={clearFieldError} onKeyDown={handleFormKeyDown}>
-        <h3>Refund due: {money(selected.invoice.refundDue, selected.invoice.currency)}</h3>
+        <h3>Request refund: {money(selected.invoice.refundDue, selected.invoice.currency)} due</h3>
         <label>Original payment *<select required value={refundPaymentId}
           onChange={event => setRefundPaymentId(event.target.value)}>
           <option value="">Choose payment</option>
@@ -488,7 +492,7 @@ export default function BillingPage({ token }: { token: string }) {
           onChange={event => setRefundReason(event.target.value)} /></label>
         <label>Refund date *<input required type="date" value={refundDate}
           onChange={event => setRefundDate(event.target.value)} /></label>
-        <div><button type="submit" disabled={busy}>Record completed refund</button></div>
+        <div><button type="submit" disabled={busy}>Submit refund request</button></div>
       </form>}
       {!!selected.refunds.length && <section aria-label="Refund history">
         <h3>Refund history</h3>
@@ -589,6 +593,14 @@ export default function BillingPage({ token }: { token: string }) {
           onClick={() => void loadReport(reportMode, reportPage + 1)}>Next</button>
       </div>}
     </section>
+
+    <FinancialApprovalsSection token={token} refreshKey={approvalsRefresh}
+      onDecision={id => {
+        void openInvoice(id);
+        void load();
+        setOutstanding(null); setCollections(null);
+        if (ledger && selected) void viewLedger(selected.invoice.contractId);
+      }} />
 
     <CustomerLedgerSection token={token} openInvoice={id => void openInvoice(id)} />
 

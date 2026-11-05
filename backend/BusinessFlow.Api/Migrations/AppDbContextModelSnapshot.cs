@@ -1178,6 +1178,39 @@ namespace BusinessFlow.Api.Migrations
                     b.ToTable("RolePermissionOverrides");
                 });
 
+            modelBuilder.Entity("BusinessFlow.Api.Models.FinancialAdjustmentApproval", b =>
+                {
+                    b.Property<long>("Id").ValueGeneratedOnAdd().HasColumnType("bigint");
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
+                    b.Property<decimal>("Amount").HasPrecision(18, 3).HasColumnType("decimal(18,3)");
+                    b.Property<DateTime?>("DecidedAtUtc").HasColumnType("datetime2");
+                    b.Property<long?>("DecidedById").HasColumnType("bigint");
+                    b.Property<string>("DecisionComment").HasMaxLength(500).HasColumnType("nvarchar(500)");
+                    b.Property<DateOnly>("EffectiveOn").HasColumnType("date");
+                    b.Property<long>("InvoiceId").HasColumnType("bigint");
+                    b.Property<byte[]>("InvoiceVersion").IsRequired().HasColumnType("varbinary(max)");
+                    b.Property<string>("Kind").IsRequired().HasMaxLength(10).HasColumnType("nvarchar(10)");
+                    b.Property<string>("Method").HasMaxLength(20).HasColumnType("nvarchar(20)");
+                    b.Property<long?>("PaymentId").HasColumnType("bigint");
+                    b.Property<string>("Reason").IsRequired().HasMaxLength(500).HasColumnType("nvarchar(500)");
+                    b.Property<string>("Reference").HasMaxLength(100).HasColumnType("nvarchar(100)");
+                    b.Property<DateTime>("RequestedAtUtc").HasColumnType("datetime2");
+                    b.Property<long>("RequestedById").HasColumnType("bigint");
+                    b.Property<byte[]>("RowVersion").IsConcurrencyToken().IsRequired().ValueGeneratedOnAddOrUpdate().HasColumnType("rowversion");
+                    b.Property<string>("State").IsRequired().HasMaxLength(12).HasColumnType("nvarchar(12)");
+                    b.HasKey("Id");
+                    b.HasIndex("DecidedById");
+                    b.HasIndex("PaymentId");
+                    b.HasIndex("RequestedById");
+                    b.HasIndex("InvoiceId", "Kind").IsUnique().HasFilter("[State] = N'Pending'");
+                    b.ToTable("FinancialAdjustmentApprovals", t =>
+                        {
+                            t.HasCheckConstraint("CK_FinancialAdjustmentApprovals_Amount", "[Amount] > 0");
+                            t.HasCheckConstraint("CK_FinancialAdjustmentApprovals_Kind", "[Kind] IN (N'Credit', N'Refund')");
+                            t.HasCheckConstraint("CK_FinancialAdjustmentApprovals_State", "[State] IN (N'Pending', N'Approved', N'Rejected')");
+                        });
+                });
+
             modelBuilder.Entity("BusinessFlow.Api.Models.SalesCreditNote", b =>
                 {
                     b.Property<long>("Id").ValueGeneratedOnAdd().HasColumnType("bigint");
@@ -2010,6 +2043,31 @@ namespace BusinessFlow.Api.Migrations
                     b.HasOne("Microsoft.AspNetCore.Identity.IdentityRole<long>", null)
                         .WithMany()
                         .HasForeignKey("RoleId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("BusinessFlow.Api.Models.FinancialAdjustmentApproval", b =>
+                {
+                    b.HasOne("BusinessFlow.Api.Models.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("DecidedById")
+                        .OnDelete(DeleteBehavior.NoAction);
+
+                    b.HasOne("BusinessFlow.Api.Models.SalesInvoice", null)
+                        .WithMany()
+                        .HasForeignKey("InvoiceId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.HasOne("BusinessFlow.Api.Models.SalesPayment", null)
+                        .WithMany()
+                        .HasForeignKey("PaymentId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
+                    b.HasOne("BusinessFlow.Api.Models.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("RequestedById")
                         .OnDelete(DeleteBehavior.NoAction)
                         .IsRequired();
                 });
