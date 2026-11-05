@@ -3,6 +3,7 @@ import { api, apiBlob } from './api';
 import { useFeedback } from './Feedback';
 import { clearFieldError, handleFormKeyDown, validateForm } from './formUtils';
 import type { Paged } from './types';
+import CustomerLedgerSection from './CustomerLedgerSection';
 
 type Contract = {
   id: number; quotationId: number; rowVersion: string; clientName: string; title: string;
@@ -11,17 +12,28 @@ type Contract = {
 type Invoice = {
   id: number; contractId: number; type: string; description: string; billToName: string;
   currency: string; amount: number; paidAmount: number; outstanding: number;
-  dueDate: string; status: string;
+  dueDate: string; status: string; creditedAmount: number; refundedAmount: number;
+  netAmount: number; refundDue: number;
 };
-type Payment = { id: number; amount: number; method: string; reference: string; receivedOn: string };
+type Payment = {
+  id: number; amount: number; refundedAmount: number; method: string; reference: string; receivedOn: string;
+};
+type CreditNote = { id: number; amount: number; reason: string; issuedOn: string };
+type Refund = {
+  id: number; paymentId: number; amount: number; method: string; reference: string;
+  reason: string; refundedOn: string;
+};
 type InvoiceDetails = {
   invoice: Invoice & { rowVersion: string; voidReason: string | null };
   contract: { id: number; rowVersion: string; billedAmount: number };
   payments: Payment[];
+  credits: CreditNote[];
+  refunds: Refund[];
 };
 type Ledger = {
   currency: string; contractAmount: number; unbilledAmount: number;
-  collected: number; outstanding: number; invoices: Invoice[]; payments: Payment[];
+  collected: number; outstanding: number; credited: number; refunded: number;
+  refundDue: number; invoices: Invoice[]; payments: Payment[];
 };
 
 type OutstandingRow = {
@@ -69,6 +81,15 @@ export default function BillingPage({ token }: { token: string }) {
   const [reference, setReference] = useState('');
   const [receivedOn, setReceivedOn] = useState(dateToday);
   const [voidReason, setVoidReason] = useState('');
+  const [creditAmount, setCreditAmount] = useState('');
+  const [creditReason, setCreditReason] = useState('');
+  const [creditDate, setCreditDate] = useState(dateToday);
+  const [refundPaymentId, setRefundPaymentId] = useState('');
+  const [refundAmount, setRefundAmount] = useState('');
+  const [refundMethod, setRefundMethod] = useState('BankTransfer');
+  const [refundReference, setRefundReference] = useState('');
+  const [refundReason, setRefundReason] = useState('');
+  const [refundDate, setRefundDate] = useState(dateToday);
   const [ledger, setLedger] = useState<Ledger | null>(null);
   const [reportMode, setReportMode] = useState<ReportMode>('outstanding');
   const [reportSearch, setReportSearch] = useState('');
@@ -219,6 +240,64 @@ export default function BillingPage({ token }: { token: string }) {
     } finally { setBusy(false); }
   }
 
+  async function issueCreditNote(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (busy || !selected || !validateForm(event.currentTarget)) return;
+    const approved = await confirm({
+      title: 'Issue credit note?',
+      message: 'This reduces the net invoice and contract billed value. Original invoice and payment records stay unchanged.',
+      confirmText: 'Issue credit note',
+    });
+    if (!approved) return;
+    setBusy(true);
+    try {
+      const id = selected.invoice.id;
+      await api('/api/admin/billing/invoices/' + id + '/credits', token, {
+        method: 'POST', body: JSON.stringify({
+          amount: Number(creditAmount), reason: creditReason.trim(),
+          issuedOn: creditDate, invoiceRowVersion: selected.invoice.rowVersion,
+        }),
+      });
+      setCreditAmount(''); setCreditReason('');
+      await openInvoice(id); await load();
+      setOutstanding(null); setCollections(null);
+      if (ledger) await viewLedger(selected.invoice.contractId);
+      notify('success', 'Credit note issued');
+    } catch (err) {
+      notify('error', 'Cannot issue credit note', err instanceof Error ? err.message : undefined);
+    } finally { setBusy(false); }
+  }
+
+  async function recordRefund(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (busy || !selected || !validateForm(event.currentTarget)) return;
+    const approved = await confirm({
+      title: 'Record completed refund?',
+      message: 'Only record money actually returned to the customer, with a traceable refund reference.',
+      confirmText: 'Record refund',
+    });
+    if (!approved) return;
+    setBusy(true);
+    try {
+      const id = selected.invoice.id;
+      await api('/api/admin/billing/invoices/' + id + '/refunds', token, {
+        method: 'POST', body: JSON.stringify({
+          paymentId: Number(refundPaymentId), amount: Number(refundAmount),
+          method: refundMethod, reference: refundReference.trim(),
+          reason: refundReason.trim(), refundedOn: refundDate,
+          invoiceRowVersion: selected.invoice.rowVersion,
+        }),
+      });
+      setRefundPaymentId(''); setRefundAmount(''); setRefundReference(''); setRefundReason('');
+      await openInvoice(id); await load();
+      setOutstanding(null); setCollections(null);
+      if (ledger) await viewLedger(selected.invoice.contractId);
+      notify('success', 'Refund recorded');
+    } catch (err) {
+      notify('error', 'Cannot record refund', err instanceof Error ? err.message : undefined);
+    } finally { setBusy(false); }
+  }
+
   async function voidInvoice(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (busy || !selected || !validateForm(event.currentTarget)) return;
@@ -321,8 +400,10 @@ export default function BillingPage({ token }: { token: string }) {
         <p>{selected.invoice.status} · {selected.invoice.billToName}</p></div>
       <p>{selected.invoice.description} · Due {selected.invoice.dueDate}</p>
       <p>Amount: {money(selected.invoice.amount, selected.invoice.currency)} ·
-        Received: {money(selected.invoice.paidAmount, selected.invoice.currency)} ·
-        Outstanding: <strong>{money(selected.invoice.outstanding, selected.invoice.currency)}</strong></p>
+        Net collected: {money(selected.invoice.paidAmount, selected.invoice.currency)} ·
+        Credited: {money(selected.invoice.creditedAmount, selected.invoice.currency)} ·
+        Outstanding: <strong>{money(selected.invoice.outstanding, selected.invoice.currency)}</strong> ·
+        Refund due: <strong>{money(selected.invoice.refundDue, selected.invoice.currency)}</strong></p>
       <div className="drawer-actions">
         <button type="button" onClick={() => void viewLedger(selected.invoice.contractId)}>
           View contract ledger</button>
@@ -349,6 +430,7 @@ export default function BillingPage({ token }: { token: string }) {
           <div><button className="primary" disabled={busy}>Record payment</button></div>
         </form>}
       {selected.invoice.status === 'Issued' && selected.invoice.paidAmount === 0 &&
+        selected.invoice.creditedAmount === 0 &&
         <form className="form-grid" aria-label="Void invoice" onSubmit={voidInvoice}
           onInput={clearFieldError} onKeyDown={handleFormKeyDown}>
           <label>Void reason<input required minLength={10} maxLength={500} value={voidReason}
@@ -356,12 +438,70 @@ export default function BillingPage({ token }: { token: string }) {
           <div><button type="submit" disabled={busy}>Void invoice</button></div>
         </form>}
       {selected.invoice.voidReason && <p>Void reason: {selected.invoice.voidReason}</p>}
+      {selected.invoice.status !== 'Void' && selected.invoice.creditedAmount < selected.invoice.amount &&
+        <form className="form-grid" aria-label="Issue credit note" onSubmit={issueCreditNote}
+          onInput={clearFieldError} onKeyDown={handleFormKeyDown}>
+          <h3>Credit note</h3>
+          <p className="field-help">Reducing the invoice may create a refund due if the customer has paid more than the revised amount.</p>
+          <label>Credit amount *<input required type="number" min="0.001" step="0.001"
+            max={selected.invoice.amount - selected.invoice.creditedAmount} value={creditAmount}
+            onChange={event => setCreditAmount(event.target.value)} /></label>
+          <label>Reason *<input required minLength={10} maxLength={500} value={creditReason}
+            onChange={event => setCreditReason(event.target.value)} /></label>
+          <label>Issue date *<input type="date" required value={creditDate}
+            onChange={event => setCreditDate(event.target.value)} /></label>
+          <div><button type="submit" disabled={busy}>Issue credit note</button></div>
+        </form>}
+      {!!selected.credits.length && <section aria-label="Credit note history">
+        <h3>Credit note history</h3>
+        {selected.credits.map(credit => <p key={credit.id}>
+          CN-{credit.id} · {credit.issuedOn} ·
+          {money(credit.amount, selected.invoice.currency)} · {credit.reason}
+        </p>)}
+      </section>}
+      {selected.invoice.refundDue > 0 && <form className="form-grid"
+        aria-label="Record refund" onSubmit={recordRefund}
+        onInput={clearFieldError} onKeyDown={handleFormKeyDown}>
+        <h3>Refund due: {money(selected.invoice.refundDue, selected.invoice.currency)}</h3>
+        <label>Original payment *<select required value={refundPaymentId}
+          onChange={event => setRefundPaymentId(event.target.value)}>
+          <option value="">Choose payment</option>
+          {selected.payments.filter(p => p.amount > p.refundedAmount).map(payment =>
+            <option key={payment.id} value={payment.id}>
+              #{payment.id} · {payment.reference} · Available:
+              {money(payment.amount - payment.refundedAmount, selected.invoice.currency)}
+            </option>)}
+        </select></label>
+        <label>Refund amount *<input required type="number" min="0.001" step="0.001"
+          max={selected.invoice.refundDue} value={refundAmount}
+          onChange={event => setRefundAmount(event.target.value)} /></label>
+        <label>Method *<select value={refundMethod} onChange={event => setRefundMethod(event.target.value)}>
+          <option value="BankTransfer">Bank transfer</option><option value="UPI">UPI</option>
+          <option value="Cash">Cash</option><option value="Card">Card</option>
+          <option value="Other">Other</option></select></label>
+        <label>Unique refund reference *<input required minLength={5} maxLength={100}
+          value={refundReference} onChange={event => setRefundReference(event.target.value)} /></label>
+        <label>Reason *<input required minLength={10} maxLength={500} value={refundReason}
+          onChange={event => setRefundReason(event.target.value)} /></label>
+        <label>Refund date *<input required type="date" value={refundDate}
+          onChange={event => setRefundDate(event.target.value)} /></label>
+        <div><button type="submit" disabled={busy}>Record completed refund</button></div>
+      </form>}
+      {!!selected.refunds.length && <section aria-label="Refund history">
+        <h3>Refund history</h3>
+        {selected.refunds.map(refund => <p key={refund.id}>
+          RF-{refund.id} · {refund.refundedOn} ·
+          {money(refund.amount, selected.invoice.currency)} ·
+          {refund.method} · {refund.reference} · {refund.reason}
+        </p>)}
+      </section>}
       <h3>Payment history</h3>
       {selected.payments.length ? <div className="table-scroll"><table>
         <thead><tr><th>Received on</th><th>Method</th><th>Reference</th><th>Amount</th></tr></thead>
         <tbody>{selected.payments.map(item => <tr key={item.id}>
           <td>{item.receivedOn}</td><td>{item.method}</td><td>{item.reference}</td>
-          <td>{money(item.amount, selected.invoice.currency)}</td>
+          <td>{money(item.amount, selected.invoice.currency)}{item.refundedAmount > 0 &&
+            <> · Refunded: {money(item.refundedAmount, selected.invoice.currency)}</>}</td>
         </tr>)}</tbody></table></div> : <p className="empty-state">No payments recorded.</p>}
     </section>}
 
@@ -445,12 +585,17 @@ export default function BillingPage({ token }: { token: string }) {
       </div>}
     </section>
 
+    <CustomerLedgerSection token={token} openInvoice={id => void openInvoice(id)} />
+
     {ledger && <section className="panel" aria-label="Contract ledger">
       <div className="panel-heading"><h2>Contract ledger</h2></div>
       <p>Contract value: {money(ledger.contractAmount, ledger.currency)} ·
         Unbilled: {money(ledger.unbilledAmount, ledger.currency)}</p>
-      <p>Collected: {money(ledger.collected, ledger.currency)} ·
-        Invoice outstanding: <strong>{money(ledger.outstanding, ledger.currency)}</strong></p>
+      <p>Net collected: {money(ledger.collected, ledger.currency)} ·
+        Credited: {money(ledger.credited, ledger.currency)} ·
+        Refunded: {money(ledger.refunded, ledger.currency)} ·
+        Invoice outstanding: <strong>{money(ledger.outstanding, ledger.currency)}</strong> ·
+        Refund due: <strong>{money(ledger.refundDue, ledger.currency)}</strong></p>
       <p className="field-help">Unbilled value is not part of invoice outstanding.</p>
     </section>}
   </section>;

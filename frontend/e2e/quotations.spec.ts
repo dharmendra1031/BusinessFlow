@@ -97,4 +97,26 @@ test('Admin completes quotation, contract, invoice and partial payment', async (
   await reports.getByRole('combobox', { name: 'Report type' }).selectOption('collections');
   await reports.getByRole('button', { name: 'Run report' }).click();
   await expect(reports).toContainText('INR 200.000');
+
+  const credit = invoice.locator('form[aria-label="Issue credit note"]');
+  await credit.getByRole('spinbutton', { name: 'Credit amount' }).fill('150');
+  await credit.getByRole('textbox', { name: 'Reason' })
+    .fill('Reduction in accepted website project delivery scope');
+  await credit.getByRole('button', { name: 'Issue credit note' }).click();
+  await page.getByRole('alertdialog', { name: 'Issue credit note?' })
+    .getByRole('button', { name: 'Issue credit note' }).click();
+  await expect(invoice).toContainText('Refund due: INR 50.000');
+
+  const refund = invoice.locator('form[aria-label="Record refund"]');
+  await refund.getByRole('combobox', { name: 'Original payment' }).selectOption({ index: 1 });
+  await refund.getByRole('spinbutton', { name: 'Refund amount' }).fill('50');
+  await refund.getByRole('textbox', { name: 'Unique refund reference' })
+    .fill('REFUND-' + Date.now());
+  await refund.getByRole('textbox', { name: 'Reason' })
+    .fill('Refund completed for reduced website project scope');
+  await refund.getByRole('button', { name: 'Record completed refund' }).click();
+  await page.getByRole('alertdialog', { name: 'Record completed refund?' })
+    .getByRole('button', { name: 'Record refund' }).click();
+  await expect(invoice).toContainText('Refund due: INR 0.000');
+  await expect(invoice.getByRole('region', { name: 'Refund history' })).toContainText('INR 50.000');
 });

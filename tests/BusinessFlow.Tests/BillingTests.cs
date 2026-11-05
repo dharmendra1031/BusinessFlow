@@ -11,7 +11,7 @@ public sealed class BillingTests
 {
     private const string Root = "/api/admin/billing";
 
-    private static async Task<(long ContractId, string Version)> SignedContract(
+    internal static async Task<(long ContractId, string Version)> SignedContract(
         Phase1TestDatabase database, long userId, decimal amount = 1000m)
     {
         await using var db = database.CreateContext();

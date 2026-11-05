@@ -14,6 +14,8 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
     public DbSet<SalesContract> SalesContracts => Set<SalesContract>();
     public DbSet<SalesInvoice> SalesInvoices => Set<SalesInvoice>();
     public DbSet<SalesPayment> SalesPayments => Set<SalesPayment>();
+    public DbSet<SalesCreditNote> SalesCreditNotes => Set<SalesCreditNote>();
+    public DbSet<SalesRefund> SalesRefunds => Set<SalesRefund>();
     public DbSet<Customer> Customers => Set<Customer>();
     public DbSet<CustomerContact> CustomerContacts => Set<CustomerContact>();
     public DbSet<Lead> Leads => Set<Lead>();
@@ -144,6 +146,8 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
             entity.Property(x => x.Currency).HasMaxLength(3).IsRequired();
             entity.Property(x => x.Amount).HasPrecision(18, 3);
             entity.Property(x => x.PaidAmount).HasPrecision(18, 3);
+            entity.Property(x => x.CreditedAmount).HasPrecision(18, 3);
+            entity.Property(x => x.RefundedAmount).HasPrecision(18, 3);
             entity.Property(x => x.VoidReason).HasMaxLength(500);
             entity.HasIndex(x => new { x.ContractId, x.Status });
             entity.HasOne<SalesContract>().WithMany().HasForeignKey(x => x.ContractId)
@@ -153,8 +157,8 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
             entity.ToTable(t =>
             {
                 t.HasCheckConstraint("CK_SalesInvoices_Type", "[Type] IN (N'Advance', N'Milestone', N'Final')");
-                t.HasCheckConstraint("CK_SalesInvoices_Status", "[Status] IN (N'Issued', N'PartiallyPaid', N'Paid', N'Void')");
-                t.HasCheckConstraint("CK_SalesInvoices_Amounts", "[Amount] > 0 AND [PaidAmount] >= 0 AND [PaidAmount] <= [Amount]");
+                t.HasCheckConstraint("CK_SalesInvoices_Status", "[Status] IN (N'Issued', N'PartiallyPaid', N'Paid', N'Void', N'RefundDue', N'Credited')");
+                t.HasCheckConstraint("CK_SalesInvoices_Amounts", "[Amount] > 0 AND [PaidAmount] >= 0 AND [PaidAmount] <= [Amount] AND [CreditedAmount] >= 0 AND [CreditedAmount] <= [Amount] AND [RefundedAmount] >= 0");
             });
         });
         modelBuilder.Entity<SalesPayment>(entity =>
@@ -162,6 +166,7 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
             entity.Property(x => x.Amount).HasPrecision(18, 3);
             entity.Property(x => x.Method).HasMaxLength(20).IsRequired();
             entity.Property(x => x.Reference).HasMaxLength(100).IsRequired();
+            entity.Property(x => x.RefundedAmount).HasPrecision(18, 3);
             entity.HasIndex(x => x.Reference).IsUnique();
             entity.HasIndex(x => new { x.InvoiceId, x.ReceivedOn });
             entity.HasOne<SalesInvoice>().WithMany().HasForeignKey(x => x.InvoiceId)
@@ -170,8 +175,41 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
                 .OnDelete(DeleteBehavior.NoAction);
             entity.ToTable(t =>
             {
-                t.HasCheckConstraint("CK_SalesPayments_Amount", "[Amount] > 0");
+                t.HasCheckConstraint("CK_SalesPayments_Amount", "[Amount] > 0 AND [RefundedAmount] >= 0 AND [RefundedAmount] <= [Amount]");
                 t.HasCheckConstraint("CK_SalesPayments_Method", "[Method] IN (N'BankTransfer', N'UPI', N'Cash', N'Card', N'Other')");
+            });
+        });
+        modelBuilder.Entity<SalesCreditNote>(entity =>
+        {
+            entity.Property(x => x.Amount).HasPrecision(18, 3);
+            entity.Property(x => x.Reason).HasMaxLength(500).IsRequired();
+            entity.HasIndex(x => x.InvoiceId);
+            entity.HasOne<SalesInvoice>().WithMany().HasForeignKey(x => x.InvoiceId)
+                .OnDelete(DeleteBehavior.NoAction);
+            entity.HasOne<ApplicationUser>().WithMany().HasForeignKey(x => x.CreatedById)
+                .OnDelete(DeleteBehavior.NoAction);
+            entity.ToTable(t => t.HasCheckConstraint("CK_SalesCreditNotes_Amount", "[Amount] > 0"));
+        });
+        modelBuilder.Entity<SalesRefund>(entity =>
+        {
+            entity.Property(x => x.Amount).HasPrecision(18, 3);
+            entity.Property(x => x.Method).HasMaxLength(20).IsRequired();
+            entity.Property(x => x.Reference).HasMaxLength(100).IsRequired();
+            entity.Property(x => x.Reason).HasMaxLength(500).IsRequired();
+            entity.HasIndex(x => x.Reference).IsUnique();
+            entity.HasIndex(x => x.InvoiceId);
+            entity.HasIndex(x => x.PaymentId);
+            entity.HasOne<SalesInvoice>().WithMany().HasForeignKey(x => x.InvoiceId)
+                .OnDelete(DeleteBehavior.NoAction);
+            entity.HasOne<SalesPayment>().WithMany().HasForeignKey(x => x.PaymentId)
+                .OnDelete(DeleteBehavior.NoAction);
+            entity.HasOne<ApplicationUser>().WithMany().HasForeignKey(x => x.CreatedById)
+                .OnDelete(DeleteBehavior.NoAction);
+            entity.ToTable(t =>
+            {
+                t.HasCheckConstraint("CK_SalesRefunds_Amount", "[Amount] > 0");
+                t.HasCheckConstraint("CK_SalesRefunds_Method",
+                    "[Method] IN (N'BankTransfer', N'UPI', N'Cash', N'Card', N'Other')");
             });
         });
         modelBuilder.Entity<SalesContract>(entity =>

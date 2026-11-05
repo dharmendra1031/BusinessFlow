@@ -12,6 +12,8 @@ public sealed class SalesInvoice
     public string Currency { get; set; } = "INR";
     public decimal Amount { get; set; }
     public decimal PaidAmount { get; set; }
+    public decimal CreditedAmount { get; set; }
+    public decimal RefundedAmount { get; set; }
     public DateOnly DueDate { get; set; }
     public string Status { get; set; } = "Issued";
     public long CreatedById { get; set; }
@@ -30,7 +32,33 @@ public sealed class SalesPayment
     public decimal Amount { get; set; }
     public string Method { get; set; } = string.Empty;
     public string Reference { get; set; } = string.Empty;
+    public decimal RefundedAmount { get; set; }
     public DateOnly ReceivedOn { get; set; }
+    public long CreatedById { get; set; }
+    public DateTime CreatedAtUtc { get; set; } = DateTime.UtcNow;
+}
+
+public sealed class SalesCreditNote
+{
+    public long Id { get; set; }
+    public long InvoiceId { get; set; }
+    public decimal Amount { get; set; }
+    public string Reason { get; set; } = string.Empty;
+    public DateOnly IssuedOn { get; set; }
+    public long CreatedById { get; set; }
+    public DateTime CreatedAtUtc { get; set; } = DateTime.UtcNow;
+}
+
+public sealed class SalesRefund
+{
+    public long Id { get; set; }
+    public long InvoiceId { get; set; }
+    public long PaymentId { get; set; }
+    public decimal Amount { get; set; }
+    public string Method { get; set; } = string.Empty;
+    public string Reference { get; set; } = string.Empty;
+    public string Reason { get; set; } = string.Empty;
+    public DateOnly RefundedOn { get; set; }
     public long CreatedById { get; set; }
     public DateTime CreatedAtUtc { get; set; } = DateTime.UtcNow;
 }

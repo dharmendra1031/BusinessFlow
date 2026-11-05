@@ -63,7 +63,7 @@ public sealed class BillingController(AppDbContext db) : ControllerBase
         int page = 1, int pageSize = 20, CancellationToken ct = default)
     {
         if (!ValidPage(page, pageSize, search) ||
-            status is not (null or "Issued" or "PartiallyPaid" or "Paid" or "Void"))
+            status is not (null or "Issued" or "PartiallyPaid" or "Paid" or "Void" or "RefundDue" or "Credited"))
             return BadRequest(new { message = "Invalid invoice filters." });
 
         var query = db.SalesInvoices.AsNoTracking().AsQueryable();
@@ -79,7 +79,13 @@ public sealed class BillingController(AppDbContext db) : ControllerBase
             .Select(x => new
             {
                 x.Id, x.ContractId, x.Type, x.Description, x.BillToName, x.Currency,
-                x.Amount, x.PaidAmount, Outstanding = x.Status == "Void" ? 0 : x.Amount - x.PaidAmount,
+                x.Amount, x.PaidAmount, x.CreditedAmount, x.RefundedAmount,
+                NetAmount = x.Amount - x.CreditedAmount,
+                Outstanding = x.Status == "Void" ? 0 :
+                    x.Amount - x.CreditedAmount > x.PaidAmount ?
+                    x.Amount - x.CreditedAmount - x.PaidAmount : 0,
+                RefundDue = x.PaidAmount > x.Amount - x.CreditedAmount ?
+                    x.PaidAmount - (x.Amount - x.CreditedAmount) : 0,
                 x.DueDate, x.Status, x.CreatedAtUtc
             }).ToListAsync(ct);
         return Ok(new { items, total, page, pageSize });
@@ -92,7 +98,13 @@ public sealed class BillingController(AppDbContext db) : ControllerBase
             .Select(x => new
             {
                 x.Id, x.ContractId, x.Type, x.Description, x.BillToName, x.Currency,
-                x.Amount, x.PaidAmount, Outstanding = x.Status == "Void" ? 0 : x.Amount - x.PaidAmount,
+                x.Amount, x.PaidAmount, x.CreditedAmount, x.RefundedAmount,
+                NetAmount = x.Amount - x.CreditedAmount,
+                Outstanding = x.Status == "Void" ? 0 :
+                    x.Amount - x.CreditedAmount > x.PaidAmount ?
+                    x.Amount - x.CreditedAmount - x.PaidAmount : 0,
+                RefundDue = x.PaidAmount > x.Amount - x.CreditedAmount ?
+                    x.PaidAmount - (x.Amount - x.CreditedAmount) : 0,
                 x.DueDate, x.Status, x.VoidReason, x.VoidedAtUtc, x.RowVersion,
                 x.CreatedAtUtc, x.UpdatedAtUtc
             }).FirstOrDefaultAsync(ct);
@@ -102,9 +114,18 @@ public sealed class BillingController(AppDbContext db) : ControllerBase
             .FirstAsync(ct);
         var payments = await db.SalesPayments.AsNoTracking().Where(x => x.InvoiceId == id)
             .OrderByDescending(x => x.Id)
-            .Select(x => new { x.Id, x.Amount, x.Method, x.Reference, x.ReceivedOn, x.CreatedAtUtc })
+            .Select(x => new { x.Id, x.Amount, x.RefundedAmount, x.Method, x.Reference, x.ReceivedOn, x.CreatedAtUtc })
             .ToListAsync(ct);
-        return Ok(new { invoice, contract, payments });
+        var credits = await db.SalesCreditNotes.AsNoTracking().Where(x => x.InvoiceId == id)
+            .OrderByDescending(x => x.Id)
+            .Select(x => new { x.Id, x.Amount, x.Reason, x.IssuedOn, x.CreatedAtUtc })
+            .ToListAsync(ct);
+        var refunds = await db.SalesRefunds.AsNoTracking().Where(x => x.InvoiceId == id)
+            .OrderByDescending(x => x.Id)
+            .Select(x => new { x.Id, x.PaymentId, x.Amount, x.Method, x.Reference,
+                x.Reason, x.RefundedOn, x.CreatedAtUtc })
+            .ToListAsync(ct);
+        return Ok(new { invoice, contract, payments, credits, refunds });
     }
 
     [HttpGet("invoices/{id:long}/pdf")]
@@ -115,7 +136,7 @@ public sealed class BillingController(AppDbContext db) : ControllerBase
             .Select(x => new
             {
                 x.Id, x.ContractId, x.BillToName, x.Description, x.Type,
-                x.Currency, x.Amount, x.PaidAmount, x.DueDate, x.Status, x.CreatedAtUtc
+                x.Currency, x.Amount, x.PaidAmount, x.CreditedAmount, x.RefundedAmount, x.DueDate, x.Status, x.CreatedAtUtc
             }).FirstOrDefaultAsync(ct);
         if (invoice is null) return NotFound();
 
@@ -136,11 +157,13 @@ public sealed class BillingController(AppDbContext db) : ControllerBase
                 currency = invoice.Currency,
                 issueDate = invoice.CreatedAtUtc.ToString("yyyy-MM-dd"),
                 dueDate = invoice.DueDate.ToString("yyyy-MM-dd"),
-                taxNote = "Commercial billing document. Tax breakdown is not configured.",
+                taxNote = $"Commercial copy; not a tax invoice. Credit notes: {invoice.CreditedAmount:N3}; " +
+                    $"Refunds: {invoice.RefundedAmount:N3}. Tax breakdown not configured.",
                 description = invoice.Type + ": " + invoice.Description,
-                amount = invoice.Amount,
+                amount = invoice.Amount - invoice.CreditedAmount,
                 received = invoice.PaidAmount,
-                balance = invoice.Status == "Void" ? 0m : invoice.Amount - invoice.PaidAmount
+                balance = invoice.Status == "Void" ? 0m :
+                    Math.Max(0m, invoice.Amount - invoice.CreditedAmount - invoice.PaidAmount)
             }
         };
 
@@ -221,11 +244,11 @@ public sealed class BillingController(AppDbContext db) : ControllerBase
         await using var transaction = await db.Database.BeginTransactionAsync(ct);
         var invoice = await db.SalesInvoices.FirstOrDefaultAsync(x => x.Id == id, ct);
         if (invoice is null) return NotFound();
-        if (invoice.Status is "Paid" or "Void")
+        if (invoice.Status is not ("Issued" or "PartiallyPaid"))
             return Conflict(new { message = "A paid or void invoice cannot accept payments." });
         if (!ConcurrencyTokens.Apply(db, invoice, request.InvoiceRowVersion))
             return BadRequest(new { message = "Reload the invoice before receiving payment." });
-        if (request.Amount > invoice.Amount - invoice.PaidAmount)
+        if (request.Amount > BillingBalance.Outstanding(invoice))
             return Conflict(new { message = "Payment exceeds the invoice outstanding balance." });
 
         var reference = request.Reference.Trim();
@@ -233,7 +256,7 @@ public sealed class BillingController(AppDbContext db) : ControllerBase
             return Conflict(new { message = "This payment reference is already recorded." });
 
         invoice.PaidAmount += request.Amount;
-        invoice.Status = invoice.PaidAmount == invoice.Amount ? "Paid" : "PartiallyPaid";
+        invoice.Status = BillingBalance.Status(invoice);
         invoice.UpdatedAtUtc = DateTime.UtcNow;
         var payment = new SalesPayment
         {
@@ -247,7 +270,7 @@ public sealed class BillingController(AppDbContext db) : ControllerBase
             Audit("Receive", "SalesInvoices", id, "PaymentId: " + payment.Id + "; Amount: " + request.Amount);
             await db.SaveChangesAsync(ct);
             await transaction.CommitAsync(ct);
-            return Ok(new { payment.Id, invoice.Status, invoice.PaidAmount, outstanding = invoice.Amount - invoice.PaidAmount });
+            return Ok(new { payment.Id, invoice.Status, invoice.PaidAmount, outstanding = BillingBalance.Outstanding(invoice) });
         }
         catch (DbUpdateException error) when (error.InnerException is SqlException { Number: 2601 or 2627 })
         {
@@ -264,7 +287,7 @@ public sealed class BillingController(AppDbContext db) : ControllerBase
         await using var transaction = await db.Database.BeginTransactionAsync(ct);
         var invoice = await db.SalesInvoices.FirstOrDefaultAsync(x => x.Id == id, ct);
         if (invoice is null) return NotFound();
-        if (invoice.Status != "Issued" || invoice.PaidAmount != 0)
+        if (invoice.Status != "Issued" || invoice.PaidAmount != 0 || invoice.CreditedAmount != 0)
             return Conflict(new { message = "Only unpaid issued invoices can be voided." });
         if (!ConcurrencyTokens.Apply(db, invoice, request.InvoiceRowVersion))
             return BadRequest(new { message = "Reload the invoice before voiding." });
@@ -299,8 +322,12 @@ public sealed class BillingController(AppDbContext db) : ControllerBase
             .OrderBy(x => x.Id)
             .Select(x => new
             {
-                x.Id, x.Type, x.Description, x.Status, x.Amount, x.PaidAmount,
-                Outstanding = x.Status == "Void" ? 0 : x.Amount - x.PaidAmount,
+                x.Id, x.Type, x.Description, x.Status, x.Amount, x.PaidAmount, x.CreditedAmount,
+                x.RefundedAmount,
+                Outstanding = x.Status == "Void" ? 0 : x.Amount - x.CreditedAmount > x.PaidAmount ?
+                    x.Amount - x.CreditedAmount - x.PaidAmount : 0,
+                RefundDue = x.PaidAmount > x.Amount - x.CreditedAmount ?
+                    x.PaidAmount - (x.Amount - x.CreditedAmount) : 0,
                 x.CreatedAtUtc
             }).ToListAsync(ct);
         var invoiceIds = invoices.Select(x => x.Id).ToArray();
@@ -313,6 +340,9 @@ public sealed class BillingController(AppDbContext db) : ControllerBase
             contract, revision.Currency, ContractAmount = revision.Amount,
             UnbilledAmount = revision.Amount - contract.BilledAmount,
             Outstanding = invoices.Sum(x => x.Outstanding),
+            RefundDue = invoices.Sum(x => x.RefundDue),
+            Credited = invoices.Sum(x => x.CreditedAmount),
+            Refunded = invoices.Sum(x => x.RefundedAmount),
             Collected = invoices.Sum(x => x.PaidAmount),
             invoices, payments
         });
@@ -346,9 +376,9 @@ public sealed class BillingController(AppDbContext db) : ControllerBase
             {
                 currency = group.Key,
                 invoiceCount = group.Count(),
-                invoiced = group.Sum(x => x.Amount),
+                invoiced = group.Sum(x => x.Amount - x.CreditedAmount),
                 collected = group.Sum(x => x.PaidAmount),
-                outstanding = group.Sum(x => x.Amount - x.PaidAmount)
+                outstanding = group.Sum(x => x.Amount - x.CreditedAmount - x.PaidAmount)
             }).OrderBy(x => x.currency).ToListAsync(ct);
         var total = await query.CountAsync(ct);
         var items = await query.OrderBy(x => x.DueDate).ThenBy(x => x.Id)
@@ -357,7 +387,7 @@ public sealed class BillingController(AppDbContext db) : ControllerBase
             {
                 x.Id, x.ContractId, x.BillToName, x.Description, x.Currency,
                 x.DueDate, x.Status, x.Amount, x.PaidAmount,
-                outstanding = x.Amount - x.PaidAmount
+                outstanding = x.Amount - x.CreditedAmount - x.PaidAmount
             }).ToListAsync(ct);
         return Ok(new { asOf = today, total, page, pageSize, summary, items });
     }

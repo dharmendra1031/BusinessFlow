@@ -1178,6 +1178,50 @@ namespace BusinessFlow.Api.Migrations
                     b.ToTable("RolePermissionOverrides");
                 });
 
+            modelBuilder.Entity("BusinessFlow.Api.Models.SalesCreditNote", b =>
+                {
+                    b.Property<long>("Id").ValueGeneratedOnAdd().HasColumnType("bigint");
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
+                    b.Property<decimal>("Amount").HasPrecision(18, 3).HasColumnType("decimal(18,3)");
+                    b.Property<DateTime>("CreatedAtUtc").HasColumnType("datetime2");
+                    b.Property<long>("CreatedById").HasColumnType("bigint");
+                    b.Property<long>("InvoiceId").HasColumnType("bigint");
+                    b.Property<DateOnly>("IssuedOn").HasColumnType("date");
+                    b.Property<string>("Reason").IsRequired().HasMaxLength(500).HasColumnType("nvarchar(500)");
+                    b.HasKey("Id");
+                    b.HasIndex("CreatedById");
+                    b.HasIndex("InvoiceId");
+                    b.ToTable("SalesCreditNotes", t =>
+                        {
+                            t.HasCheckConstraint("CK_SalesCreditNotes_Amount", "[Amount] > 0");
+                        });
+                });
+
+            modelBuilder.Entity("BusinessFlow.Api.Models.SalesRefund", b =>
+                {
+                    b.Property<long>("Id").ValueGeneratedOnAdd().HasColumnType("bigint");
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
+                    b.Property<decimal>("Amount").HasPrecision(18, 3).HasColumnType("decimal(18,3)");
+                    b.Property<DateTime>("CreatedAtUtc").HasColumnType("datetime2");
+                    b.Property<long>("CreatedById").HasColumnType("bigint");
+                    b.Property<long>("InvoiceId").HasColumnType("bigint");
+                    b.Property<string>("Method").IsRequired().HasMaxLength(20).HasColumnType("nvarchar(20)");
+                    b.Property<long>("PaymentId").HasColumnType("bigint");
+                    b.Property<string>("Reason").IsRequired().HasMaxLength(500).HasColumnType("nvarchar(500)");
+                    b.Property<string>("Reference").IsRequired().HasMaxLength(100).HasColumnType("nvarchar(100)");
+                    b.Property<DateOnly>("RefundedOn").HasColumnType("date");
+                    b.HasKey("Id");
+                    b.HasIndex("CreatedById");
+                    b.HasIndex("InvoiceId");
+                    b.HasIndex("PaymentId");
+                    b.HasIndex("Reference").IsUnique();
+                    b.ToTable("SalesRefunds", t =>
+                        {
+                            t.HasCheckConstraint("CK_SalesRefunds_Amount", "[Amount] > 0");
+                            t.HasCheckConstraint("CK_SalesRefunds_Method", "[Method] IN (N'BankTransfer', N'UPI', N'Cash', N'Card', N'Other')");
+                        });
+                });
+
             modelBuilder.Entity("BusinessFlow.Api.Models.SalesContract", b =>
                 {
                     b.Property<long>("Id").ValueGeneratedOnAdd().HasColumnType("bigint");
@@ -1218,6 +1262,8 @@ namespace BusinessFlow.Api.Migrations
                     b.Property<string>("Currency").IsRequired().HasMaxLength(3).HasColumnType("nvarchar(3)");
                     b.Property<string>("Description").IsRequired().HasMaxLength(250).HasColumnType("nvarchar(250)");
                     b.Property<DateOnly>("DueDate").HasColumnType("date");
+                    b.Property<decimal>("CreditedAmount").HasPrecision(18, 3).HasColumnType("decimal(18,3)");
+                    b.Property<decimal>("RefundedAmount").HasPrecision(18, 3).HasColumnType("decimal(18,3)");
                     b.Property<decimal>("PaidAmount").HasPrecision(18, 3).HasColumnType("decimal(18,3)");
                     b.Property<byte[]>("RowVersion").IsConcurrencyToken().IsRequired()
                         .ValueGeneratedOnAddOrUpdate().HasColumnType("rowversion");
@@ -1232,8 +1278,8 @@ namespace BusinessFlow.Api.Migrations
                     b.ToTable("SalesInvoices", t =>
                         {
                             t.HasCheckConstraint("CK_SalesInvoices_Type", "[Type] IN (N'Advance', N'Milestone', N'Final')");
-                            t.HasCheckConstraint("CK_SalesInvoices_Status", "[Status] IN (N'Issued', N'PartiallyPaid', N'Paid', N'Void')");
-                            t.HasCheckConstraint("CK_SalesInvoices_Amounts", "[Amount] > 0 AND [PaidAmount] >= 0 AND [PaidAmount] <= [Amount]");
+                            t.HasCheckConstraint("CK_SalesInvoices_Status", "[Status] IN (N'Issued', N'PartiallyPaid', N'Paid', N'Void', N'RefundDue', N'Credited')");
+                            t.HasCheckConstraint("CK_SalesInvoices_Amounts", "[Amount] > 0 AND [PaidAmount] >= 0 AND [PaidAmount] <= [Amount] AND [CreditedAmount] >= 0 AND [CreditedAmount] <= [Amount] AND [RefundedAmount] >= 0");
                         });
                 });
 
@@ -1247,6 +1293,7 @@ namespace BusinessFlow.Api.Migrations
                     b.Property<long>("InvoiceId").HasColumnType("bigint");
                     b.Property<string>("Method").IsRequired().HasMaxLength(20).HasColumnType("nvarchar(20)");
                     b.Property<DateOnly>("ReceivedOn").HasColumnType("date");
+                    b.Property<decimal>("RefundedAmount").HasPrecision(18, 3).HasColumnType("decimal(18,3)");
                     b.Property<string>("Reference").IsRequired().HasMaxLength(100).HasColumnType("nvarchar(100)");
                     b.HasKey("Id");
                     b.HasIndex("CreatedById");
@@ -1254,7 +1301,7 @@ namespace BusinessFlow.Api.Migrations
                     b.HasIndex("Reference").IsUnique();
                     b.ToTable("SalesPayments", t =>
                         {
-                            t.HasCheckConstraint("CK_SalesPayments_Amount", "[Amount] > 0");
+                            t.HasCheckConstraint("CK_SalesPayments_Amount", "[Amount] > 0 AND [RefundedAmount] >= 0 AND [RefundedAmount] <= [Amount]");
                             t.HasCheckConstraint("CK_SalesPayments_Method", "[Method] IN (N'BankTransfer', N'UPI', N'Cash', N'Card', N'Other')");
                         });
                 });
@@ -1963,6 +2010,42 @@ namespace BusinessFlow.Api.Migrations
                     b.HasOne("Microsoft.AspNetCore.Identity.IdentityRole<long>", null)
                         .WithMany()
                         .HasForeignKey("RoleId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("BusinessFlow.Api.Models.SalesCreditNote", b =>
+                {
+                    b.HasOne("BusinessFlow.Api.Models.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("CreatedById")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.HasOne("BusinessFlow.Api.Models.SalesInvoice", null)
+                        .WithMany()
+                        .HasForeignKey("InvoiceId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("BusinessFlow.Api.Models.SalesRefund", b =>
+                {
+                    b.HasOne("BusinessFlow.Api.Models.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("CreatedById")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.HasOne("BusinessFlow.Api.Models.SalesInvoice", null)
+                        .WithMany()
+                        .HasForeignKey("InvoiceId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.HasOne("BusinessFlow.Api.Models.SalesPayment", null)
+                        .WithMany()
+                        .HasForeignKey("PaymentId")
                         .OnDelete(DeleteBehavior.NoAction)
                         .IsRequired();
                 });
