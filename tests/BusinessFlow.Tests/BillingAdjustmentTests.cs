@@ -18,6 +18,7 @@ public sealed class BillingAdjustmentTests
         await using var host = new Phase1ApiHost(database);
         using var admin = await host.ClientAsync("Admin");
         using var employee = await host.ClientAsync("Employee");
+        using var reviewer = await host.ClientAsync("Admin");
         var userId = (await admin.GetFromJsonAsync<JsonElement>("/api/auth/me"))
             .GetProperty("id").GetInt64();
         var (contractId, contractVersion) = await BillingTests.SignedContract(database, userId);
@@ -50,10 +51,25 @@ public sealed class BillingAdjustmentTests
         Assert.Equal(HttpStatusCode.Forbidden,
             (await employee.PostAsJsonAsync($"{Root}/invoices/{invoiceId}/credits", credit)).StatusCode);
         var result = await admin.PostAsJsonAsync($"{Root}/invoices/{invoiceId}/credits", credit);
-        Assert.Equal(HttpStatusCode.OK, result.StatusCode);
-        var payload = await result.Content.ReadFromJsonAsync<JsonElement>();
-        Assert.Equal("RefundDue", payload.GetProperty("status").GetString());
-        Assert.Equal(100m, payload.GetProperty("refundDue").GetDecimal());
+        Assert.Equal(HttpStatusCode.Accepted, result.StatusCode);
+        var approvalId = (await result.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetInt64();
+        Assert.Equal(0, (await admin.GetFromJsonAsync<JsonElement>($"{Root}/invoices/{invoiceId}"))
+            .GetProperty("credits").GetArrayLength());
+
+        var approvals = await reviewer.GetFromJsonAsync<JsonElement>(Root + "/adjustments");
+        Assert.Equal(1, approvals.GetProperty("total").GetInt32());
+        Assert.True(approvals.GetProperty("items")[0].GetProperty("canDecide").GetBoolean());
+        var approvalVersion = approvals.GetProperty("items")[0].GetProperty("rowVersion").GetString();
+        var decision = new { approve = true,
+            comment = "Reviewed credit against signed commercial terms", rowVersion = approvalVersion };
+        Assert.Equal(HttpStatusCode.Conflict,
+            (await admin.PostAsJsonAsync($"{Root}/adjustments/{approvalId}/decision", decision)).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden,
+            (await employee.PostAsJsonAsync($"{Root}/adjustments/{approvalId}/decision", decision)).StatusCode);
+        Assert.Equal(HttpStatusCode.NoContent,
+            (await reviewer.PostAsJsonAsync($"{Root}/adjustments/{approvalId}/decision", decision)).StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict,
+            (await reviewer.PostAsJsonAsync($"{Root}/adjustments/{approvalId}/decision", decision)).StatusCode);
 
         detail = await admin.GetFromJsonAsync<JsonElement>($"{Root}/invoices/{invoiceId}");
         invoiceVersion = detail.GetProperty("invoice").GetProperty("rowVersion").GetString();
@@ -81,7 +97,15 @@ public sealed class BillingAdjustmentTests
             reason = "First partial repayment of the agreed credit",
             refundedOn = date, invoiceRowVersion = invoiceVersion
         });
-        Assert.Equal(HttpStatusCode.OK, part.StatusCode);
+        Assert.Equal(HttpStatusCode.Accepted, part.StatusCode);
+        var partId = (await part.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetInt64();
+        var partApprovals = await reviewer.GetFromJsonAsync<JsonElement>(Root + "/adjustments");
+        Assert.Equal(HttpStatusCode.NoContent,
+            (await reviewer.PostAsJsonAsync($"{Root}/adjustments/{partId}/decision", new
+            {
+                approve = true, comment = "Transfer reference checked against bank record",
+                rowVersion = partApprovals.GetProperty("items")[0].GetProperty("rowVersion").GetString()
+            })).StatusCode);
         detail = await admin.GetFromJsonAsync<JsonElement>($"{Root}/invoices/{invoiceId}");
         invoiceVersion = detail.GetProperty("invoice").GetProperty("rowVersion").GetString();
 
@@ -99,7 +123,15 @@ public sealed class BillingAdjustmentTests
             reason = "Final part of the agreed client repayment",
             refundedOn = date, invoiceRowVersion = invoiceVersion
         });
-        Assert.Equal(HttpStatusCode.OK, finish.StatusCode);
+        Assert.Equal(HttpStatusCode.Accepted, finish.StatusCode);
+        var finishId = (await finish.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetInt64();
+        var finishApprovals = await reviewer.GetFromJsonAsync<JsonElement>(Root + "/adjustments");
+        Assert.Equal(HttpStatusCode.NoContent,
+            (await reviewer.PostAsJsonAsync($"{Root}/adjustments/{finishId}/decision", new
+            {
+                approve = true, comment = "Final customer refund evidence verified",
+                rowVersion = finishApprovals.GetProperty("items")[0].GetProperty("rowVersion").GetString()
+            })).StatusCode);
         detail = await admin.GetFromJsonAsync<JsonElement>($"{Root}/invoices/{invoiceId}");
         var finalInvoice = detail.GetProperty("invoice");
         Assert.Equal("Paid", finalInvoice.GetProperty("status").GetString());
