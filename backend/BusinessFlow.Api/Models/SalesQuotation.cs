@@ -63,6 +63,7 @@ public sealed class SalesContract
     public long Id { get; set; }
     public long QuotationId { get; set; }
     public int QuotationRevision { get; set; }
+    public decimal BilledAmount { get; set; }
     public string Status { get; set; } = "Draft";
     public string Terms { get; set; } = string.Empty;
     public long CreatedById { get; set; }

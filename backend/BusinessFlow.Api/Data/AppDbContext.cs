@@ -12,6 +12,8 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
     public DbSet<SalesQuotationRevision> SalesQuotationRevisions => Set<SalesQuotationRevision>();
     public DbSet<SalesQuotationLineItem> SalesQuotationLineItems => Set<SalesQuotationLineItem>();
     public DbSet<SalesContract> SalesContracts => Set<SalesContract>();
+    public DbSet<SalesInvoice> SalesInvoices => Set<SalesInvoice>();
+    public DbSet<SalesPayment> SalesPayments => Set<SalesPayment>();
     public DbSet<Customer> Customers => Set<Customer>();
     public DbSet<CustomerContact> CustomerContacts => Set<CustomerContact>();
     public DbSet<Lead> Leads => Set<Lead>();
@@ -133,10 +135,50 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
             entity.ToTable(t => t.HasCheckConstraint("CK_SalesQuotationRevisions_Amount", "[Amount] > 0"));
         });
 
+        modelBuilder.Entity<SalesInvoice>(entity =>
+        {
+            entity.Property(x => x.Type).HasMaxLength(20).IsRequired();
+            entity.Property(x => x.Status).HasMaxLength(20).IsRequired();
+            entity.Property(x => x.Description).HasMaxLength(250).IsRequired();
+            entity.Property(x => x.BillToName).HasMaxLength(200).IsRequired();
+            entity.Property(x => x.Currency).HasMaxLength(3).IsRequired();
+            entity.Property(x => x.Amount).HasPrecision(18, 3);
+            entity.Property(x => x.PaidAmount).HasPrecision(18, 3);
+            entity.Property(x => x.VoidReason).HasMaxLength(500);
+            entity.HasIndex(x => new { x.ContractId, x.Status });
+            entity.HasOne<SalesContract>().WithMany().HasForeignKey(x => x.ContractId)
+                .OnDelete(DeleteBehavior.NoAction);
+            entity.HasOne<ApplicationUser>().WithMany().HasForeignKey(x => x.CreatedById)
+                .OnDelete(DeleteBehavior.NoAction);
+            entity.ToTable(t =>
+            {
+                t.HasCheckConstraint("CK_SalesInvoices_Type", "[Type] IN (N'Advance', N'Milestone', N'Final')");
+                t.HasCheckConstraint("CK_SalesInvoices_Status", "[Status] IN (N'Issued', N'PartiallyPaid', N'Paid', N'Void')");
+                t.HasCheckConstraint("CK_SalesInvoices_Amounts", "[Amount] > 0 AND [PaidAmount] >= 0 AND [PaidAmount] <= [Amount]");
+            });
+        });
+        modelBuilder.Entity<SalesPayment>(entity =>
+        {
+            entity.Property(x => x.Amount).HasPrecision(18, 3);
+            entity.Property(x => x.Method).HasMaxLength(20).IsRequired();
+            entity.Property(x => x.Reference).HasMaxLength(100).IsRequired();
+            entity.HasIndex(x => x.Reference).IsUnique();
+            entity.HasIndex(x => new { x.InvoiceId, x.ReceivedOn });
+            entity.HasOne<SalesInvoice>().WithMany().HasForeignKey(x => x.InvoiceId)
+                .OnDelete(DeleteBehavior.NoAction);
+            entity.HasOne<ApplicationUser>().WithMany().HasForeignKey(x => x.CreatedById)
+                .OnDelete(DeleteBehavior.NoAction);
+            entity.ToTable(t =>
+            {
+                t.HasCheckConstraint("CK_SalesPayments_Amount", "[Amount] > 0");
+                t.HasCheckConstraint("CK_SalesPayments_Method", "[Method] IN (N'BankTransfer', N'UPI', N'Cash', N'Card', N'Other')");
+            });
+        });
         modelBuilder.Entity<SalesContract>(entity =>
         {
             entity.Property(x => x.Status).HasMaxLength(20).IsRequired();
             entity.Property(x => x.Terms).HasMaxLength(2000).IsRequired();
+            entity.Property(x => x.BilledAmount).HasPrecision(18, 3);
             entity.Property(x => x.SignedBy).HasMaxLength(150);
             entity.Property(x => x.SignatureReference).HasMaxLength(500);
             entity.HasIndex(x => x.QuotationId).IsUnique();

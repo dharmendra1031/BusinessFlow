@@ -1182,6 +1182,10 @@ namespace BusinessFlow.Api.Migrations
                 {
                     b.Property<long>("Id").ValueGeneratedOnAdd().HasColumnType("bigint");
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
+                    b.Property<decimal>("BilledAmount")
+                        .HasPrecision(18, 3)
+                        .HasColumnType("decimal(18,3)");
+
                     b.Property<DateTime>("CreatedAtUtc").HasColumnType("datetime2");
                     b.Property<long>("CreatedById").HasColumnType("bigint");
                     b.Property<long>("QuotationId").HasColumnType("bigint");
@@ -1199,6 +1203,59 @@ namespace BusinessFlow.Api.Migrations
                     b.ToTable("SalesContracts", t =>
                         {
                             t.HasCheckConstraint("CK_SalesContracts_Status", "[Status] IN (N'Draft', N'Signed')");
+                        });
+                });
+
+            modelBuilder.Entity("BusinessFlow.Api.Models.SalesInvoice", b =>
+                {
+                    b.Property<long>("Id").ValueGeneratedOnAdd().HasColumnType("bigint");
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
+                    b.Property<decimal>("Amount").HasPrecision(18, 3).HasColumnType("decimal(18,3)");
+                    b.Property<string>("BillToName").IsRequired().HasMaxLength(200).HasColumnType("nvarchar(200)");
+                    b.Property<long>("ContractId").HasColumnType("bigint");
+                    b.Property<DateTime>("CreatedAtUtc").HasColumnType("datetime2");
+                    b.Property<long>("CreatedById").HasColumnType("bigint");
+                    b.Property<string>("Currency").IsRequired().HasMaxLength(3).HasColumnType("nvarchar(3)");
+                    b.Property<string>("Description").IsRequired().HasMaxLength(250).HasColumnType("nvarchar(250)");
+                    b.Property<DateOnly>("DueDate").HasColumnType("date");
+                    b.Property<decimal>("PaidAmount").HasPrecision(18, 3).HasColumnType("decimal(18,3)");
+                    b.Property<byte[]>("RowVersion").IsConcurrencyToken().IsRequired()
+                        .ValueGeneratedOnAddOrUpdate().HasColumnType("rowversion");
+                    b.Property<string>("Status").IsRequired().HasMaxLength(20).HasColumnType("nvarchar(20)");
+                    b.Property<string>("Type").IsRequired().HasMaxLength(20).HasColumnType("nvarchar(20)");
+                    b.Property<DateTime>("UpdatedAtUtc").HasColumnType("datetime2");
+                    b.Property<DateTime?>("VoidedAtUtc").HasColumnType("datetime2");
+                    b.Property<string>("VoidReason").HasMaxLength(500).HasColumnType("nvarchar(500)");
+                    b.HasKey("Id");
+                    b.HasIndex("CreatedById");
+                    b.HasIndex("ContractId", "Status");
+                    b.ToTable("SalesInvoices", t =>
+                        {
+                            t.HasCheckConstraint("CK_SalesInvoices_Type", "[Type] IN (N'Advance', N'Milestone', N'Final')");
+                            t.HasCheckConstraint("CK_SalesInvoices_Status", "[Status] IN (N'Issued', N'PartiallyPaid', N'Paid', N'Void')");
+                            t.HasCheckConstraint("CK_SalesInvoices_Amounts", "[Amount] > 0 AND [PaidAmount] >= 0 AND [PaidAmount] <= [Amount]");
+                        });
+                });
+
+            modelBuilder.Entity("BusinessFlow.Api.Models.SalesPayment", b =>
+                {
+                    b.Property<long>("Id").ValueGeneratedOnAdd().HasColumnType("bigint");
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
+                    b.Property<decimal>("Amount").HasPrecision(18, 3).HasColumnType("decimal(18,3)");
+                    b.Property<DateTime>("CreatedAtUtc").HasColumnType("datetime2");
+                    b.Property<long>("CreatedById").HasColumnType("bigint");
+                    b.Property<long>("InvoiceId").HasColumnType("bigint");
+                    b.Property<string>("Method").IsRequired().HasMaxLength(20).HasColumnType("nvarchar(20)");
+                    b.Property<DateOnly>("ReceivedOn").HasColumnType("date");
+                    b.Property<string>("Reference").IsRequired().HasMaxLength(100).HasColumnType("nvarchar(100)");
+                    b.HasKey("Id");
+                    b.HasIndex("CreatedById");
+                    b.HasIndex("InvoiceId", "ReceivedOn");
+                    b.HasIndex("Reference").IsUnique();
+                    b.ToTable("SalesPayments", t =>
+                        {
+                            t.HasCheckConstraint("CK_SalesPayments_Amount", "[Amount] > 0");
+                            t.HasCheckConstraint("CK_SalesPayments_Method", "[Method] IN (N'BankTransfer', N'UPI', N'Cash', N'Card', N'Other')");
                         });
                 });
 
@@ -1906,6 +1963,36 @@ namespace BusinessFlow.Api.Migrations
                     b.HasOne("Microsoft.AspNetCore.Identity.IdentityRole<long>", null)
                         .WithMany()
                         .HasForeignKey("RoleId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("BusinessFlow.Api.Models.SalesInvoice", b =>
+                {
+                    b.HasOne("BusinessFlow.Api.Models.SalesContract", null)
+                        .WithMany()
+                        .HasForeignKey("ContractId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.HasOne("BusinessFlow.Api.Models.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("CreatedById")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("BusinessFlow.Api.Models.SalesPayment", b =>
+                {
+                    b.HasOne("BusinessFlow.Api.Models.SalesInvoice", null)
+                        .WithMany()
+                        .HasForeignKey("InvoiceId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.HasOne("BusinessFlow.Api.Models.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("CreatedById")
                         .OnDelete(DeleteBehavior.NoAction)
                         .IsRequired();
                 });

@@ -1,0 +1,36 @@
+using System.ComponentModel.DataAnnotations;
+
+namespace BusinessFlow.Api.Models;
+
+public sealed class SalesInvoice
+{
+    public long Id { get; set; }
+    public long ContractId { get; set; }
+    public string Type { get; set; } = "Milestone";
+    public string Description { get; set; } = string.Empty;
+    public string BillToName { get; set; } = string.Empty;
+    public string Currency { get; set; } = "INR";
+    public decimal Amount { get; set; }
+    public decimal PaidAmount { get; set; }
+    public DateOnly DueDate { get; set; }
+    public string Status { get; set; } = "Issued";
+    public long CreatedById { get; set; }
+    public DateTime CreatedAtUtc { get; set; } = DateTime.UtcNow;
+    public DateTime UpdatedAtUtc { get; set; } = DateTime.UtcNow;
+    public DateTime? VoidedAtUtc { get; set; }
+    public string? VoidReason { get; set; }
+    [Timestamp]
+    public byte[] RowVersion { get; set; } = [];
+}
+
+public sealed class SalesPayment
+{
+    public long Id { get; set; }
+    public long InvoiceId { get; set; }
+    public decimal Amount { get; set; }
+    public string Method { get; set; } = string.Empty;
+    public string Reference { get; set; } = string.Empty;
+    public DateOnly ReceivedOn { get; set; }
+    public long CreatedById { get; set; }
+    public DateTime CreatedAtUtc { get; set; } = DateTime.UtcNow;
+}
