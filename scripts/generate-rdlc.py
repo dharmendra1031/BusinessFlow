@@ -45,9 +45,12 @@ def textbox(parent, name, value, bold=False, header=False, plain=False):
 def make_report(report_type, definition):
     columns = definition["Columns"]
     quotation = report_type == "quotation"
+    invoice = report_type == "invoice"
+    portrait = quotation or invoice
     display = (["description", "quantity", "unitPrice", "discount", "tax", "lineTotal"]
-               if quotation else list(columns))
-    report_width = 17 if quotation else 25
+               if quotation else ["description", "amount", "received", "balance"]
+               if invoice else list(columns))
+    report_width = 17 if portrait else 25
     root = ET.Element(f"{{{RDL}}}Report")
     child(root, "AutoRefresh", 0)
     source = child(child(root, "DataSources"), "DataSource", Name="LocalSource")
@@ -85,10 +88,26 @@ def make_report(report_type, definition):
             child(box, "Left", "0cm")
             child(box, "Height", "0.65cm")
             child(box, "Width", "17cm")
+    if invoice:
+        headings = [
+            ("InvoiceClient", '="Client: " & First(Fields!clientName.Value, "Items")', "1.05cm"),
+            ("InvoiceRef", '="Invoice: " & First(Fields!invoiceRef.Value, "Items") & "  |  Contract: " & First(Fields!contractRef.Value, "Items")', "1.6cm"),
+            ("InvoiceDates", '="Issued: " & First(Fields!issueDate.Value, "Items") & "  |  Due: " & First(Fields!dueDate.Value, "Items")', "2.15cm"),
+            ("InvoiceStatus", '="Status: " & First(Fields!status.Value, "Items") & "  |  Currency: " & First(Fields!currency.Value, "Items")', "2.7cm"),
+            ("InvoiceTaxNote", '=First(Fields!taxNote.Value, "Items")', "3.25cm"),
+        ]
+        for name, expression, top in headings:
+            box = textbox(items, name, expression, plain=True)
+            child(box, "Top", top)
+            child(box, "Left", "0cm")
+            child(box, "Height", "0.55cm")
+            child(box, "Width", "17cm")
     table = child(items, "Tablix", Name="ReportTable")
     table_body = child(table, "TablixBody")
     widths = child(table_body, "TablixColumns")
-    widths_cm = [6.0, 1.9, 2.3, 2.2, 2.0, 2.6] if quotation else [25 / len(columns)] * len(columns)
+    widths_cm = ([6.0, 1.9, 2.3, 2.2, 2.0, 2.6] if quotation
+                 else [7.0, 3.3, 3.3, 3.4] if invoice
+                 else [25 / len(columns)] * len(columns)
     for width in widths_cm:
         child(child(widths, "TablixColumn"), "Width", f"{width:.3f}cm")
     rows = child(table_body, "TablixRows")
@@ -106,12 +125,15 @@ def make_report(report_type, definition):
             }
             label = labels.get(name, name.replace("AtUtc", " Date").replace("Id", " ID"))
             expression = f"=Fields!{name}.Value"
-            if quotation and row_index == 1 and name != "description":
+            if portrait and row_index == 1 and name != "description":
                 expression = f'=If(IsNothing(Fields!{name}.Value), "", Format(Fields!{name}.Value, "N3"))'
             if quotation:
                 label = {"description": "ITEM / DESCRIPTION", "quantity": "QTY",
                          "unitPrice": "UNIT PRICE", "discount": "DISCOUNT",
                          "tax": "TAX", "lineTotal": "TOTAL"}[name]
+            if invoice:
+                label = {"description": "DESCRIPTION", "amount": "AMOUNT",
+                         "received": "RECEIVED", "balance": "BALANCE"}[name]
             if report_type == "source-wise" and name == "conversionRate":
                 expression = '=Format(Fields!conversionRate.Value, "N1") & "%"'
             elif report_type == "source-wise" and name in ("pipelineAmount", "wonAmount"):
@@ -128,15 +150,15 @@ def make_report(report_type, definition):
         child(header_member, "RepeatOnNewPage", "true")
     child(child(hierarchy, "TablixMember"), "Group", Name="Details")
     child(table, "DataSetName", "Items")
-    child(table, "Top", "3.2cm" if quotation else "1.2cm")
+    child(table, "Top", "4.1cm" if invoice else "3.2cm" if quotation else "1.2cm")
     child(table, "Left", "0cm")
     child(table, "Height", "1.3cm")
     child(table, "Width", f"{report_width}cm")
-    child(body, "Height", "5cm" if quotation else "3cm")
+    child(body, "Height", "6cm" if invoice else "5cm" if quotation else "3cm")
     child(section, "Width", f"{report_width}cm")
     page = child(section, "Page")
-    for name, value in {"PageHeight": "29.7cm" if quotation else "21cm",
-                        "PageWidth": "21cm" if quotation else "29.7cm",
+    for name, value in {"PageHeight": "29.7cm" if portrait else "21cm",
+                        "PageWidth": "21cm" if portrait else "29.7cm",
                         "LeftMargin": "2cm", "RightMargin": "2cm",
                         "TopMargin": "2cm", "BottomMargin": "2cm"}.items():
         child(page, name, value)

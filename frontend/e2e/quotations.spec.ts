@@ -90,4 +90,11 @@ test('Admin completes quotation, contract, invoice and partial payment', async (
   await invoice.getByRole('button', { name: 'View contract ledger' }).click();
   await expect(page.getByRole('region', { name: 'Contract ledger' }))
     .toContainText('Invoice outstanding: INR 100.000');
+
+  const reports = page.getByRole('region', { name: 'Billing reports' });
+  await reports.getByRole('button', { name: 'Run report' }).click();
+  await expect(reports).toContainText('INR 100.000');
+  await reports.getByRole('combobox', { name: 'Report type' }).selectOption('collections');
+  await reports.getByRole('button', { name: 'Run report' }).click();
+  await expect(reports).toContainText('INR 200.000');
 });

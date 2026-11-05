@@ -107,6 +107,59 @@ public sealed class BillingController(AppDbContext db) : ControllerBase
         return Ok(new { invoice, contract, payments });
     }
 
+    [HttpGet("invoices/{id:long}/pdf")]
+    public async Task<IActionResult> InvoicePdf(long id, CancellationToken ct = default)
+    {
+        var invoice = await db.SalesInvoices.AsNoTracking()
+            .Where(x => x.Id == id)
+            .Select(x => new
+            {
+                x.Id, x.ContractId, x.BillToName, x.Description, x.Type,
+                x.Currency, x.Amount, x.PaidAmount, x.DueDate, x.Status, x.CreatedAtUtc
+            }).FirstOrDefaultAsync(ct);
+        if (invoice is null) return NotFound();
+
+        var renderer = ReportPdfRenderer.Path(
+            HttpContext.RequestServices.GetRequiredService<IConfiguration>());
+        if (!System.IO.File.Exists(renderer))
+            return StatusCode(StatusCodes.Status503ServiceUnavailable,
+                new { message = "PDF renderer is unavailable." });
+
+        var rows = new[]
+        {
+            new
+            {
+                invoiceRef = $"INV-{invoice.Id:D6}",
+                clientName = invoice.BillToName,
+                contractRef = $"CON-{invoice.ContractId:D6}",
+                status = invoice.Status,
+                currency = invoice.Currency,
+                issueDate = invoice.CreatedAtUtc.ToString("yyyy-MM-dd"),
+                dueDate = invoice.DueDate.ToString("yyyy-MM-dd"),
+                taxNote = "Commercial billing document. Tax breakdown is not configured.",
+                description = invoice.Type + ": " + invoice.Description,
+                amount = invoice.Amount,
+                received = invoice.PaidAmount,
+                balance = invoice.Status == "Void" ? 0m : invoice.Amount - invoice.PaidAmount
+            }
+        };
+
+        try
+        {
+            var pdf = await ReportPdfRenderer.RenderAsync(renderer, "invoice",
+                System.Text.Json.JsonSerializer.Serialize(rows), ct);
+            return File(pdf, "application/pdf", $"Invoice-{id}.pdf");
+        }
+        catch (OperationCanceledException) { throw; }
+        catch (Exception error)
+        {
+            HttpContext.RequestServices.GetRequiredService<ILogger<BillingController>>()
+                .LogError(error, "Invoice PDF generation failed for {InvoiceId}", id);
+            return StatusCode(StatusCodes.Status502BadGateway,
+                new { message = "Invoice PDF generation failed." });
+        }
+    }
+
     [HttpPost("invoices")]
     public async Task<IActionResult> Create(CreateInvoiceRequest request, CancellationToken ct)
     {
@@ -264,6 +317,101 @@ public sealed class BillingController(AppDbContext db) : ControllerBase
             invoices, payments
         });
     }
+
+    [HttpGet("reports/outstanding")]
+    public async Task<IActionResult> OutstandingReport(string? currency = null, string? search = null,
+        bool overdueOnly = false, DateOnly? asOf = null, int page = 1, int pageSize = 25,
+        CancellationToken ct = default)
+    {
+        if (!ValidPage(page, pageSize, search) || !ValidCurrency(currency))
+            return BadRequest(new { message = "Invalid outstanding report filters." });
+
+        var today = asOf ?? DateOnly.FromDateTime(DateTime.UtcNow);
+        var query = db.SalesInvoices.AsNoTracking()
+            .Where(x => x.Status == "Issued" || x.Status == "PartiallyPaid");
+        if (overdueOnly) query = query.Where(x => x.DueDate < today);
+        if (!string.IsNullOrWhiteSpace(currency))
+        {
+            var code = currency.Trim().ToUpperInvariant();
+            query = query.Where(x => x.Currency == code);
+        }
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            var term = search.Trim();
+            query = query.Where(x => x.BillToName.Contains(term) || x.Description.Contains(term));
+        }
+
+        var summary = await query.GroupBy(x => x.Currency)
+            .Select(group => new
+            {
+                currency = group.Key,
+                invoiceCount = group.Count(),
+                invoiced = group.Sum(x => x.Amount),
+                collected = group.Sum(x => x.PaidAmount),
+                outstanding = group.Sum(x => x.Amount - x.PaidAmount)
+            }).OrderBy(x => x.currency).ToListAsync(ct);
+        var total = await query.CountAsync(ct);
+        var items = await query.OrderBy(x => x.DueDate).ThenBy(x => x.Id)
+            .Skip((page - 1) * pageSize).Take(pageSize)
+            .Select(x => new
+            {
+                x.Id, x.ContractId, x.BillToName, x.Description, x.Currency,
+                x.DueDate, x.Status, x.Amount, x.PaidAmount,
+                outstanding = x.Amount - x.PaidAmount
+            }).ToListAsync(ct);
+        return Ok(new { asOf = today, total, page, pageSize, summary, items });
+    }
+
+    [HttpGet("reports/collections")]
+    public async Task<IActionResult> CollectionReport(DateOnly? from = null, DateOnly? to = null,
+        string? currency = null, string? search = null, int page = 1, int pageSize = 25,
+        CancellationToken ct = default)
+    {
+        if (!ValidPage(page, pageSize, search) || !ValidCurrency(currency))
+            return BadRequest(new { message = "Invalid collection report filters." });
+
+        var last = to ?? DateOnly.FromDateTime(DateTime.UtcNow);
+        var first = from ?? new DateOnly(last.Year, last.Month, 1);
+        if (first > last || last.DayNumber - first.DayNumber > 366)
+            return BadRequest(new { message = "Choose a valid date range of at most 366 days." });
+
+        var query = from payment in db.SalesPayments.AsNoTracking()
+                    join invoice in db.SalesInvoices.AsNoTracking() on payment.InvoiceId equals invoice.Id
+                    where payment.ReceivedOn >= first && payment.ReceivedOn <= last
+                    select new
+                    {
+                        payment.Id, payment.InvoiceId, payment.Amount, payment.Method,
+                        payment.Reference, payment.ReceivedOn,
+                        invoice.BillToName, invoice.Currency
+                    };
+        if (!string.IsNullOrWhiteSpace(currency))
+        {
+            var code = currency.Trim().ToUpperInvariant();
+            query = query.Where(x => x.Currency == code);
+        }
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            var term = search.Trim();
+            query = query.Where(x => x.BillToName.Contains(term) || x.Reference.Contains(term));
+        }
+
+        var summary = await query.GroupBy(x => x.Currency)
+            .Select(group => new
+            {
+                currency = group.Key,
+                paymentCount = group.Count(),
+                collected = group.Sum(x => x.Amount)
+            }).OrderBy(x => x.currency).ToListAsync(ct);
+        var total = await query.CountAsync(ct);
+        var items = await query.OrderByDescending(x => x.ReceivedOn).ThenByDescending(x => x.Id)
+            .Skip((page - 1) * pageSize).Take(pageSize).ToListAsync(ct);
+        return Ok(new { from = first, to = last, total, page, pageSize, summary, items });
+    }
+
+    private static bool ValidCurrency(string? currency) =>
+        string.IsNullOrWhiteSpace(currency) ||
+        (currency.Trim().Length == 3 && currency.Trim().All(c =>
+            c is >= 'A' and <= 'Z' or >= 'a' and <= 'z'));
 
     private static bool ValidPage(int page, int pageSize, string? search) =>
         page > 0 && pageSize is >= 1 and <= 100 &&

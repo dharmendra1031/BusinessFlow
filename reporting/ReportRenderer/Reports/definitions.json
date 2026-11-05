@@ -148,5 +148,22 @@
       "tax": "decimal",
       "lineTotal": "decimal"
     }
+  },
+  "invoice": {
+    "Title": "SERVICE INVOICE — COMMERCIAL COPY",
+    "Columns": {
+      "invoiceRef": "string",
+      "clientName": "string",
+      "contractRef": "string",
+      "status": "string",
+      "currency": "string",
+      "issueDate": "string",
+      "dueDate": "string",
+      "taxNote": "string",
+      "description": "string",
+      "amount": "decimal",
+      "received": "decimal",
+      "balance": "decimal"
+    }
   }
 }

@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:msdata="urn:schemas-microsoft-com:xml-msdata" id="invoiceReportDataSet">
+<xs:element name="invoiceReportDataSet" msdata:IsDataSet="true" msdata:UseCurrentLocale="true"><xs:complexType><xs:choice minOccurs="0" maxOccurs="unbounded"><xs:element name="Items"><xs:complexType><xs:sequence>
+<xs:element name="invoiceRef" type="xs:string" minOccurs="0" />
+<xs:element name="clientName" type="xs:string" minOccurs="0" />
+<xs:element name="contractRef" type="xs:string" minOccurs="0" />
+<xs:element name="status" type="xs:string" minOccurs="0" />
+<xs:element name="currency" type="xs:string" minOccurs="0" />
+<xs:element name="issueDate" type="xs:string" minOccurs="0" />
+<xs:element name="dueDate" type="xs:string" minOccurs="0" />
+<xs:element name="taxNote" type="xs:string" minOccurs="0" />
+<xs:element name="description" type="xs:string" minOccurs="0" />
+<xs:element name="amount" type="xs:decimal" minOccurs="0" />
+<xs:element name="received" type="xs:decimal" minOccurs="0" />
+<xs:element name="balance" type="xs:decimal" minOccurs="0" />
+</xs:sequence></xs:complexType></xs:element></xs:choice></xs:complexType></xs:element></xs:schema>

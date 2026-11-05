@@ -159,4 +159,99 @@ public sealed class BillingTests
         Assert.Equal(HttpStatusCode.Created,
             (await admin.PostAsJsonAsync(Root + "/invoices", Request(1000m, currentContractVersion))).StatusCode);
     }
+
+    [Fact]
+    public async Task Financial_reports_keep_currencies_separate_and_filter_overdue_and_collection_dates()
+    {
+        await using var fixture = await Phase1TestDatabase.CreateAsync();
+        await using var host = new Phase1ApiHost(fixture);
+        using var admin = await host.ClientAsync("Admin");
+        using var employee = await host.ClientAsync("Employee");
+        var userId = (await admin.GetFromJsonAsync<JsonElement>("/api/auth/me"))
+            .GetProperty("id").GetInt64();
+
+        var (inrContract, inrVersion) = await SignedContract(fixture, userId, 1000m);
+        var (kwdContract, kwdVersion) = await SignedContract(fixture, userId, 900m);
+        await using (var db = fixture.CreateContext())
+        {
+            var contract = await db.SalesContracts.SingleAsync(x => x.Id == kwdContract);
+            var revision = await db.SalesQuotationRevisions.SingleAsync(x =>
+                x.QuotationId == contract.QuotationId && x.Revision == contract.QuotationRevision);
+            revision.Currency = "KWD";
+            await db.SaveChangesAsync();
+        }
+
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        async Task<long> Issue(long contractId, string version, decimal value, DateOnly date)
+        {
+            var response = await admin.PostAsJsonAsync(Root + "/invoices", new
+            {
+                contractId, contractRowVersion = version, type = "Milestone",
+                description = "Software milestone billing", amount = value, dueDate = date
+            });
+            Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+            return (await response.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetInt64();
+        }
+
+        var inrInvoice = await Issue(inrContract, inrVersion, 400m, today.AddDays(-2));
+        var kwdInvoice = await Issue(kwdContract, kwdVersion, 500m, today.AddDays(10));
+        async Task Pay(long id, decimal value, string reference)
+        {
+            var invoice = await admin.GetFromJsonAsync<JsonElement>($"{Root}/invoices/{id}");
+            var response = await admin.PostAsJsonAsync($"{Root}/invoices/{id}/payments", new
+            {
+                amount = value, method = "BankTransfer", reference, receivedOn = today,
+                invoiceRowVersion = invoice.GetProperty("invoice").GetProperty("rowVersion").GetString()
+            });
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        }
+
+        await Pay(inrInvoice, 150m, "INR-REPORT-20261105");
+        await Pay(kwdInvoice, 200m, "KWD-REPORT-20261105");
+
+        Assert.Equal(HttpStatusCode.Forbidden,
+            (await employee.GetAsync(Root + "/reports/outstanding")).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden,
+            (await employee.GetAsync(Root + "/reports/collections")).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound,
+            (await admin.GetAsync(Root + "/invoices/9999999/pdf")).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden,
+            (await employee.GetAsync($"{Root}/invoices/{inrInvoice}/pdf")).StatusCode);
+
+        var outstanding = await admin.GetFromJsonAsync<JsonElement>(Root + "/reports/outstanding");
+        Assert.Equal(2, outstanding.GetProperty("total").GetInt32());
+        var summary = outstanding.GetProperty("summary").EnumerateArray().ToList();
+        Assert.Equal(2, summary.Count);
+        Assert.Equal(250m, summary.Single(x => x.GetProperty("currency").GetString() == "INR")
+            .GetProperty("outstanding").GetDecimal());
+        Assert.Equal(300m, summary.Single(x => x.GetProperty("currency").GetString() == "KWD")
+            .GetProperty("outstanding").GetDecimal());
+
+        var overdue = await admin.GetFromJsonAsync<JsonElement>(
+            Root + $"/reports/outstanding?overdueOnly=true&asOf={today:yyyy-MM-dd}");
+        Assert.Equal(1, overdue.GetProperty("total").GetInt32());
+        Assert.Equal(inrInvoice, overdue.GetProperty("items")[0].GetProperty("id").GetInt64());
+
+        var filtered = await admin.GetFromJsonAsync<JsonElement>(
+            Root + "/reports/outstanding?currency=KWD");
+        Assert.Equal(1, filtered.GetProperty("total").GetInt32());
+        Assert.Equal(kwdInvoice, filtered.GetProperty("items")[0].GetProperty("id").GetInt64());
+
+        var collections = await admin.GetFromJsonAsync<JsonElement>(
+            Root + $"/reports/collections?from={today:yyyy-MM-dd}&to={today:yyyy-MM-dd}");
+        Assert.Equal(2, collections.GetProperty("total").GetInt32());
+        Assert.Equal(2, collections.GetProperty("summary").GetArrayLength());
+
+        var byReference = await admin.GetFromJsonAsync<JsonElement>(
+            Root + $"/reports/collections?from={today:yyyy-MM-dd}&to={today:yyyy-MM-dd}&search=KWD-REPORT");
+        Assert.Equal(1, byReference.GetProperty("total").GetInt32());
+        Assert.Equal(200m, byReference.GetProperty("items")[0].GetProperty("amount").GetDecimal());
+
+        Assert.Equal(HttpStatusCode.BadRequest,
+            (await admin.GetAsync(Root + "/reports/outstanding?pageSize=101")).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest,
+            (await admin.GetAsync(Root + "/reports/outstanding?currency=1234")).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest,
+            (await admin.GetAsync(Root + $"/reports/collections?from={today.AddDays(-367):yyyy-MM-dd}&to={today:yyyy-MM-dd}")).StatusCode);
+    }
 }
