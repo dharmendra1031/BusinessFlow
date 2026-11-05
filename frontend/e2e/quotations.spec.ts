@@ -61,7 +61,7 @@ test('Admin creates a quotation through lead search and preserves revisions', as
   await contract.getByRole('textbox', { name: 'Signed by' }).fill('Customer director');
   await contract.getByRole('textbox', { name: 'Signature evidence reference' })
     .fill('Document signed and verified');
-  await contract.getByRole('textbox', { name: 'Signed on' })
+  await contract.getByLabel('Signed on')
     .fill(new Date().toISOString().slice(0, 10));
   await contract.getByRole('button', { name: 'Record signature' }).click();
   await page.getByRole('alertdialog', { name: 'Record signed contract?' })
