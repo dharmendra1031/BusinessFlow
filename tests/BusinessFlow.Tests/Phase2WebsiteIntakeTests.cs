@@ -113,6 +113,10 @@ public sealed class Phase2WebsiteIntakeTests
             (await client.SendAsync(Signed(payload, incorrectSignature: true))).StatusCode);
         Assert.Equal(HttpStatusCode.Unauthorized,
             (await client.SendAsync(Signed(payload, timestamp: DateTimeOffset.UtcNow.AddMinutes(-15).ToUnixTimeSeconds()))).StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized,
+            (await client.SendAsync(Signed(payload, timestamp: DateTimeOffset.UtcNow.AddMinutes(15).ToUnixTimeSeconds()))).StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized,
+            (await client.SendAsync(Signed(payload, timestamp: long.MinValue))).StatusCode);
         var noConsent = new { eventId = "website-event-2002", name = "Visitor",
             phone = "9876543210", consentAccepted = false };
         Assert.Equal(HttpStatusCode.BadRequest, (await client.SendAsync(Signed(noConsent))).StatusCode);
@@ -174,6 +178,8 @@ public sealed class Phase2WebsiteIntakeTests
             (await client.SendAsync(Signed(new { eventId }, incorrectSignature: true, path: route))).StatusCode);
         Assert.Equal(HttpStatusCode.Unauthorized,
             (await client.SendAsync(Signed(new { eventId }, timestamp: DateTimeOffset.UtcNow.AddMinutes(-10).ToUnixTimeSeconds(), path: route))).StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized,
+            (await client.SendAsync(Signed(new { eventId }, timestamp: long.MinValue, path: route))).StatusCode);
         Assert.Equal(HttpStatusCode.NotFound,
             (await client.SendAsync(Signed(new { eventId = "resmoh-999999999999999999999999" }, path: route))).StatusCode);
 

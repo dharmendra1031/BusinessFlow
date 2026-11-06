@@ -163,6 +163,10 @@ public sealed class ResmohWebsiteTests
         Assert.False(response.TryGetProperty("email", out _));
         Assert.Equal("resmoh-012345678901234567890123",
             JsonSerializer.Deserialize<JsonElement>(crm.Body!).GetProperty("eventId").GetString());
+        var signed = Encoding.UTF8.GetBytes(crm.Timestamp + "." + crm.Body);
+        var expected = "sha256=" + Convert.ToHexString(
+            HMACSHA256.HashData(Encoding.UTF8.GetBytes(Secret), signed));
+        Assert.Equal(expected, crm.Signature);
 
         using var invalid = new HttpRequestMessage(HttpMethod.Get, "/api/project-request/status");
         invalid.Headers.TryAddWithoutValidation("Cookie", cookie[..^4] + "0000");

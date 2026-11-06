@@ -186,8 +186,10 @@ public sealed class WebsiteIntakeController(AppDbContext db, IConfiguration conf
             string.IsNullOrWhiteSpace(secret) || Encoding.UTF8.GetByteCount(secret) < 32)
             return StatusCode(503, new { message = "Website intake is not configured." });
 
-        if (!long.TryParse(Request.Headers["X-Website-Timestamp"], out var timestamp) ||
-            Math.Abs(clock.GetUtcNow().ToUnixTimeSeconds() - timestamp) > 300)
+        if (!long.TryParse(Request.Headers["X-Website-Timestamp"], out var timestamp))
+            return Unauthorized();
+        var now = clock.GetUtcNow().ToUnixTimeSeconds();
+        if (timestamp < now - 300 || timestamp > now + 300)
             return Unauthorized();
 
         using var buffer = new MemoryStream();
