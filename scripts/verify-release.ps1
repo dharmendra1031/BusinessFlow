@@ -1,6 +1,7 @@
 param(
     [Parameter(Mandatory = $true)][uri]$BaseUrl,
-    [pscredential]$Credential
+    [pscredential]$Credential,
+    [switch]$VerifyBilling
 )
 
 $ErrorActionPreference = 'Stop'
@@ -8,6 +9,10 @@ Set-StrictMode -Version Latest
 
 if ($BaseUrl.Scheme -ne 'https') {
     throw 'Release verification requires an HTTPS address and a trusted certificate.'
+}
+
+if ($VerifyBilling -and -not $Credential) {
+    throw 'Billing smoke checks require a credential for an authorized staging Admin account.'
 }
 
 $root = $BaseUrl.AbsoluteUri.TrimEnd('/')
@@ -57,6 +62,28 @@ if ($Credential) {
     $me = Invoke-WebRequest -Uri "$root/api/auth/me" -WebSession $session -UseBasicParsing -TimeoutSec 20
     $csrf = ($me.Content | ConvertFrom-Json).csrfToken
     if ([string]::IsNullOrWhiteSpace($csrf)) { throw 'Session did not issue a CSRF token.' }
+    if ($VerifyBilling) {
+        $checks = @(
+            @{ Path = '/api/admin/billing/invoices?pageSize=1'; Fields = @('items', 'total') },
+            @{ Path = '/api/admin/billing/adjustments?state=Pending&pageSize=1'; Fields = @('items', 'total') },
+            @{ Path = '/api/admin/billing/reports/outstanding?pageSize=1'; Fields = @('summary', 'items', 'total') },
+            @{ Path = '/api/admin/billing/reports/collections?pageSize=1'; Fields = @('summary', 'items', 'total') },
+            @{ Path = '/api/admin/billing/customers?pageSize=1'; Fields = @('items', 'total') }
+        )
+        foreach ($check in $checks) {
+            $result = Invoke-WebRequest -Uri "$root$($check.Path)" -WebSession $session -UseBasicParsing -TimeoutSec 20
+            if ($result.StatusCode -ne 200) {
+                throw "$($check.Path) returned HTTP $($result.StatusCode)"
+            }
+            $payload = $result.Content | ConvertFrom-Json
+            foreach ($field in $check.Fields) {
+                if ($field -notin $payload.PSObject.Properties.Name) {
+                    throw "$($check.Path) did not return $field"
+                }
+            }
+            Write-Host "PASS: read-only $($check.Path)"
+        }
+    }
     try {
         Invoke-WebRequest -Uri "$root/api/auth/logout" -Method Post -WebSession $session `
             -UseBasicParsing -TimeoutSec 20 | Out-Null
@@ -77,3 +104,4 @@ if ($Credential) {
     Write-Host 'PASS: production cookie login, CSRF logout protection and sign-out'
 }
 Write-Host 'Still required: role workflows, database restore, backup and rollback drills.'
+Write-Host 'Billing smoke checks are read-only and do not certify payment/refund processing.'

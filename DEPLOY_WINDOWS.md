@@ -56,7 +56,7 @@ The script creates `artifacts\iis`, `artifacts\BusinessFlow-IIS.zip`, and
 `artifacts\efbundle.exe`. It checks that the development settings file is
 absent from the IIS package. Transfer the **ZIP only** to the VPS and extract
 its **contents** into the IIS site folder. `web.config`,
-`appsettings.Production.json`, `efbundle.exe`, and `seed_kuwait_demo.sql` must be directly inside that
+`appsettings.Production.json`, and `efbundle.exe` must be directly inside that
 folder. Do not copy the repository's development settings file or
 `frontend/.env.example`.
 
@@ -160,24 +160,6 @@ credentials, then remove the temporary admin credentials from the config.
 When the domain is pending, check `http://VPS_IP:8080/health/ready` only. After
 the domain and certificate are ready, remove the temporary HTTP binding and
 perform the login check over HTTPS.
-
-### Optional Kuwait demo data
-
-The ZIP also contains `seed_kuwait_demo.sql`. After the **first successful API
-start** has created the admin account, run this file in SQL Server Management
-Studio against the new `LeadManagement` database. Alternatively, if `sqlcmd`
-is installed and the Windows account has database write permission:
-
-```powershell
-sqlcmd -S 'YOUR_SQL_SERVER' -d LeadManagement -E -b -i .\seed_kuwait_demo.sql
-```
-
-It adds 5 demo staff, 24 synthetic customers and 37 follow-ups. The demo staff
-have no password and cannot sign in until an admin sets one. The script only
-runs against a database named `LeadManagement`, refuses to mix with real leads,
-and skips a repeated run. Refresh the dashboard after seeding and delete the
-SQL file from the IIS folder. The contacts are fictional and must not be used
-for outreach.
 
 If IIS returns **500.30**, check the Windows Event Viewer Application log for
 the API startup error; the usual setup causes are an unchanged placeholder,

@@ -27,11 +27,14 @@ jobs:
         run: |
           $tokens = $null
           $parseErrors = $null
-          $path = (Resolve-Path 'scripts/check-local-staging.ps1').Path
-          [System.Management.Automation.Language.Parser]::ParseFile($path, [ref]$tokens, [ref]$parseErrors) | Out-Null
-          if ($parseErrors.Count -gt 0) {
-            $parseErrors | ForEach-Object { Write-Error $_.Message }
-            throw 'Local staging preflight PowerShell syntax validation failed.'
+          foreach ($file in @('check-local-staging.ps1', 'verify-billing-staging.ps1', 'verify-release.ps1')) {
+            $parseErrors = $null
+            $path = (Resolve-Path "scripts/$file").Path
+            [System.Management.Automation.Language.Parser]::ParseFile($path, [ref]$tokens, [ref]$parseErrors) | Out-Null
+            if ($parseErrors.Count -gt 0) {
+              $parseErrors | ForEach-Object { Write-Error $_.Message }
+              throw "PowerShell syntax validation failed: $file"
+            }
           }
       - name: Reject unsafe local staging parameters
         shell: pwsh
@@ -49,6 +52,29 @@ jobs:
             catch {
               if ($_.Exception.Message -notlike "*$($case.Expected)*") { throw }
             }
+          }
+      - name: Reject unsafe Phase 6 staging parameters
+        shell: pwsh
+        run: |
+          $cases = @(
+            @{ Database = 'master'; Expected = 'system database' },
+            @{ Database = 'LeadManagement;DROP'; Expected = 'Database name' }
+          )
+          foreach ($case in $cases) {
+            try {
+              & ./scripts/verify-billing-staging.ps1 -Server localhost -Database $case.Database
+              throw 'Staging verification accepted an invalid database.'
+            }
+            catch {
+              if ($_.Exception.Message -notlike "*$($case.Expected)*") { throw }
+            }
+          }
+          try {
+            & ./scripts/verify-release.ps1 -BaseUrl 'http://localhost' -VerifyBilling
+            throw 'Release verification accepted an insecure address.'
+          }
+          catch {
+            if ($_.Exception.Message -notlike '*HTTPS*') { throw }
           }
       - name: Build Windows IIS package
         shell: pwsh
@@ -70,6 +96,9 @@ jobs:
             }
             if ('appsettings.Development.json' -in $files) {
               throw 'Development settings must not be published.'
+            }
+            if ('seed_kuwait_demo.sql' -in $files) {
+              throw 'Demo customer data seeding scripts must not ship in staging releases.'
             }
           }
           finally { $zip.Dispose() }

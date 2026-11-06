@@ -67,14 +67,11 @@ if (-not (Select-String -LiteralPath (Join-Path $publish 'web.config') -Pattern 
 $zip = Join-Path $artifacts 'BusinessFlow-IIS.zip'
 if (Test-Path -LiteralPath $zip) { Remove-Item -LiteralPath $zip -Force }
 $bundleInPublish = Join-Path $publish 'efbundle.exe'
-$demoInPublish = Join-Path $publish 'seed_kuwait_demo.sql'
 try {
     Copy-Item -LiteralPath (Join-Path $artifacts 'efbundle.exe') -Destination $bundleInPublish -Force
-    Copy-Item -LiteralPath (Join-Path $repo 'database/seed_kuwait_demo.sql') -Destination $demoInPublish -Force
     Compress-Archive -Path (Join-Path $publish '*') -DestinationPath $zip
 } finally {
     if (Test-Path -LiteralPath $bundleInPublish) { Remove-Item -LiteralPath $bundleInPublish -Force }
-    if (Test-Path -LiteralPath $demoInPublish) { Remove-Item -LiteralPath $demoInPublish -Force }
 }
 
 Write-Host "IIS files: $publish"
