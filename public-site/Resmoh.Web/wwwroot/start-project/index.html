@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#0f2438">
+  <meta name="robots" content="noindex, follow">
+  <title>Start a Project | Resmoh IT</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body class="page-form">
+  <a class="skip-link" href="#main">Skip to content</a>
+  <header class="site-header"><div class="container nav-row">
+    <a class="brand" href="/"><span class="brand-mark">R<span>.</span></span><span>Resmoh <strong>IT</strong></span></a>
+    <nav class="desktop-nav" aria-label="Main navigation"><a href="/">Home</a><a href="/#services">Services</a><a href="/#approach">Our approach</a></nav>
+    <a class="nav-contact" href="/">Back to website <span aria-hidden="true">↗</span></a>
+  </div></header>
+  <main id="main" class="form-main">
+    <div class="container form-layout">
+      <aside class="form-aside">
+        <span class="eyebrow"><span class="eyebrow-line"></span> NEW PROJECT ENQUIRY</span>
+        <h1>Let's understand what you're building.</h1>
+        <p>Tell us a little about your business and what you want to achieve. No account is needed to get started.</p>
+        <div class="aside-rule"></div>
+        <h2>What happens next?</h2>
+        <ol class="next-steps">
+          <li><span>01</span><div><strong>Submit your requirement</strong><p>Share your project goals and contact details.</p></div></li>
+          <li><span>02</span><div><strong>Our team reviews it</strong><p>We may contact you to clarify scope and priorities.</p></div></li>
+          <li><span>03</span><div><strong>Plan the next step</strong><p>We discuss feasibility, estimates and a possible proposal.</p></div></li>
+        </ol>
+        <p class="aside-hint">Don't share passwords, financial account details or confidential customer records in this form.</p>
+      </aside>
+
+      <div class="form-panel">
+        <div class="form-top"><span>PROJECT REQUEST</span><span id="step-label" aria-live="polite">Step 1 of 3</span></div>
+        <div class="progress-track" aria-hidden="true"><span id="form-progress"></span></div>
+        <form id="project-form" novalidate>
+          <fieldset data-step="1" class="form-step">
+            <legend>Tell us about your idea</legend>
+            <p class="form-intro">Start with the software you have in mind. It's okay if you don't have all the details yet.</p>
+            <label for="service">What do you need? <span class="required">*</span></label>
+            <select id="service" name="service" required>
+              <option value="">Select a service</option><option value="Website">Website</option>
+              <option value="Mobile App">Mobile App</option><option value="ERP / CRM">ERP / CRM</option>
+              <option value="POS">Point of Sale</option><option value="AI Automation">AI Automation</option>
+              <option value="Custom Software">Custom Software / Not sure</option>
+            </select>
+            <p class="field-note" id="service-hint">Choose the closest option. We can refine it together.</p>
+            <label for="details">Describe your project <span class="required">*</span></label>
+            <textarea id="details" name="details" rows="6" minlength="20" maxlength="1600" required placeholder="What does your business do? What problem would the software solve? Which features matter most?"></textarea>
+            <div class="input-footer"><span>Plain language is fine. No technical brief required.</span><span id="details-count">0 / 1600</span></div>
+          </fieldset>
+
+          <fieldset data-step="2" class="form-step" hidden>
+            <legend>Project planning basics</legend>
+            <p class="form-intro">This helps us understand the scale and urgency. You can leave the budget open.</p>
+            <label for="timeline">When would you like to start? <span class="required">*</span></label>
+            <select id="timeline" name="timeline" required><option value="">Select a timeline</option>
+              <option value="Not sure">Not sure yet</option><option value="Within 1 month">Within 1 month</option>
+              <option value="1-3 months">In 1–3 months</option><option value="3-6 months">In 3–6 months</option>
+              <option value="Flexible">Flexible</option>
+            </select>
+            <label for="budget">Approximate budget <span class="optional">optional</span></label>
+            <input id="budget" name="budget" maxlength="80" placeholder="e.g. INR 80,000 / KWD 500 / Need guidance">
+            <p class="field-note">A budget helps with planning, but isn't required for an enquiry.</p>
+            <label for="country">Country / location <span class="optional">optional</span></label>
+            <input id="country" name="country" maxlength="80" autocomplete="country-name" placeholder="e.g. India, Kuwait, UAE">
+          </fieldset>
+
+          <fieldset data-step="3" class="form-step" hidden>
+            <legend>How can we reach you?</legend>
+            <p class="form-intro">We'll use these details only to respond to your enquiry and discuss your project.</p>
+            <label for="name">Your name <span class="required">*</span></label>
+            <input id="name" name="name" minlength="2" maxlength="150" autocomplete="name" required placeholder="Full name">
+            <label for="company">Company name <span class="optional">optional</span></label>
+            <input id="company" name="company" maxlength="200" autocomplete="organization" placeholder="Your business / organization">
+            <label for="phone">Phone / WhatsApp <span class="required">*</span></label>
+            <input id="phone" name="phone" type="tel" inputmode="tel" autocomplete="tel" required maxlength="30" placeholder="+91 98765 43210">
+            <label for="email">Email address <span class="optional">optional</span></label>
+            <input id="email" name="email" type="email" maxlength="256" autocomplete="email" placeholder="you@company.com">
+            <label class="consent" for="consent"><input id="consent" name="consent" type="checkbox" required><span>I agree that Resmoh IT may use my submitted details to respond about this project. <a href="/privacy/" target="_blank" rel="noopener">Read the enquiry privacy notice</a>.</span></label>
+            <div class="review-box" id="project-summary" aria-live="polite"></div>
+          </fieldset>
+
+          <div class="form-message" id="form-message" role="status" aria-live="polite" hidden></div>
+          <div class="form-actions">
+            <button type="button" class="button button-outline" id="back" hidden>Back</button>
+            <button type="button" class="button button-primary" id="next">Continue <span aria-hidden="true">→</span></button>
+            <button type="submit" class="button button-primary" id="submit" hidden>Submit project request <span aria-hidden="true">→</span></button>
+          </div>
+          <p class="form-security-note">We review every enquiry before providing a quotation. No automatic price or delivery commitment is made.</p>
+        </form>
+        <div id="form-success" class="success-state" hidden tabindex="-1">
+          <span class="success-symbol" aria-hidden="true">✓</span>
+          <h2>Your project request has been received.</h2>
+          <p>Thank you for reaching out to Resmoh IT. Our team can review your requirement and contact you using the details provided.</p>
+          <a href="/" class="button button-primary">Return to website <span aria-hidden="true">↗</span></a>
+        </div>
+      </div>
+    </div>
+  </main>
+  <footer class="site-footer"><div class="container footer-row"><a class="brand" href="/"><span class="brand-mark small">R<span>.</span></span><span>Resmoh <strong>IT</strong></span></a><span>Software & IT Solutions</span><div><a href="/">Home</a><a href="/privacy/">Privacy notice</a></div><span>© 2026 Resmoh IT</span></div></footer>
+  <script src="/site.js" defer></script>
+</body>
+</html>

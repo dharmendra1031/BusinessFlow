@@ -81,6 +81,24 @@ jobs:
         run: |
           dotnet tool install --global dotnet-ef --version 10.0.0
           .\scripts\publish-windows.ps1
+      - name: Build Resmoh IT public website
+        shell: pwsh
+        run: |
+          dotnet publish public-site/Resmoh.Web/Resmoh.Web.csproj -c Release -r win-x64 --self-contained false -o artifacts/resmoh-public
+          if ($LASTEXITCODE -ne 0) { throw 'Public website publish failed.' }
+          foreach ($required in @('web.config', 'wwwroot/index.html', 'wwwroot/start-project/index.html',
+                                  'wwwroot/privacy/index.html', 'wwwroot/site.js', 'wwwroot/styles.css')) {
+            if (-not (Test-Path -LiteralPath (Join-Path 'artifacts/resmoh-public' $required))) {
+              throw "Public website package is missing $required"
+            }
+          }
+          if (Select-String -LiteralPath 'artifacts/resmoh-public/wwwroot/site.js' -Pattern 'X-Website-Signature|SigningSecret' -Quiet) {
+            throw 'A website signing secret or signature mechanism must never be in browser assets.'
+          }
+          if (Test-Path -LiteralPath 'artifacts/resmoh-public/appsettings.Development.json') {
+            throw 'Development settings must not be published in the public site.'
+          }
+          Compress-Archive -Path 'artifacts/resmoh-public/*' -DestinationPath 'artifacts/Resmoh-PublicSite-IIS.zip'
       - name: Render every RDLC template
         run: python scripts/verify-rdlc.py
       - name: Verify package contents
@@ -113,6 +131,12 @@ jobs:
             bundleSha256 = (Get-FileHash -LiteralPath $bundlePath -Algorithm SHA256).Hash
           }
           $manifest | ConvertTo-Json | Set-Content artifacts\release-manifest.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: resmoh-public-website
+          path: artifacts/Resmoh-PublicSite-IIS.zip
+          if-no-files-found: error
+          retention-days: 14
       - uses: actions/upload-artifact@v4
         with:
           name: staging-iis-package
