@@ -41,6 +41,14 @@ public class Program
         builder.Services.AddRateLimiter(options =>
         {
             options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+            options.AddPolicy("client-auth", context =>
+                RateLimitPartition.GetFixedWindowLimiter(
+                    context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+                    _ => new FixedWindowRateLimiterOptions
+                    {
+                        PermitLimit = 12, Window = TimeSpan.FromMinutes(1),
+                        AutoReplenishment = true, QueueLimit = 0
+                    }));
             options.AddPolicy("project-enquiry", context =>
                 RateLimitPartition.GetFixedWindowLimiter(
                     context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
@@ -222,6 +230,78 @@ public class Program
                 return Results.StatusCode(StatusCodes.Status502BadGateway);
             }
         }).RequireRateLimiting("project-enquiry");
+
+        // Only four client-auth routes are allowed through the public site.
+        // Employee/Admin endpoints are never proxied.
+        app.MapMethods("/api/client/{**path}", ["GET", "POST"],
+            async (HttpContext context, string? path, IConfiguration config,
+                IHttpClientFactory clients, CancellationToken ct) =>
+            {
+                var validRoute = (HttpMethods.IsGet(context.Request.Method) && path == "me") ||
+                    (HttpMethods.IsPost(context.Request.Method) &&
+                     path is "auth/request-code" or "auth/verify-code" or "auth/logout");
+                if (!validRoute) return Results.NotFound();
+
+                if (HttpMethods.IsPost(context.Request.Method))
+                {
+                    if (!string.Equals(context.Request.Headers.Origin.ToString(),
+                        config["PublicSite:Origin"]?.TrimEnd('/'), StringComparison.Ordinal))
+                        return Results.StatusCode(StatusCodes.Status403Forbidden);
+                    if (!context.Request.HasJsonContentType() && path != "auth/logout")
+                        return Results.BadRequest();
+                    if (context.Request.ContentLength > 2048)
+                        return Results.StatusCode(StatusCodes.Status413PayloadTooLarge);
+                }
+
+                var target = config["BusinessFlow:ClientApiUrl"];
+                if (!Uri.TryCreate(target, UriKind.Absolute, out var endpoint) ||
+                    (endpoint.Scheme != Uri.UriSchemeHttps &&
+                     !(app.Environment.IsDevelopment() && endpoint.IsLoopback && endpoint.Scheme == Uri.UriSchemeHttp)))
+                    return Results.StatusCode(StatusCodes.Status503ServiceUnavailable);
+
+                using var outgoing = new HttpRequestMessage(new HttpMethod(context.Request.Method),
+                    new Uri(endpoint.AbsoluteUri.TrimEnd('/') + "/" + path));
+                if (HttpMethods.IsPost(context.Request.Method))
+                {
+                    using var buffer = new MemoryStream();
+                    await context.Request.Body.CopyToAsync(buffer, ct);
+                    if (buffer.Length > 2048)
+                        return Results.StatusCode(StatusCodes.Status413PayloadTooLarge);
+                    outgoing.Content = new ByteArrayContent(buffer.ToArray());
+                    outgoing.Content.Headers.ContentType =
+                        new System.Net.Http.Headers.MediaTypeHeaderValue("application/json");
+                }
+
+                var cookie = context.Request.Cookies["Resmoh.Client"];
+                if (!string.IsNullOrEmpty(cookie))
+                    outgoing.Headers.TryAddWithoutValidation("Cookie", "Resmoh.Client=" + cookie);
+
+                context.Response.Headers.CacheControl = "no-store";
+                try
+                {
+                    using var response = await clients.CreateClient("businessflow").SendAsync(outgoing, ct);
+                    if (response.Headers.TryGetValues("Set-Cookie", out var cookies))
+                    {
+                        foreach (var value in cookies)
+                            if (value.StartsWith("Resmoh.Client=", StringComparison.Ordinal))
+                                context.Response.Headers.Append("Set-Cookie", value);
+                    }
+                    context.Response.StatusCode = (int)response.StatusCode;
+                    context.Response.ContentType = response.Content.Headers.ContentType?.ToString() ??
+                        "application/json; charset=utf-8";
+                    await response.Content.CopyToAsync(context.Response.Body, ct);
+                    return Results.Empty;
+                }
+                catch (HttpRequestException)
+                {
+                    return Results.StatusCode(StatusCodes.Status503ServiceUnavailable);
+                }
+                catch (TaskCanceledException) when (!ct.IsCancellationRequested)
+                {
+                    return Results.StatusCode(StatusCodes.Status503ServiceUnavailable);
+                }
+            }).RequireRateLimiting("client-auth")
+              .WithMetadata(new RequestSizeLimitAttribute(2048));
 
         app.Run();
     }

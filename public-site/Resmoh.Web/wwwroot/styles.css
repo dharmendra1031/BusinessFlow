@@ -240,3 +240,9 @@ button { cursor: pointer; }
 .tracking-panel .button { margin-top: 17px; }
 .tracking-note h2 { font-size: 1.25rem; letter-spacing: -.02em; }
 .tracking-note p { line-height: 1.8; }
+
+/* Phase 7C2: verified client sign-in and minimal account overview */
+.tracking-panel label { display: block; margin: 15px 0 8px; font-size: .88rem; font-weight: 650; }
+.tracking-panel input { display: block; min-height: 49px; width: 100%; padding: 12px; border: 1px solid #c6d2da; border-radius: 5px; margin-bottom: 18px; font: inherit; }
+.tracking-panel .button { margin-right: 8px; margin-top: 6px; }
+#login-message { margin-top: 20px; font-size: .88rem; }

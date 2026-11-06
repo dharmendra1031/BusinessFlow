@@ -145,6 +145,49 @@ namespace BusinessFlow.Api.Migrations
                     b.ToTable("AuditLogs");
                 });
 
+            modelBuilder.Entity("BusinessFlow.Api.Models.ClientLoginChallenge", b =>
+                {
+                    b.Property<long>("Id").ValueGeneratedOnAdd().HasColumnType("bigint");
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
+                    b.Property<long>("AccountId").HasColumnType("bigint");
+                    b.Property<int>("AttemptCount").HasColumnType("int");
+                    b.Property<string>("CodeHash").IsRequired().HasMaxLength(64).HasColumnType("nvarchar(64)");
+                    b.Property<DateTime>("CreatedAtUtc").HasColumnType("datetime2");
+                    b.Property<DateTime>("ExpiresAtUtc").HasColumnType("datetime2");
+                    b.Property<DateTime?>("UsedAtUtc").HasColumnType("datetime2");
+                    b.HasKey("Id");
+                    b.HasIndex("AccountId", "CreatedAtUtc");
+                    b.ToTable("ClientLoginChallenges", t =>
+                        {
+                            t.HasCheckConstraint("CK_ClientLoginChallenges_AttemptCount", "[AttemptCount] BETWEEN 0 AND 5");
+                        });
+                });
+
+            modelBuilder.Entity("BusinessFlow.Api.Models.ClientPortalAccount", b =>
+                {
+                    b.Property<long>("Id").ValueGeneratedOnAdd().HasColumnType("bigint");
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
+                    b.Property<long>("ContactId").HasColumnType("bigint");
+                    b.Property<DateTime>("CreatedAtUtc").HasColumnType("datetime2");
+                    b.Property<long>("CreatedById").HasColumnType("bigint");
+                    b.Property<long>("CustomerId").HasColumnType("bigint");
+                    b.Property<string>("Email").IsRequired().HasMaxLength(256).HasColumnType("nvarchar(256)");
+                    b.Property<bool>("IsActive").HasColumnType("bit");
+                    b.Property<DateTime?>("RevokedAtUtc").HasColumnType("datetime2");
+                    b.Property<byte[]>("RowVersion").IsConcurrencyToken().IsRequired()
+                        .ValueGeneratedOnAddOrUpdate().HasColumnType("rowversion");
+                    b.Property<int>("SessionVersion").HasColumnType("int");
+                    b.HasKey("Id");
+                    b.HasIndex("ContactId").IsUnique();
+                    b.HasIndex("CreatedById");
+                    b.HasIndex("CustomerId");
+                    b.HasIndex("Email");
+                    b.ToTable("ClientPortalAccounts", t =>
+                        {
+                            t.HasCheckConstraint("CK_ClientPortalAccounts_SessionVersion", "[SessionVersion] > 0");
+                        });
+                });
+
             modelBuilder.Entity("BusinessFlow.Api.Models.Customer", b =>
                 {
                     b.Property<long>("Id")
@@ -1744,6 +1787,36 @@ namespace BusinessFlow.Api.Migrations
                         .WithMany()
                         .HasForeignKey("MergedIntoCustomerId")
                         .OnDelete(DeleteBehavior.NoAction);
+                });
+
+            modelBuilder.Entity("BusinessFlow.Api.Models.ClientLoginChallenge", b =>
+                {
+                    b.HasOne("BusinessFlow.Api.Models.ClientPortalAccount", null)
+                        .WithMany()
+                        .HasForeignKey("AccountId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("BusinessFlow.Api.Models.ClientPortalAccount", b =>
+                {
+                    b.HasOne("BusinessFlow.Api.Models.CustomerContact", null)
+                        .WithMany()
+                        .HasForeignKey("ContactId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.HasOne("BusinessFlow.Api.Models.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("CreatedById")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.HasOne("BusinessFlow.Api.Models.Customer", null)
+                        .WithMany()
+                        .HasForeignKey("CustomerId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("BusinessFlow.Api.Models.CustomerContact", b =>

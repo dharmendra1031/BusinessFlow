@@ -17,6 +17,8 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
     public DbSet<SalesCreditNote> SalesCreditNotes => Set<SalesCreditNote>();
     public DbSet<SalesRefund> SalesRefunds => Set<SalesRefund>();
     public DbSet<FinancialAdjustmentApproval> FinancialAdjustmentApprovals => Set<FinancialAdjustmentApproval>();
+    public DbSet<ClientPortalAccount> ClientPortalAccounts => Set<ClientPortalAccount>();
+    public DbSet<ClientLoginChallenge> ClientLoginChallenges => Set<ClientLoginChallenge>();
     public DbSet<Customer> Customers => Set<Customer>();
     public DbSet<CustomerContact> CustomerContacts => Set<CustomerContact>();
     public DbSet<Lead> Leads => Set<Lead>();
@@ -47,6 +49,27 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
     {
         base.OnModelCreating(modelBuilder);
 
+        modelBuilder.Entity<ClientPortalAccount>(entity =>
+        {
+            entity.Property(x => x.Email).HasMaxLength(256).IsRequired();
+            entity.HasIndex(x => x.ContactId).IsUnique();
+            entity.HasIndex(x => x.Email);
+            entity.HasOne<Customer>().WithMany().HasForeignKey(x => x.CustomerId)
+                .OnDelete(DeleteBehavior.NoAction);
+            entity.HasOne<CustomerContact>().WithMany().HasForeignKey(x => x.ContactId)
+                .OnDelete(DeleteBehavior.NoAction);
+            entity.HasOne<ApplicationUser>().WithMany().HasForeignKey(x => x.CreatedById)
+                .OnDelete(DeleteBehavior.NoAction);
+            entity.ToTable(t => t.HasCheckConstraint("CK_ClientPortalAccounts_SessionVersion", "[SessionVersion] > 0"));
+        });
+        modelBuilder.Entity<ClientLoginChallenge>(entity =>
+        {
+            entity.Property(x => x.CodeHash).HasMaxLength(64).IsRequired();
+            entity.HasIndex(x => new { x.AccountId, x.CreatedAtUtc });
+            entity.HasOne<ClientPortalAccount>().WithMany().HasForeignKey(x => x.AccountId)
+                .OnDelete(DeleteBehavior.NoAction);
+            entity.ToTable(t => t.HasCheckConstraint("CK_ClientLoginChallenges_AttemptCount", "[AttemptCount] BETWEEN 0 AND 5"));
+        });
         modelBuilder.Entity<WebsiteLeadSubmission>(entity =>
         {
             entity.Property(x => x.SubmissionHash).HasMaxLength(64).IsRequired();

@@ -5,6 +5,7 @@ using BusinessFlow.Api.Data;
 using BusinessFlow.Api.Models;
 using BusinessFlow.Api.Services;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Antiforgery;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
@@ -39,6 +40,14 @@ builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddSingleton<LoginAttemptLimiter>();
 builder.Services.AddRateLimiter(options =>
 {
+    options.AddPolicy("client-login", context =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+            _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 10, Window = TimeSpan.FromMinutes(1),
+                QueueLimit = 0, AutoReplenishment = true
+            }));
     options.AddPolicy("website-intake", context =>
         RateLimitPartition.GetFixedWindowLimiter(
             context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
@@ -67,6 +76,7 @@ builder.Services.AddIdentityCore<ApplicationUser>(options =>
 }).AddRoles<IdentityRole<long>>().AddEntityFrameworkStores<AppDbContext>().AddDefaultTokenProviders();
 
 builder.Services.AddScoped<TokenService>();
+builder.Services.AddScoped<IClientOtpSender, SmtpClientOtpSender>();
 builder.Services.AddScoped<RolePermissionService>();
 builder.Services.AddScoped<OrganizationService>();
 builder.Services.AddScoped<RoleAdministrationService>();
@@ -120,6 +130,50 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             NameClaimType = "name",
             RoleClaimType = "role",
             ClockSkew = TimeSpan.FromMinutes(1)
+        };
+    })
+    .AddCookie("ClientPortal", options =>
+    {
+        options.Cookie.Name = "Resmoh.Client";
+        options.Cookie.Path = "/api/client";
+        options.Cookie.HttpOnly = true;
+        options.Cookie.SameSite = SameSiteMode.Strict;
+        options.Cookie.SecurePolicy = builder.Environment.IsDevelopment()
+            ? CookieSecurePolicy.SameAsRequest : CookieSecurePolicy.Always;
+        options.ExpireTimeSpan = TimeSpan.FromHours(8);
+        options.SlidingExpiration = false;
+        options.Events.OnRedirectToLogin = context =>
+        {
+            context.Response.StatusCode = StatusCodes.Status401Unauthorized;
+            return Task.CompletedTask;
+        };
+        options.Events.OnRedirectToAccessDenied = context =>
+        {
+            context.Response.StatusCode = StatusCodes.Status403Forbidden;
+            return Task.CompletedTask;
+        };
+        options.Events.OnValidatePrincipal = async context =>
+        {
+            var idText = context.Principal?.FindFirst("client_account")?.Value;
+            var versionText = context.Principal?.FindFirst("client_version")?.Value;
+            if (!long.TryParse(idText, out var accountId) ||
+                !int.TryParse(versionText, out var version) || accountId <= 0 || version <= 0)
+            {
+                context.RejectPrincipal();
+                return;
+            }
+            var db = context.HttpContext.RequestServices.GetRequiredService<AppDbContext>();
+            var valid = await (from account in db.ClientPortalAccounts.AsNoTracking()
+                               join customer in db.Customers.AsNoTracking() on account.CustomerId equals customer.Id
+                               join contact in db.CustomerContacts.AsNoTracking() on account.ContactId equals contact.Id
+                               where account.Id == accountId &&
+                                     account.IsActive && account.SessionVersion == version &&
+                                     contact.CustomerId == account.CustomerId &&
+                                     contact.IsActive && contact.Email != null &&
+                                     contact.Email.Trim().ToUpper() == account.Email &&
+                                     customer.IsActive && customer.MergedIntoCustomerId == null
+                               select account.Id).AnyAsync(context.HttpContext.RequestAborted);
+            if (!valid) context.RejectPrincipal();
         };
     });
 builder.Services.AddAuthorization();

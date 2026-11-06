@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="robots" content="noindex, nofollow"><title>Client Sign In | Resmoh IT</title><link rel="stylesheet" href="/styles.css"></head>
+<body class="page-form">
+<a class="skip-link" href="#main">Skip to content</a>
+<header class="site-header"><div class="container nav-row"><a class="brand" href="/"><span class="brand-mark">R<span>.</span></span><span>Resmoh <strong>IT</strong></span></a><a href="/client/" class="nav-contact">Track an enquiry ↗</a></div></header>
+<main id="main" class="section"><div class="container reading-width">
+<span class="eyebrow dark">VERIFIED CLIENT ACCESS</span><h1 class="tracking-title">Welcome back.</h1>
+<p>Access your Resmoh IT client account using an email verification code. Access must first be approved by our team.</p>
+<div class="tracking-panel">
+<form id="client-login" novalidate>
+<div id="email-stage"><h2>Sign in with your email</h2>
+<label for="client-email">Approved contact email</label><input id="client-email" type="email" autocomplete="email" maxlength="256" placeholder="you@company.com" required>
+<button class="button button-primary" type="button" id="request-code">Send verification code →</button></div>
+<div id="code-stage" hidden><h2>Enter your verification code</h2><p>If this email has client access, an 8-digit code will be sent to it. The code expires after 10 minutes.</p>
+<label for="client-code">8-digit code</label><input id="client-code" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="8" minlength="8" pattern="[0-9]{8}" placeholder="00000000" required>
+<button class="button button-primary" type="submit" id="verify-code">Verify and sign in →</button>
+<button class="button button-outline" type="button" id="change-email">Change email</button></div>
+<p id="login-message" role="status" aria-live="polite"></p>
+</form></div>
+<p class="field-note">Don't have portal access yet? Contact the Resmoh IT team handling your project. Public enquiries can still be tracked separately from the same browser.</p>
+</div></main>
+<footer class="site-footer"><div class="container footer-row"><a class="brand" href="/"><span class="brand-mark small">R<span>.</span></span><span>Resmoh <strong>IT</strong></span></a><span>Software & IT Solutions</span><div><a href="/">Home</a><a href="/privacy/">Privacy</a></div><span>© 2026 Resmoh IT</span></div></footer>
+<script src="/client-login.js" defer></script>
+</body></html>

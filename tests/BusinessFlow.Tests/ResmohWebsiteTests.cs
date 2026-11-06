@@ -49,7 +49,8 @@ public sealed class ResmohWebsiteTests
                     ["PublicSite:Origin"] = Root,
                     ["BusinessFlow:IntakeUrl"] = configured
                         ? "https://businessflow.test/api/integrations/website/leads" : "",
-                    ["BusinessFlow:SigningSecret"] = configured ? Secret : ""
+                    ["BusinessFlow:SigningSecret"] = configured ? Secret : "",
+                    ["BusinessFlow:ClientApiUrl"] = "https://businessflow.test/api/client"
                 }));
             builder.ConfigureTestServices(services =>
                 services.AddHttpClient("businessflow")
@@ -184,17 +185,68 @@ public sealed class ResmohWebsiteTests
         Assert.DoesNotContain(Secret, page);
     }
 
+    [Fact]
+    public async Task Public_client_proxy_only_forwards_approved_auth_routes()
+    {
+        using var crm = new RecordingCrm();
+        await using var site = Site(crm);
+        using var client = site.CreateClient(new WebApplicationFactoryClientOptions
+        { BaseAddress = new Uri(Root), HandleCookies = false });
+        Assert.Contains("Client Sign In", await client.GetStringAsync("/client/login/"));
+        Assert.Contains("Client Account", await client.GetStringAsync("/client/account/"));
+
+        Assert.Equal(HttpStatusCode.Forbidden,
+            (await client.PostAsJsonAsync("/api/client/auth/request-code",
+                new { email = "person@example.test" })).StatusCode);
+        client.DefaultRequestHeaders.TryAddWithoutValidation("Origin", Root);
+        Assert.Equal(HttpStatusCode.Accepted,
+            (await client.PostAsJsonAsync("/api/client/auth/request-code",
+                new { email = "person@example.test" })).StatusCode);
+        Assert.Equal(1, crm.Requests);
+        Assert.Equal("https://businessflow.test/api/client/auth/request-code", crm.LastUrl);
+
+        using var request = new HttpRequestMessage(HttpMethod.Get, "/api/client/me");
+        request.Headers.TryAddWithoutValidation("Cookie", "Resmoh.Client=example-ticket; OtherCookie=ignored");
+        using var profile = await client.SendAsync(request);
+        Assert.Equal(HttpStatusCode.OK, profile.StatusCode);
+        Assert.Equal("Resmoh.Client=example-ticket", crm.ForwardedCookie);
+        Assert.DoesNotContain("OtherCookie", crm.ForwardedCookie);
+
+        Assert.Equal(HttpStatusCode.NotFound,
+            (await client.GetAsync("/api/client/quotations")).StatusCode);
+        Assert.Equal(2, crm.Requests);
+    }
+
     private sealed class RecordingCrm : HttpMessageHandler
     {
         public int Requests { get; private set; }
         public string? Body { get; private set; }
         public string? Timestamp { get; private set; }
         public string? Signature { get; private set; }
+        public string? LastUrl { get; private set; }
+        public string? ForwardedCookie { get; private set; }
 
         protected override async Task<HttpResponseMessage> SendAsync(
             HttpRequestMessage request, CancellationToken cancellationToken)
         {
             Requests++;
+            LastUrl = request.RequestUri!.AbsoluteUri;
+            if (LastUrl.StartsWith("https://businessflow.test/api/client/", StringComparison.Ordinal))
+            {
+                ForwardedCookie = request.Headers.TryGetValues("Cookie", out var cookies)
+                    ? cookies.Single() : null;
+                if (request.Method == HttpMethod.Get && LastUrl.EndsWith("/me", StringComparison.Ordinal))
+                    return new HttpResponseMessage(HttpStatusCode.OK)
+                    {
+                        Content = JsonContent.Create(new
+                        {
+                            customerName = "Example",
+                            contactName = "Example Contact",
+                            email = "example@test.local"
+                        })
+                    };
+                return new HttpResponseMessage(HttpStatusCode.Accepted);
+            }
             Body = await request.Content!.ReadAsStringAsync(cancellationToken);
             Timestamp = request.Headers.GetValues("X-Website-Timestamp").Single();
             Signature = request.Headers.GetValues("X-Website-Signature").Single();
