@@ -55,20 +55,8 @@ public sealed class WebsiteIntakeController(AppDbContext db, IConfiguration conf
         var body = buffer.ToArray();
         if (body.Length is 0 or > 16384) return BadRequest();
 
-        var signature = Request.Headers["X-Website-Signature"].ToString();
-        if (!signature.StartsWith("sha256=", StringComparison.OrdinalIgnoreCase) ||
-            signature.Length != 71) return Unauthorized();
-        byte[] supplied;
-        try { supplied = Convert.FromHexString(signature.AsSpan(7)); }
-        catch (FormatException) { return Unauthorized(); }
-        if (supplied.Length != 32) return Unauthorized();
-
-        var prefix = Encoding.UTF8.GetBytes(timestamp.ToString(System.Globalization.CultureInfo.InvariantCulture) + ".");
-        var signed = new byte[prefix.Length + body.Length];
-        prefix.CopyTo(signed, 0);
-        body.CopyTo(signed, prefix.Length);
-        var expected = HMACSHA256.HashData(Encoding.UTF8.GetBytes(secret), signed);
-        if (!CryptographicOperations.FixedTimeEquals(expected, supplied)) return Unauthorized();
+        if (!ValidSignature(Request.Headers["X-Website-Signature"].ToString(), timestamp, body, secret))
+            return Unauthorized();
 
         WebsiteLeadRequest? request;
         try { request = JsonSerializer.Deserialize<WebsiteLeadRequest>(body, JsonOptions); }
@@ -207,21 +195,7 @@ public sealed class WebsiteIntakeController(AppDbContext db, IConfiguration conf
         var body = buffer.ToArray();
         if (body.Length is 0 or > 1024) return BadRequest();
 
-        var signature = Request.Headers["X-Website-Signature"].ToString();
-        if (!signature.StartsWith("sha256=", StringComparison.OrdinalIgnoreCase) ||
-            signature.Length != 71)
-            return Unauthorized();
-
-        byte[] supplied;
-        try { supplied = Convert.FromHexString(signature.AsSpan(7)); }
-        catch (FormatException) { return Unauthorized(); }
-
-        var prefix = Encoding.UTF8.GetBytes(timestamp.ToString(System.Globalization.CultureInfo.InvariantCulture) + ".");
-        var message = new byte[prefix.Length + body.Length];
-        prefix.CopyTo(message, 0);
-        body.CopyTo(message, prefix.Length);
-        var expected = HMACSHA256.HashData(Encoding.UTF8.GetBytes(secret), message);
-        if (!CryptographicOperations.FixedTimeEquals(expected, supplied))
+        if (!ValidSignature(Request.Headers["X-Website-Signature"].ToString(), timestamp, body, secret))
             return Unauthorized();
 
         WebsiteStatusRequest? request;
@@ -239,6 +213,25 @@ public sealed class WebsiteIntakeController(AppDbContext db, IConfiguration conf
             .SingleOrDefaultAsync(ct);
 
         return status is null ? NotFound() : Ok(status);
+    }
+
+    private static bool ValidSignature(string signature, long timestamp, byte[] body, string secret)
+    {
+        if (!signature.StartsWith("sha256=", StringComparison.OrdinalIgnoreCase) ||
+            signature.Length != 71)
+            return false;
+
+        byte[] supplied;
+        try { supplied = Convert.FromHexString(signature.AsSpan(7)); }
+        catch (FormatException) { return false; }
+        if (supplied.Length != 32) return false;
+
+        var prefix = Encoding.UTF8.GetBytes(timestamp.ToString(System.Globalization.CultureInfo.InvariantCulture) + ".");
+        var message = new byte[prefix.Length + body.Length];
+        prefix.CopyTo(message, 0);
+        body.CopyTo(message, prefix.Length);
+        var expected = HMACSHA256.HashData(Encoding.UTF8.GetBytes(secret), message);
+        return CryptographicOperations.FixedTimeEquals(expected, supplied);
     }
 
     private static bool IsDuplicateSubmission(Exception exception)

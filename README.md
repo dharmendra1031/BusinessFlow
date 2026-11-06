@@ -1,28 +1,13 @@
 # BusinessFlow
 
-**CRM & Project Management System** — From Lead to Delivery.
+**BusinessFlow** — CRM, project delivery, quotations and billing for Resmoh IT.
 
-> Existing SQL Server database names and JWT issuer values remain unchanged for compatibility; only application and repository branding is renamed.
+Internal application: ASP.NET Core Web API (.NET 10), EF Core / SQL Server, React / TypeScript / Vite.
+Public website: separate ASP.NET Core app in `public-site/Resmoh.Web`.
 
-Single-company lead management system for admins, managers and employees.
+The system handles leads, routing, follow-ups, customers, project work, quotations, contracts, invoices, payments and reports. The public site accepts project enquiries through the signed Website Intake API. Client access uses approved customer contacts, email OTP and a separate session; quotation and invoice views are not yet available to clients.
 
-## Stack
-
-- ASP.NET Core Web API (.NET 10)
-- Entity Framework Core / SQL Server
-- ASP.NET Core Identity (`long` numeric user/role keys)
-- React + TypeScript + Vite
-
-## Features included in this starter
-
-- JWT sign-in and role-based API authorization
-- Admin-managed employees, optional reporting manager
-- Lead create/read/update, search, filters and pagination
-- Lead assignment with pending follow-up reassignment and assignment history
-- Status changes and status history
-- Follow-ups, completion and overdue list
-- Dashboard counts scoped to each user's permissions
-- React dashboard, lead listing, lead editing, and follow-up scheduling
+Database entity keys use numeric BIGINT identity columns. The website is packaged separately for IIS; CI success does not mean `resmoh.in` has been deployed.
 
 ## Local setup
 
@@ -55,13 +40,11 @@ The admin is seeded only if `CRM_ADMIN_EMAIL` and `CRM_ADMIN_PASSWORD` are confi
 - `Manager`: own and direct reports' leads, assign only to direct reports or self.
 - `Employee`: own/created leads and follow-ups.
 
-## In scope / pending
+## Deployment status
 
-This is **Phase 1 starter**, not a production-complete CRM. Lead deletion and automated integrations are not included yet. Meta Lead Ads, WhatsApp webhooks, bulk Excel import, reminders, attachments, and notifications are pending. The frontend is a basic MVP; the backend has additional functionality available for UI expansion. An IIS deployment package exists, but live deployment and broader production validation are pending.
+The current codebase is **not a claim of production readiness**. Client login requires configured SMTP, approved client contacts, HTTPS and staging validation. The public site and the private CRM have independent IIS packages.
 
-Security hardening in this starter includes login rate limiting (five attempts per minute per remote IP), disabled-user checks, security-stamp and role revalidation for JWTs, HSTS outside development, and liveness/readiness endpoints. These are source changes, not verified deployment controls. Old tokens expire immediately after the security-stamp claim is introduced; users must sign in again.
-
-Do not deploy publicly until HTTPS/proxy configuration, secrets management, tested migrations, observability, and secure cookie-based web authentication have been reviewed.
+Before production: verify database migrations against a restored staging copy, configure server-side signing and mail secrets, check DNS/IIS and forwarding rules, complete the privacy notice, and test the full enquiry-to-CRM flow. Never put server secrets in frontend assets or source control.
 
 ## UI feedback and accessibility
 

@@ -117,20 +117,7 @@ public class Program
                 enquiry.Name!.Trim(), enquiry.Phone!.Trim(), enquiry.Email?.Trim(),
                 enquiry.Company?.Trim(), requirement, true);
             var body = JsonSerializer.SerializeToUtf8Bytes(lead, new JsonSerializerOptions(JsonSerializerDefaults.Web));
-            var timestamp = DateTimeOffset.UtcNow.ToUnixTimeSeconds().ToString(CultureInfo.InvariantCulture);
-            var prefix = Encoding.UTF8.GetBytes(timestamp + ".");
-            var message = new byte[prefix.Length + body.Length];
-            prefix.CopyTo(message, 0);
-            body.CopyTo(message, prefix.Length);
-            var signature = Convert.ToHexString(
-                HMACSHA256.HashData(Encoding.UTF8.GetBytes(secret), message));
-
-            using var outgoing = new HttpRequestMessage(HttpMethod.Post, endpoint);
-            outgoing.Content = new ByteArrayContent(body);
-            outgoing.Content.Headers.ContentType =
-                new System.Net.Http.Headers.MediaTypeHeaderValue("application/json");
-            outgoing.Headers.TryAddWithoutValidation("X-Website-Timestamp", timestamp);
-            outgoing.Headers.TryAddWithoutValidation("X-Website-Signature", "sha256=" + signature);
+            using var outgoing = CreateSignedRequest(endpoint, body, secret);
 
             try
             {
@@ -181,21 +168,8 @@ public class Program
                 return Results.StatusCode(StatusCodes.Status503ServiceUnavailable);
 
             var body = JsonSerializer.SerializeToUtf8Bytes(new { eventId = "resmoh-" + key });
-            var timestamp = DateTimeOffset.UtcNow.ToUnixTimeSeconds().ToString(CultureInfo.InvariantCulture);
-            var prefix = Encoding.UTF8.GetBytes(timestamp + ".");
-            var signed = new byte[prefix.Length + body.Length];
-            prefix.CopyTo(signed, 0);
-            body.CopyTo(signed, prefix.Length);
-            var signature = Convert.ToHexString(
-                HMACSHA256.HashData(Encoding.UTF8.GetBytes(secret), signed));
-
-            using var outgoing = new HttpRequestMessage(HttpMethod.Post,
-                new Uri(endpoint.AbsoluteUri.TrimEnd('/') + "/status"));
-            outgoing.Content = new ByteArrayContent(body);
-            outgoing.Content.Headers.ContentType =
-                new System.Net.Http.Headers.MediaTypeHeaderValue("application/json");
-            outgoing.Headers.TryAddWithoutValidation("X-Website-Timestamp", timestamp);
-            outgoing.Headers.TryAddWithoutValidation("X-Website-Signature", "sha256=" + signature);
+            using var outgoing = CreateSignedRequest(
+                new Uri(endpoint.AbsoluteUri.TrimEnd('/') + "/status"), body, secret);
 
             try
             {
@@ -304,6 +278,27 @@ public class Program
               .WithMetadata(new RequestSizeLimitAttribute(2048));
 
         app.Run();
+    }
+
+    private static HttpRequestMessage CreateSignedRequest(Uri url, byte[] body, string secret)
+    {
+        var timestamp = DateTimeOffset.UtcNow.ToUnixTimeSeconds().ToString(CultureInfo.InvariantCulture);
+        var prefix = Encoding.UTF8.GetBytes(timestamp + ".");
+        var data = new byte[prefix.Length + body.Length];
+        prefix.CopyTo(data, 0);
+        body.CopyTo(data, prefix.Length);
+
+        var signature = Convert.ToHexString(
+            HMACSHA256.HashData(Encoding.UTF8.GetBytes(secret), data));
+        var request = new HttpRequestMessage(HttpMethod.Post, url)
+        {
+            Content = new ByteArrayContent(body)
+        };
+        request.Content.Headers.ContentType =
+            new System.Net.Http.Headers.MediaTypeHeaderValue("application/json");
+        request.Headers.TryAddWithoutValidation("X-Website-Timestamp", timestamp);
+        request.Headers.TryAddWithoutValidation("X-Website-Signature", "sha256=" + signature);
+        return request;
     }
 
     private static string? ReadReceipt(string? receipt, string secret)
