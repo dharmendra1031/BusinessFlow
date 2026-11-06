@@ -87,7 +87,8 @@ jobs:
           dotnet publish public-site/Resmoh.Web/Resmoh.Web.csproj -c Release -r win-x64 --self-contained false -o artifacts/resmoh-public
           if ($LASTEXITCODE -ne 0) { throw 'Public website publish failed.' }
           foreach ($required in @('web.config', 'wwwroot/index.html', 'wwwroot/start-project/index.html',
-                                  'wwwroot/privacy/index.html', 'wwwroot/site.js', 'wwwroot/styles.css')) {
+                                  'wwwroot/privacy/index.html', 'wwwroot/client/index.html',
+                                  'wwwroot/client-status.js', 'wwwroot/site.js', 'wwwroot/styles.css')) {
             if (-not (Test-Path -LiteralPath (Join-Path 'artifacts/resmoh-public' $required))) {
               throw "Public website package is missing $required"
             }

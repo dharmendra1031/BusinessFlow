@@ -134,6 +134,56 @@ public sealed class ResmohWebsiteTests
         Assert.Equal(0, disabledCrm.Requests);
     }
 
+    [Fact]
+    public async Task Latest_enquiry_receipt_reads_only_its_status_and_rejects_tampering()
+    {
+        using var crm = new RecordingCrm();
+        await using var site = Site(crm);
+        using var client = site.CreateClient(new WebApplicationFactoryClientOptions
+        {
+            BaseAddress = new Uri(Root), HandleCookies = false
+        });
+        client.DefaultRequestHeaders.TryAddWithoutValidation("Origin", Root);
+        var submission = await client.PostAsJsonAsync("/api/project-requests", Enquiry());
+        Assert.Equal(HttpStatusCode.Accepted, submission.StatusCode);
+        var cookie = submission.Headers.GetValues("Set-Cookie")
+            .Single(value => value.StartsWith("Resmoh.Request=", StringComparison.Ordinal))
+            .Split(';')[0];
+        Assert.Contains("httponly", submission.Headers.GetValues("Set-Cookie").Single(), StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("samesite=strict", submission.Headers.GetValues("Set-Cookie").Single(), StringComparison.OrdinalIgnoreCase);
+
+        using var statusRequest = new HttpRequestMessage(HttpMethod.Get, "/api/project-request/status");
+        statusRequest.Headers.TryAddWithoutValidation("Cookie", cookie);
+        using var status = await client.SendAsync(statusRequest);
+        Assert.Equal(HttpStatusCode.OK, status.StatusCode);
+        var response = await status.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("New", response.GetProperty("status").GetString());
+        Assert.False(response.TryGetProperty("leadId", out _));
+        Assert.False(response.TryGetProperty("email", out _));
+        Assert.Equal("resmoh-012345678901234567890123",
+            JsonSerializer.Deserialize<JsonElement>(crm.Body!).GetProperty("eventId").GetString());
+
+        using var invalid = new HttpRequestMessage(HttpMethod.Get, "/api/project-request/status");
+        invalid.Headers.TryAddWithoutValidation("Cookie", cookie[..^4] + "0000");
+        Assert.Equal(HttpStatusCode.Unauthorized, (await client.SendAsync(invalid)).StatusCode);
+        Assert.Equal(2, crm.Requests);
+    }
+
+    [Fact]
+    public async Task Status_requires_receipt_and_does_not_forward_unauthorized_requests()
+    {
+        using var crm = new RecordingCrm();
+        await using var site = Site(crm);
+        using var client = site.CreateClient(new WebApplicationFactoryClientOptions
+        { BaseAddress = new Uri(Root), HandleCookies = false });
+        Assert.Equal(HttpStatusCode.Unauthorized,
+            (await client.GetAsync("/api/project-request/status")).StatusCode);
+        Assert.Equal(0, crm.Requests);
+        var page = await client.GetStringAsync("/client/");
+        Assert.Contains("Your enquiry status", page);
+        Assert.DoesNotContain(Secret, page);
+    }
+
     private sealed class RecordingCrm : HttpMessageHandler
     {
         public int Requests { get; private set; }
@@ -149,8 +199,17 @@ public sealed class ResmohWebsiteTests
             Timestamp = request.Headers.GetValues("X-Website-Timestamp").Single();
             Signature = request.Headers.GetValues("X-Website-Signature").Single();
             Assert.Equal(HttpMethod.Post, request.Method);
-            Assert.Equal("https://businessflow.test/api/integrations/website/leads",
-                request.RequestUri!.AbsoluteUri);
+            var path = request.RequestUri!.AbsoluteUri;
+            if (path.EndsWith("/leads/status", StringComparison.Ordinal))
+                return new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = JsonContent.Create(new
+                    {
+                        status = "New",
+                        submittedAtUtc = DateTimeOffset.UtcNow
+                    })
+                };
+            Assert.Equal("https://businessflow.test/api/integrations/website/leads", path);
             return new HttpResponseMessage(HttpStatusCode.Accepted);
         }
     }

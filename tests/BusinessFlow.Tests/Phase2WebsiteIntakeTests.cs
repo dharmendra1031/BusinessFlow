@@ -29,7 +29,8 @@ public sealed class Phase2WebsiteIntakeTests
         return (database, owner.Id);
     }
 
-    private static HttpRequestMessage Signed(object data, bool incorrectSignature = false, long? timestamp = null)
+    private static HttpRequestMessage Signed(object data, bool incorrectSignature = false, long? timestamp = null,
+        string path = "/api/integrations/website/leads")
     {
         var bytes = JsonSerializer.SerializeToUtf8Bytes(data);
         var seconds = timestamp ?? DateTimeOffset.UtcNow.ToUnixTimeSeconds();
@@ -38,7 +39,7 @@ public sealed class Phase2WebsiteIntakeTests
         prefix.CopyTo(message, 0);
         bytes.CopyTo(message, prefix.Length);
         var hash = Convert.ToHexString(HMACSHA256.HashData(Encoding.UTF8.GetBytes(Key), message));
-        var request = new HttpRequestMessage(HttpMethod.Post, "/api/integrations/website/leads")
+        var request = new HttpRequestMessage(HttpMethod.Post, path)
         {
             Content = new ByteArrayContent(bytes)
         };
@@ -136,6 +137,49 @@ public sealed class Phase2WebsiteIntakeTests
         await using var finalDb = database.CreateContext();
         Assert.Equal(0, await finalDb.WebsiteLeadSubmissions.CountAsync());
         Assert.Equal(0, await finalDb.Leads.CountAsync());
+    }
+
+    [Fact]
+    public async Task Signed_status_lookup_returns_only_the_matching_enquiry_and_rejects_bad_signature()
+    {
+        var (database, ownerId) = await Fixture();
+        await using var fixture = database;
+        await using var host = new Phase1ApiHost(database, new Dictionary<string, string?>
+        {
+            ["WebsiteIntake:Enabled"] = "true",
+            ["WebsiteIntake:SigningSecret"] = Key,
+            ["WebsiteIntake:OwnerUserId"] = ownerId.ToString()
+        });
+        using var client = host.CreateClient(new WebApplicationFactoryClientOptions
+        { BaseAddress = new Uri("https://localhost") });
+
+        const string eventId = "resmoh-012345678901234567890123";
+        var request = new
+        {
+            eventId, name = "Customer for status lookup",
+            phone = "+91 9876543210", consentAccepted = true
+        };
+        Assert.Equal(HttpStatusCode.Accepted, (await client.SendAsync(Signed(request))).StatusCode);
+
+        const string route = "/api/integrations/website/leads/status";
+        using var result = await client.SendAsync(Signed(new { eventId }, path: route));
+        Assert.Equal(HttpStatusCode.OK, result.StatusCode);
+        var body = await result.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("New", body.GetProperty("status").GetString());
+        Assert.True(body.TryGetProperty("submittedAtUtc", out _));
+        Assert.False(body.TryGetProperty("leadId", out _));
+        Assert.False(body.TryGetProperty("phone", out _));
+
+        Assert.Equal(HttpStatusCode.Unauthorized,
+            (await client.SendAsync(Signed(new { eventId }, incorrectSignature: true, path: route))).StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized,
+            (await client.SendAsync(Signed(new { eventId }, timestamp: DateTimeOffset.UtcNow.AddMinutes(-10).ToUnixTimeSeconds(), path: route))).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound,
+            (await client.SendAsync(Signed(new { eventId = "resmoh-999999999999999999999999" }, path: route))).StatusCode);
+
+        await using var db = database.CreateContext();
+        Assert.Equal(1, await db.WebsiteLeadSubmissions.CountAsync());
+        Assert.Equal(1, await db.Leads.CountAsync());
     }
 
     [Fact]

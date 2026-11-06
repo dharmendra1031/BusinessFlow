@@ -184,6 +184,63 @@ public sealed class WebsiteIntakeController(AppDbContext db, IConfiguration conf
         return Accepted(new { accepted = true });
     }
 
+    public sealed record WebsiteStatusRequest(string? EventId);
+
+    // A signed website-backend request can view only the status of the one
+    // submission it already knows. Never return internal Lead IDs or contacts.
+    [HttpPost("status")]
+    [Consumes("application/json")]
+    [RequestSizeLimit(1024)]
+    public async Task<IActionResult> Status(CancellationToken ct)
+    {
+        var secret = config["WebsiteIntake:SigningSecret"];
+        if (!config.GetValue<bool>("WebsiteIntake:Enabled") ||
+            string.IsNullOrWhiteSpace(secret) || Encoding.UTF8.GetByteCount(secret) < 32)
+            return StatusCode(503, new { message = "Website intake is not configured." });
+
+        if (!long.TryParse(Request.Headers["X-Website-Timestamp"], out var timestamp) ||
+            Math.Abs(clock.GetUtcNow().ToUnixTimeSeconds() - timestamp) > 300)
+            return Unauthorized();
+
+        using var buffer = new MemoryStream();
+        await Request.Body.CopyToAsync(buffer, ct);
+        var body = buffer.ToArray();
+        if (body.Length is 0 or > 1024) return BadRequest();
+
+        var signature = Request.Headers["X-Website-Signature"].ToString();
+        if (!signature.StartsWith("sha256=", StringComparison.OrdinalIgnoreCase) ||
+            signature.Length != 71)
+            return Unauthorized();
+
+        byte[] supplied;
+        try { supplied = Convert.FromHexString(signature.AsSpan(7)); }
+        catch (FormatException) { return Unauthorized(); }
+
+        var prefix = Encoding.UTF8.GetBytes(timestamp.ToString(System.Globalization.CultureInfo.InvariantCulture) + ".");
+        var message = new byte[prefix.Length + body.Length];
+        prefix.CopyTo(message, 0);
+        body.CopyTo(message, prefix.Length);
+        var expected = HMACSHA256.HashData(Encoding.UTF8.GetBytes(secret), message);
+        if (!CryptographicOperations.FixedTimeEquals(expected, supplied))
+            return Unauthorized();
+
+        WebsiteStatusRequest? request;
+        try { request = JsonSerializer.Deserialize<WebsiteStatusRequest>(body, JsonOptions); }
+        catch (JsonException) { return BadRequest(); }
+        if (request?.EventId is null || !Regex.IsMatch(request.EventId, @"^resmoh-[0-9]{20,32}$"))
+            return BadRequest();
+
+        var hash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(request.EventId)));
+        var status = await (from submission in db.WebsiteLeadSubmissions.AsNoTracking()
+                            join lead in db.Leads.AsNoTracking() on submission.LeadId equals lead.Id
+                            join leadStatus in db.LeadStatuses.AsNoTracking() on lead.StatusId equals leadStatus.Id
+                            where submission.SubmissionHash == hash
+                            select new { Status = leadStatus.Name, SubmittedAtUtc = submission.CreatedAtUtc })
+            .SingleOrDefaultAsync(ct);
+
+        return status is null ? NotFound() : Ok(status);
+    }
+
     private static bool IsDuplicateSubmission(Exception exception)
     {
         for (Exception? error = exception; error is not null; error = error.InnerException)

@@ -127,9 +127,21 @@ public class Program
             try
             {
                 using var response = await clients.CreateClient("businessflow").SendAsync(outgoing, ct);
-                return response.StatusCode == HttpStatusCode.Accepted
-                    ? Results.Accepted(value: new { accepted = true })
-                    : Results.StatusCode(StatusCodes.Status503ServiceUnavailable);
+                if (response.StatusCode != HttpStatusCode.Accepted)
+                    return Results.StatusCode(StatusCodes.Status503ServiceUnavailable);
+
+                var expires = DateTimeOffset.UtcNow.AddDays(14);
+                var receipt = enquiry.SubmissionKey + "." + expires.ToUnixTimeSeconds();
+                var proof = Convert.ToHexString(HMACSHA256.HashData(
+                    Encoding.UTF8.GetBytes(secret), Encoding.UTF8.GetBytes("resmoh-request." + receipt)));
+                http.HttpContext.Response.Cookies.Append("Resmoh.Request", receipt + "." + proof,
+                    new CookieOptions
+                    {
+                        HttpOnly = true, Secure = !app.Environment.IsDevelopment(),
+                        SameSite = SameSiteMode.Strict, Path = "/",
+                        Expires = expires
+                    });
+                return Results.Accepted(value: new { accepted = true });
             }
             catch (HttpRequestException)
             {
@@ -141,7 +153,96 @@ public class Program
             }
         }).RequireRateLimiting("project-enquiry").WithMetadata(new RequestSizeLimitAttribute(8192));
 
+        // This is browser-bound receipt tracking, not an authenticated client account.
+        // Financial or project documents must not be exposed through this endpoint.
+        app.MapGet("/api/project-request/status", async (HttpContext context,
+            IConfiguration config, IHttpClientFactory clients, CancellationToken ct) =>
+        {
+            context.Response.Headers.CacheControl = "no-store";
+            var secret = config["BusinessFlow:SigningSecret"];
+            if (string.IsNullOrWhiteSpace(secret) || Encoding.UTF8.GetByteCount(secret) < 32)
+                return Results.StatusCode(StatusCodes.Status503ServiceUnavailable);
+
+            var key = ReadReceipt(context.Request.Cookies["Resmoh.Request"], secret);
+            if (key is null) return Results.Unauthorized();
+
+            var target = config["BusinessFlow:IntakeUrl"];
+            if (!Uri.TryCreate(target, UriKind.Absolute, out var endpoint) ||
+                (endpoint.Scheme != Uri.UriSchemeHttps &&
+                 !(app.Environment.IsDevelopment() && endpoint.IsLoopback && endpoint.Scheme == Uri.UriSchemeHttp)))
+                return Results.StatusCode(StatusCodes.Status503ServiceUnavailable);
+
+            var body = JsonSerializer.SerializeToUtf8Bytes(new { eventId = "resmoh-" + key });
+            var timestamp = DateTimeOffset.UtcNow.ToUnixTimeSeconds().ToString(CultureInfo.InvariantCulture);
+            var prefix = Encoding.UTF8.GetBytes(timestamp + ".");
+            var signed = new byte[prefix.Length + body.Length];
+            prefix.CopyTo(signed, 0);
+            body.CopyTo(signed, prefix.Length);
+            var signature = Convert.ToHexString(
+                HMACSHA256.HashData(Encoding.UTF8.GetBytes(secret), signed));
+
+            using var outgoing = new HttpRequestMessage(HttpMethod.Post,
+                new Uri(endpoint.AbsoluteUri.TrimEnd('/') + "/status"));
+            outgoing.Content = new ByteArrayContent(body);
+            outgoing.Content.Headers.ContentType =
+                new System.Net.Http.Headers.MediaTypeHeaderValue("application/json");
+            outgoing.Headers.TryAddWithoutValidation("X-Website-Timestamp", timestamp);
+            outgoing.Headers.TryAddWithoutValidation("X-Website-Signature", "sha256=" + signature);
+
+            try
+            {
+                using var response = await clients.CreateClient("businessflow").SendAsync(outgoing, ct);
+                if (response.StatusCode == HttpStatusCode.NotFound) return Results.NotFound();
+                if (response.StatusCode != HttpStatusCode.OK)
+                    return Results.StatusCode(StatusCodes.Status503ServiceUnavailable);
+
+                using var json = await JsonDocument.ParseAsync(
+                    await response.Content.ReadAsStreamAsync(ct), cancellationToken: ct);
+                var root = json.RootElement;
+                if (!root.TryGetProperty("status", out var status) ||
+                    status.ValueKind != JsonValueKind.String ||
+                    string.IsNullOrWhiteSpace(status.GetString()) || status.GetString()!.Length > 80 ||
+                    !root.TryGetProperty("submittedAtUtc", out var submitted) ||
+                    submitted.ValueKind != JsonValueKind.String ||
+                    !DateTimeOffset.TryParse(submitted.GetString(), out var submittedAtUtc))
+                    return Results.StatusCode(StatusCodes.Status502BadGateway);
+
+                return Results.Ok(new { status = status.GetString(), submittedAtUtc });
+            }
+            catch (HttpRequestException)
+            {
+                return Results.StatusCode(StatusCodes.Status503ServiceUnavailable);
+            }
+            catch (TaskCanceledException) when (!ct.IsCancellationRequested)
+            {
+                return Results.StatusCode(StatusCodes.Status503ServiceUnavailable);
+            }
+            catch (JsonException)
+            {
+                return Results.StatusCode(StatusCodes.Status502BadGateway);
+            }
+        }).RequireRateLimiting("project-enquiry");
+
         app.Run();
+    }
+
+    private static string? ReadReceipt(string? receipt, string secret)
+    {
+        if (string.IsNullOrWhiteSpace(receipt)) return null;
+        var parts = receipt.Split('.');
+        if (parts.Length != 3 || !Regex.IsMatch(parts[0], @"^[0-9]{20,32}$") ||
+            !long.TryParse(parts[1], out var expiry) ||
+            expiry < DateTimeOffset.UtcNow.ToUnixTimeSeconds() ||
+            expiry > DateTimeOffset.UtcNow.AddDays(14).ToUnixTimeSeconds() ||
+            parts[2].Length != 64)
+            return null;
+
+        byte[] supplied;
+        try { supplied = Convert.FromHexString(parts[2]); }
+        catch (FormatException) { return null; }
+        var expected = HMACSHA256.HashData(Encoding.UTF8.GetBytes(secret),
+            Encoding.UTF8.GetBytes("resmoh-request." + parts[0] + "." + parts[1]));
+        return CryptographicOperations.FixedTimeEquals(expected, supplied) ? parts[0] : null;
     }
 
     private static bool Valid(ProjectEnquiry r)
