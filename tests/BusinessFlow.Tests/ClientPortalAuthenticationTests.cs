@@ -341,7 +341,7 @@ public sealed class ClientPortalAuthenticationTests
             }));
 
         using var admin = await AdminClient(host);
-        using var employee = await host.ClientAsync("Employee");
+        using var employee = await baseHost.ClientAsync("Employee");
         using var client = host.CreateClient(new WebApplicationFactoryClientOptions
         {
             BaseAddress = new Uri("https://localhost"), HandleCookies = true
