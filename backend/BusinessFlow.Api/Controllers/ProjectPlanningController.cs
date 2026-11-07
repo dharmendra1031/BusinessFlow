@@ -40,7 +40,7 @@ public sealed class ProjectPlanningController(AppDbContext db, RecordAccessServi
             .Where(m => m.ProjectId == projectId).OrderBy(m => m.DueDate).ThenBy(m => m.Id)
             .Select(m => new
             {
-                m.Id, m.Title, m.Description, m.Status, m.DueDate,
+                m.Id, m.Title, m.Description, m.Status, m.DueDate, m.PublishedAtUtc,
                 TaskCount = db.DevelopmentTasks.Count(t => t.MilestoneId == m.Id),
                 DoneCount = db.DevelopmentTasks.Count(t => t.MilestoneId == m.Id && t.Status == "Done")
             }).ToListAsync();
@@ -103,9 +103,38 @@ public sealed class ProjectPlanningController(AppDbContext db, RecordAccessServi
         milestone.Description = request.Description?.Trim();
         milestone.Status = request.Status;
         milestone.DueDate = request.DueDate;
+        milestone.PublishedAtUtc = null; // Edited details need fresh Admin approval before sharing.
         project.UpdatedAtUtc = DateTime.UtcNow;
         Audit("Update", "ProjectMilestones", id);
         await db.SaveChangesAsync();
+        return NoContent();
+    }
+
+    public sealed record MilestonePublicationRequest(bool IsPublished);
+
+    [HttpPatch("milestones/{id:long}/publication")]
+    [Authorize(Roles = "Admin")]
+    public async Task<IActionResult> SetMilestonePublication(
+        long projectId, long id, MilestonePublicationRequest request, CancellationToken ct)
+    {
+        var milestone = await db.ProjectMilestones
+            .Include(x => x.Project).ThenInclude(x => x.Lead)
+            .FirstOrDefaultAsync(x => x.Id == id && x.ProjectId == projectId, ct);
+        if (milestone is null) return NotFound();
+
+        if (request.IsPublished)
+        {
+            var customerId = milestone.Project.Lead.CustomerId;
+            if (customerId is null || !await db.Customers.AnyAsync(x =>
+                x.Id == customerId && x.IsActive && x.MergedIntoCustomerId == null, ct))
+                return Conflict(new { message = "Link an active customer before publishing." });
+        }
+
+        if (milestone.PublishedAtUtc.HasValue == request.IsPublished) return NoContent();
+        milestone.PublishedAtUtc = request.IsPublished ? DateTime.UtcNow : null;
+        milestone.Project.UpdatedAtUtc = DateTime.UtcNow;
+        Audit(request.IsPublished ? "Publish" : "Unpublish", "ProjectMilestones", id);
+        await db.SaveChangesAsync(ct);
         return NoContent();
     }
 

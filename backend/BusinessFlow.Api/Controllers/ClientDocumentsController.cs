@@ -90,6 +90,32 @@ public sealed class ClientDocumentsController(AppDbContext db) : ControllerBase
         });
     }
 
+    [HttpGet("projects")]
+    public async Task<IActionResult> Projects(int page = 1, CancellationToken ct = default)
+    {
+        if (page is < 1 or > 100000) return BadRequest(new { message = "Invalid page." });
+        var customerId = await CustomerIdAsync(ct);
+        if (customerId is null) return Unauthorized();
+
+        var query = from milestone in db.ProjectMilestones.AsNoTracking()
+                    join project in db.DevelopmentProjects.AsNoTracking()
+                        on milestone.ProjectId equals project.Id
+                    join lead in db.Leads.AsNoTracking() on project.LeadId equals lead.Id
+                    where lead.CustomerId == customerId && milestone.PublishedAtUtc != null
+                    select new
+                    {
+                        milestone.Id, milestone.ProjectId, ProjectTitle = project.Title,
+                        milestone.Title, milestone.Status, milestone.DueDate,
+                        milestone.PublishedAtUtc
+                    };
+
+        var total = await query.CountAsync(ct);
+        var items = await query.OrderByDescending(x => x.PublishedAtUtc)
+            .ThenByDescending(x => x.Id)
+            .Skip((page - 1) * PageSize).Take(PageSize).ToListAsync(ct);
+        return Ok(new { items, total, page, pageSize = PageSize });
+    }
+
     [HttpGet("invoices")]
     public async Task<IActionResult> Invoices(int page = 1, CancellationToken ct = default)
     {

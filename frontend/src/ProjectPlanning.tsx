@@ -8,8 +8,8 @@ const statuses = ['Planned', 'InProgress', 'Completed'];
 const label = (value: string) => value.replace(/([a-z])([A-Z])/g, '$1 $2');
 const percent = (done: number, total: number) => total ? Math.round(done / total * 100) : 0;
 
-export default function ProjectPlanning({ project, token, canManage, planning, onSaved }: {
-  project: DevelopmentProject; token: string; canManage: boolean;
+export default function ProjectPlanning({ project, token, canManage, canPublish, planning, onSaved }: {
+  project: DevelopmentProject; token: string; canManage: boolean; canPublish: boolean;
   planning: ProjectPlan; onSaved: () => Promise<void>;
 }) {
   const { notify } = useFeedback();
@@ -71,6 +71,21 @@ export default function ProjectPlanning({ project, token, canManage, planning, o
     } finally { setBusy(false); }
   }
 
+  async function publishMilestone(item: ProjectMilestone) {
+    if (busy) return;
+    setBusy(true);
+    try {
+      await api(base + '/milestones/' + item.id + '/publication', token, {
+        method: 'PATCH',
+        body: JSON.stringify({ isPublished: !item.publishedAtUtc }),
+      });
+      await onSaved();
+      notify('success', item.publishedAtUtc ? 'Milestone hidden from client' : 'Milestone shared with client');
+    } catch (err) {
+      notify('error', 'Unable to update client visibility', err instanceof Error ? err.message : undefined);
+    } finally { setBusy(false); }
+  }
+
   async function saveSprint(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!validateForm(event.currentTarget) || busy) return;
@@ -107,8 +122,15 @@ export default function ProjectPlanning({ project, token, canManage, planning, o
             <small>{label(item.status)} · Due {item.dueDate || 'not set'} ·
               {' '}{item.doneCount}/{item.taskCount} tasks ({percent(item.doneCount, item.taskCount)}%)</small>
           </div>
-          {canManage && project.status !== 'Completed' &&
-            <button type="button" className="text-action" onClick={() => editMilestone(item)}>Edit milestone</button>}
+          <div>
+            <small>{item.publishedAtUtc ? 'Shared with client' : 'Internal only'}</small>
+            {canManage && project.status !== 'Completed' &&
+              <button type="button" className="text-action" onClick={() => editMilestone(item)}>Edit milestone</button>}
+            {canPublish && <button type="button" className="text-action" disabled={busy}
+              onClick={() => void publishMilestone(item)}>
+              {item.publishedAtUtc ? 'Hide from client' : 'Share with client'}
+            </button>}
+          </div>
         </article>)}
       </div> : <p className="field-help">No milestones planned.</p>}
       {canManage && project.status !== 'Completed' && <details className="project-section" open={editingMilestone !== null ? true : undefined}>

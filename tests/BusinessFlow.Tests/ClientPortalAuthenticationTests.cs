@@ -323,6 +323,146 @@ public sealed class ClientPortalAuthenticationTests
             (await client.GetAsync("/api/client/invoices")).StatusCode);
     }
 
+    [Fact]
+    public async Task Client_only_sees_explicitly_published_milestones_for_their_customer()
+    {
+        await using var database = await Phase1TestDatabase.CreateAsync();
+        var sender = new Mailbox();
+        await using var baseHost = new Phase1ApiHost(database, new Dictionary<string, string?>
+        {
+            ["ClientPortal:Enabled"] = "true",
+            ["ClientPortal:OtpPepper"] = "a_dedicated_server_secret_that_is_at_least_32_bytes_long"
+        });
+        await using var host = baseHost.WithWebHostBuilder(builder =>
+            builder.ConfigureTestServices(services =>
+            {
+                services.RemoveAll<IClientOtpSender>();
+                services.AddSingleton<IClientOtpSender>(sender);
+            }));
+
+        using var admin = await AdminClient(host);
+        using var employee = await host.ClientAsync("Employee");
+        using var client = host.CreateClient(new WebApplicationFactoryClientOptions
+        {
+            BaseAddress = new Uri("https://localhost"), HandleCookies = true
+        });
+        var staffId = (await admin.GetFromJsonAsync<JsonElement>("/api/auth/me"))
+            .GetProperty("id").GetInt64();
+
+        long customerId, contactId, projectId, sharedId, hiddenId, foreignProjectId, foreignId;
+        await using (var db = database.CreateContext())
+        {
+            var own = new Customer { Name = "Portal Customer" };
+            var foreign = new Customer { Name = "Another Customer" };
+            db.Customers.AddRange(own, foreign);
+            await db.SaveChangesAsync();
+
+            var contact = new CustomerContact
+            {
+                CustomerId = own.Id, Name = "Portal Contact", Email = "milestones@example.test"
+            };
+            db.CustomerContacts.Add(contact);
+            var lead = new Lead
+            {
+                CustomerId = own.Id, Name = "Own Lead", Phone = "1234567890",
+                SourceId = 1, StatusId = 5, CreatedById = staffId
+            };
+            var foreignLead = new Lead
+            {
+                CustomerId = foreign.Id, Name = "Other Lead", Phone = "1234567891",
+                SourceId = 1, StatusId = 5, CreatedById = staffId
+            };
+            db.Leads.AddRange(lead, foreignLead);
+            await db.SaveChangesAsync();
+
+            var ownProject = new DevelopmentProject
+            {
+                LeadId = lead.Id, OwnerId = staffId, CreatedById = staffId,
+                Title = "Customer Website", Status = "Planning"
+            };
+            var otherProject = new DevelopmentProject
+            {
+                LeadId = foreignLead.Id, OwnerId = staffId, CreatedById = staffId,
+                Title = "Private Project", Status = "Planning"
+            };
+            db.DevelopmentProjects.AddRange(ownProject, otherProject);
+            await db.SaveChangesAsync();
+
+            var shared = new ProjectMilestone { ProjectId = ownProject.Id, Title = "Client review" };
+            var hidden = new ProjectMilestone { ProjectId = ownProject.Id, Title = "Internal QA" };
+            var other = new ProjectMilestone { ProjectId = otherProject.Id, Title = "Other client work" };
+            db.ProjectMilestones.AddRange(shared, hidden, other);
+            await db.SaveChangesAsync();
+            customerId = own.Id;
+            contactId = contact.Id;
+            projectId = ownProject.Id;
+            foreignProjectId = otherProject.Id;
+            sharedId = shared.Id;
+            hiddenId = hidden.Id;
+            foreignId = other.Id;
+        }
+
+        Assert.Equal(HttpStatusCode.Unauthorized,
+            (await client.GetAsync("/api/client/projects")).StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized,
+            (await admin.GetAsync("/api/client/projects")).StatusCode);
+        Assert.Equal(HttpStatusCode.Created,
+            (await admin.PostAsJsonAsync("/api/admin/client-access", new { customerId, contactId })).StatusCode);
+        Assert.Equal(HttpStatusCode.Accepted,
+            (await client.PostAsJsonAsync("/api/client/auth/request-code",
+                new { email = "milestones@example.test" })).StatusCode);
+        Assert.Equal(HttpStatusCode.OK,
+            (await client.PostAsJsonAsync("/api/client/auth/verify-code",
+                new { email = "milestones@example.test", code = sender.Code })).StatusCode);
+
+        var empty = await client.GetFromJsonAsync<JsonElement>("/api/client/projects");
+        Assert.Equal(0, empty.GetProperty("total").GetInt32());
+
+        var publish = new { isPublished = true };
+        var ownUrl = $"/api/projects/{projectId}/planning/milestones/{sharedId}/publication";
+        Assert.Equal(HttpStatusCode.Forbidden,
+            (await employee.PatchAsJsonAsync(ownUrl, publish)).StatusCode);
+        Assert.Equal(HttpStatusCode.NoContent,
+            (await admin.PatchAsJsonAsync(ownUrl, publish)).StatusCode);
+        Assert.Equal(HttpStatusCode.NoContent,
+            (await admin.PatchAsJsonAsync(
+                $"/api/projects/{foreignProjectId}/planning/milestones/{foreignId}/publication",
+                publish)).StatusCode);
+
+        var visible = await client.GetFromJsonAsync<JsonElement>("/api/client/projects");
+        Assert.Equal(1, visible.GetProperty("total").GetInt32());
+        var update = visible.GetProperty("items")[0];
+        Assert.Equal(sharedId, update.GetProperty("id").GetInt64());
+        Assert.Equal("Customer Website", update.GetProperty("projectTitle").GetString());
+        Assert.Equal("Client review", update.GetProperty("title").GetString());
+        Assert.False(update.TryGetProperty("description", out _));
+        Assert.False(update.TryGetProperty("ownerId", out _));
+        Assert.False(update.TryGetProperty("customerId", out _));
+        Assert.Equal(HttpStatusCode.BadRequest,
+            (await client.GetAsync("/api/client/projects?page=-1")).StatusCode);
+
+        Assert.Equal(HttpStatusCode.NoContent,
+            (await admin.PutAsJsonAsync(
+                $"/api/projects/{projectId}/planning/milestones/{sharedId}",
+                new { title = "Client review updated", description = "Revised", status = "Planned", dueDate = (DateOnly?)null })).StatusCode);
+        var afterEdit = await client.GetFromJsonAsync<JsonElement>("/api/client/projects");
+        Assert.Equal(0, afterEdit.GetProperty("total").GetInt32());
+
+        Assert.Equal(HttpStatusCode.NoContent,
+            (await admin.PatchAsJsonAsync(ownUrl, publish)).StatusCode);
+        Assert.Equal(HttpStatusCode.NoContent,
+            (await admin.PatchAsJsonAsync(ownUrl, new { isPublished = false })).StatusCode);
+        var afterHide = await client.GetFromJsonAsync<JsonElement>("/api/client/projects");
+        Assert.Equal(0, afterHide.GetProperty("total").GetInt32());
+
+        await using var dbCheck = database.CreateContext();
+        Assert.Null((await dbCheck.ProjectMilestones.SingleAsync(x => x.Id == sharedId)).PublishedAtUtc);
+        Assert.Null((await dbCheck.ProjectMilestones.SingleAsync(x => x.Id == hiddenId)).PublishedAtUtc);
+        Assert.NotNull((await dbCheck.ProjectMilestones.SingleAsync(x => x.Id == foreignId)).PublishedAtUtc);
+        Assert.True(await dbCheck.AuditLogs.AnyAsync(x =>
+            x.TableName == "ProjectMilestones" && x.RecordId == sharedId && x.Action == "Unpublish"));
+    }
+
     private static async Task<HttpClient> AdminClient(WebApplicationFactory<Program> host)
     {
         using var scope = host.Services.CreateScope();

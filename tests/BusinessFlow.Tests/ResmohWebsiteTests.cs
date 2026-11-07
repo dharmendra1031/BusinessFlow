@@ -227,11 +227,17 @@ public sealed class ResmohWebsiteTests
         invoice.Headers.TryAddWithoutValidation("Cookie", "Resmoh.Client=example-ticket");
         Assert.Equal(HttpStatusCode.OK, (await client.SendAsync(invoice)).StatusCode);
         Assert.Equal("https://businessflow.test/api/client/invoices/14", crm.LastUrl);
-        Assert.Equal(HttpStatusCode.NotFound,
+        Assert.Equal(HttpStatusCode.Unauthorized,
             (await client.GetAsync("/api/client/projects")).StatusCode);
+        using var projects = new HttpRequestMessage(HttpMethod.Get, "/api/client/projects?page=3");
+        projects.Headers.TryAddWithoutValidation("Cookie", "Resmoh.Client=example-ticket");
+        Assert.Equal(HttpStatusCode.OK, (await client.SendAsync(projects)).StatusCode);
+        Assert.Equal("https://businessflow.test/api/client/projects?page=3", crm.LastUrl);
+        Assert.Equal(HttpStatusCode.NotFound,
+            (await client.GetAsync("/api/client/projects/1")).StatusCode);
         Assert.Equal(HttpStatusCode.NotFound,
             (await client.GetAsync("/api/client/quotations/0")).StatusCode);
-        Assert.Equal(5, crm.Requests);
+        Assert.Equal(7, crm.Requests);
     }
 
     private sealed class RecordingCrm : HttpMessageHandler
@@ -264,7 +270,8 @@ public sealed class ResmohWebsiteTests
                     };
                 if (request.Method == HttpMethod.Get &&
                     (LastUrl.Contains("/quotations", StringComparison.Ordinal) ||
-                     LastUrl.Contains("/invoices", StringComparison.Ordinal)))
+                     LastUrl.Contains("/invoices", StringComparison.Ordinal) ||
+                     LastUrl.Contains("/projects", StringComparison.Ordinal)))
                     return ForwardedCookie is null
                         ? new HttpResponseMessage(HttpStatusCode.Unauthorized)
                         : new HttpResponseMessage(HttpStatusCode.OK)

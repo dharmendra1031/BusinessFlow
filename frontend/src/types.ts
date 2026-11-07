@@ -28,7 +28,7 @@ export type DevelopmentProject = {
 
 export type ProjectMilestone = {
   id: number; title: string; description: string | null; status: string;
-  dueDate: string | null; taskCount: number; doneCount: number;
+  dueDate: string | null; publishedAtUtc: string | null; taskCount: number; doneCount: number;
 };
 export type ProjectSprint = {
   id: number; title: string; goal: string | null; status: string;

@@ -9,6 +9,7 @@ public sealed class ProjectMilestone
     public string? Description { get; set; }
     public string Status { get; set; } = "Planned";
     public DateOnly? DueDate { get; set; }
+    public DateTime? PublishedAtUtc { get; set; }
     public DateTime CreatedAtUtc { get; set; } = DateTime.UtcNow;
 }
 

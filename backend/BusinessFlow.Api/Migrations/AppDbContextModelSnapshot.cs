@@ -1104,6 +1104,9 @@ namespace BusinessFlow.Api.Migrations
                     b.Property<long>("ProjectId")
                         .HasColumnType("bigint");
 
+                    b.Property<DateTime?>("PublishedAtUtc")
+                        .HasColumnType("datetime2");
+
                     b.Property<string>("Status")
                         .IsRequired()
                         .HasMaxLength(20)

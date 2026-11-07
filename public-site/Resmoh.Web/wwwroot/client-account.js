@@ -147,6 +147,58 @@ async function loadDocuments(kind, page = 1) {
   }
 }
 
+async function loadProjects(page = 1) {
+  const status = document.getElementById('projects-status');
+  const container = document.getElementById('projects-list');
+  status.textContent = 'Loading…';
+  try {
+    const response = await fetch('/api/client/projects?page=' + page, {
+      credentials: 'same-origin', cache: 'no-store'
+    });
+    if (response.status === 401) {
+      window.location.replace('/client/login/');
+      return;
+    }
+    if (!response.ok) throw new Error('unavailable');
+
+    const data = await response.json();
+    container.replaceChildren();
+    if (!data.items.length) {
+      status.textContent = 'No published project milestones yet.';
+      return;
+    }
+    status.textContent = 'Showing page ' + data.page + ' of ' +
+      Math.ceil(data.total / data.pageSize);
+
+    for (const milestone of data.items) {
+      const article = document.createElement('article');
+      article.className = 'client-project-update';
+      const title = document.createElement('strong');
+      title.textContent = milestone.projectTitle + ' — ' + milestone.title;
+      article.appendChild(title);
+      addText(article, 'Status', milestone.status);
+      addText(article, 'Due date', formatDate(milestone.dueDate));
+      container.appendChild(article);
+    }
+
+    if (data.total > data.pageSize) {
+      const pager = document.createElement('div');
+      pager.className = 'client-pager';
+      for (const [label, target] of [['Previous', page - 1], ['Next', page + 1]]) {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.textContent = label;
+        button.disabled = target < 1 || (target - 1) * data.pageSize >= data.total;
+        button.addEventListener('click', () => void loadProjects(target));
+        pager.appendChild(button);
+      }
+      container.appendChild(pager);
+    }
+  } catch {
+    status.textContent = 'Unable to load project milestones. Please try again.';
+  }
+}
+
 async function loadAccount() {
   try {
     const response = await fetch('/api/client/me', {
@@ -164,7 +216,7 @@ async function loadAccount() {
     message.textContent = 'Your client identity is verified.';
     logout.hidden = false;
     documents.hidden = false;
-    await Promise.all([loadDocuments('quotations'), loadDocuments('invoices')]);
+    await Promise.all([loadDocuments('quotations'), loadDocuments('invoices'), loadProjects()]);
   } catch {
     company.textContent = 'Account temporarily unavailable';
     message.textContent = 'Please refresh or try again later.';

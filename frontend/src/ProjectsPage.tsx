@@ -331,7 +331,8 @@ export default function ProjectsPage({ token, user, permissions }: {
           </form>
         </details>}
         {allowed('planning.view') && <ProjectPlanning project={selected} token={token} planning={planning}
-          canManage={canManagePlanning && mayManage(selected)} onSaved={() => openProject(selected.id)} />}
+          canManage={canManagePlanning && mayManage(selected)} canPublish={user.roles.includes('Admin')}
+           onSaved={() => openProject(selected.id)} />}
         <ProjectTaskList project={selected} userId={user.id}
           canChangeTask={canChangeTask} canEditTask={canEditTask}
           canManage={mayManage(selected)} taskSaving={taskSaving}
