@@ -205,13 +205,17 @@ public class Program
             }
         }).RequireRateLimiting("project-enquiry");
 
-        // Only four client-auth routes are allowed through the public site.
-        // Employee/Admin endpoints are never proxied.
+        // Only approved client routes reach the private CRM. Staff APIs stay private.
         app.MapMethods("/api/client/{**path}", ["GET", "POST"],
             async (HttpContext context, string? path, IConfiguration config,
                 IHttpClientFactory clients, CancellationToken ct) =>
             {
-                var validRoute = (HttpMethods.IsGet(context.Request.Method) && path == "me") ||
+                var parts = path?.Split('/');
+                var documentRoute = parts is { Length: 2 } &&
+                    (parts[0] == "quotations" || parts[0] == "invoices") &&
+                    long.TryParse(parts[1], out var documentId) && documentId > 0;
+                var validRoute = (HttpMethods.IsGet(context.Request.Method) &&
+                    (path is "me" or "quotations" or "invoices" || documentRoute)) ||
                     (HttpMethods.IsPost(context.Request.Method) &&
                      path is "auth/request-code" or "auth/verify-code" or "auth/logout");
                 if (!validRoute) return Results.NotFound();
@@ -233,8 +237,10 @@ public class Program
                      !(app.Environment.IsDevelopment() && endpoint.IsLoopback && endpoint.Scheme == Uri.UriSchemeHttp)))
                     return Results.StatusCode(StatusCodes.Status503ServiceUnavailable);
 
+                var query = path is "quotations" or "invoices"
+                    ? context.Request.QueryString.Value : "";
                 using var outgoing = new HttpRequestMessage(new HttpMethod(context.Request.Method),
-                    new Uri(endpoint.AbsoluteUri.TrimEnd('/') + "/" + path));
+                    new Uri(endpoint.AbsoluteUri.TrimEnd('/') + "/" + path + query));
                 if (HttpMethods.IsPost(context.Request.Method))
                 {
                     using var buffer = new MemoryStream();

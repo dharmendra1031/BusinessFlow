@@ -156,6 +156,173 @@ public sealed class ClientPortalAuthenticationTests
                 new { email = "someone@example.test" })).StatusCode);
     }
 
+    [Fact]
+    public async Task Client_documents_are_read_only_and_limited_to_the_verified_customer()
+    {
+        await using var database = await Phase1TestDatabase.CreateAsync();
+        var sender = new Mailbox();
+        await using var baseHost = new Phase1ApiHost(database, new Dictionary<string, string?>
+        {
+            ["ClientPortal:Enabled"] = "true",
+            ["ClientPortal:OtpPepper"] = "a_dedicated_server_secret_that_is_at_least_32_bytes_long"
+        });
+        await using var host = baseHost.WithWebHostBuilder(builder =>
+            builder.ConfigureTestServices(services =>
+            {
+                services.RemoveAll<IClientOtpSender>();
+                services.AddSingleton<IClientOtpSender>(sender);
+            }));
+
+        using var admin = await AdminClient(host);
+        using var client = host.CreateClient(new WebApplicationFactoryClientOptions
+        {
+            BaseAddress = new Uri("https://localhost"), HandleCookies = true
+        });
+        var staffId = (await admin.GetFromJsonAsync<JsonElement>("/api/auth/me"))
+            .GetProperty("id").GetInt64();
+        long customerId, contactId, sentId, draftId, otherId, invoiceId, otherInvoiceId;
+
+        await using (var db = database.CreateContext())
+        {
+            var customer = new Customer { Name = "Company A" };
+            var other = new Customer { Name = "Company B" };
+            db.Customers.AddRange(customer, other);
+            await db.SaveChangesAsync();
+
+            var contact = new CustomerContact
+            {
+                CustomerId = customer.Id, Name = "A Contact", Email = "a@example.test"
+            };
+            db.CustomerContacts.Add(contact);
+
+            Lead NewLead(long customer, string name) => new()
+            {
+                CustomerId = customer, Name = name, Phone = "1234567890",
+                SourceId = 1, StatusId = 3, CreatedById = staffId
+            };
+            var sentLead = NewLead(customer.Id, "A Sent");
+            var draftLead = NewLead(customer.Id, "A Draft");
+            var acceptedLead = NewLead(customer.Id, "A Accepted");
+            var otherLead = NewLead(other.Id, "B Accepted");
+            db.Leads.AddRange(sentLead, draftLead, acceptedLead, otherLead);
+            await db.SaveChangesAsync();
+
+            SalesQuotation NewQuote(long leadId, string status) => new()
+            {
+                LeadId = leadId, Status = status, CreatedById = staffId
+            };
+            var sent = NewQuote(sentLead.Id, "Sent");
+            var draft = NewQuote(draftLead.Id, "Draft");
+            var accepted = NewQuote(acceptedLead.Id, "Accepted");
+            var foreign = NewQuote(otherLead.Id, "Accepted");
+            db.SalesQuotations.AddRange(sent, draft, accepted, foreign);
+            await db.SaveChangesAsync();
+
+            SalesQuotationRevision NewRevision(long quotationId, string title) => new()
+            {
+                QuotationId = quotationId, Revision = 1, Title = title,
+                Amount = 100m, Subtotal = 100m, CreatedById = staffId
+            };
+            db.SalesQuotationRevisions.AddRange(
+                NewRevision(sent.Id, "A Public Quote"),
+                NewRevision(draft.Id, "A Private Draft"),
+                NewRevision(accepted.Id, "A Signed Quote"),
+                NewRevision(foreign.Id, "B Private Quote"));
+            await db.SaveChangesAsync();
+
+            var contract = new SalesContract
+            {
+                QuotationId = accepted.Id, QuotationRevision = 1,
+                BilledAmount = 100m, Status = "Signed", Terms = "Agreed terms",
+                CreatedById = staffId
+            };
+            var otherContract = new SalesContract
+            {
+                QuotationId = foreign.Id, QuotationRevision = 1,
+                BilledAmount = 100m, Status = "Signed", Terms = "Other terms",
+                CreatedById = staffId
+            };
+            db.SalesContracts.AddRange(contract, otherContract);
+            await db.SaveChangesAsync();
+
+            SalesInvoice NewInvoice(long contractId, string status) => new()
+            {
+                ContractId = contractId, Status = status, Amount = 100m,
+                Description = "Project milestone", BillToName = "Customer",
+                DueDate = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(7)),
+                CreatedById = staffId
+            };
+            var invoice = NewInvoice(contract.Id, "Issued");
+            var voidInvoice = NewInvoice(contract.Id, "Void");
+            var otherInvoice = NewInvoice(otherContract.Id, "Issued");
+            db.SalesInvoices.AddRange(invoice, voidInvoice, otherInvoice);
+            await db.SaveChangesAsync();
+
+            customerId = customer.Id;
+            contactId = contact.Id;
+            sentId = sent.Id;
+            draftId = draft.Id;
+            otherId = foreign.Id;
+            invoiceId = invoice.Id;
+            otherInvoiceId = otherInvoice.Id;
+        }
+
+        Assert.Equal(HttpStatusCode.Unauthorized,
+            (await client.GetAsync("/api/client/quotations")).StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized,
+            (await admin.GetAsync("/api/client/invoices")).StatusCode);
+
+        Assert.Equal(HttpStatusCode.Created,
+            (await admin.PostAsJsonAsync("/api/admin/client-access", new { customerId, contactId })).StatusCode);
+        Assert.Equal(HttpStatusCode.Accepted,
+            (await client.PostAsJsonAsync("/api/client/auth/request-code",
+                new { email = "a@example.test" })).StatusCode);
+        Assert.Equal(HttpStatusCode.OK,
+            (await client.PostAsJsonAsync("/api/client/auth/verify-code",
+                new { email = "a@example.test", code = sender.Code })).StatusCode);
+
+        var quotes = await client.GetFromJsonAsync<JsonElement>("/api/client/quotations");
+        Assert.Equal(2, quotes.GetProperty("total").GetInt32());
+        Assert.Contains(quotes.GetProperty("items").EnumerateArray(),
+            x => x.GetProperty("id").GetInt64() == sentId);
+        Assert.DoesNotContain(quotes.GetProperty("items").EnumerateArray(),
+            x => x.GetProperty("title").GetString() == "A Private Draft" ||
+                 x.GetProperty("title").GetString() == "B Private Quote");
+        Assert.False(quotes.GetProperty("items")[0].TryGetProperty("leadId", out _));
+        Assert.Equal(HttpStatusCode.NotFound,
+            (await client.GetAsync($"/api/client/quotations/{draftId}")).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound,
+            (await client.GetAsync($"/api/client/quotations/{otherId}")).StatusCode);
+        var visibleQuote = await client.GetFromJsonAsync<JsonElement>($"/api/client/quotations/{sentId}");
+        Assert.Equal("A Public Quote", visibleQuote.GetProperty("title").GetString());
+        Assert.False(visibleQuote.TryGetProperty("createdById", out _));
+
+        var invoices = await client.GetFromJsonAsync<JsonElement>("/api/client/invoices");
+        Assert.Equal(1, invoices.GetProperty("total").GetInt32());
+        Assert.Equal(invoiceId, invoices.GetProperty("items")[0].GetProperty("id").GetInt64());
+        Assert.False(invoices.GetProperty("items")[0].TryGetProperty("contractId", out _));
+        Assert.Equal(HttpStatusCode.NotFound,
+            (await client.GetAsync($"/api/client/invoices/{otherInvoiceId}")).StatusCode);
+        Assert.Equal(HttpStatusCode.OK,
+            (await client.GetAsync($"/api/client/invoices/{invoiceId}")).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest,
+            (await client.GetAsync("/api/client/invoices?page=-1")).StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized,
+            (await client.GetAsync("/api/admin/billing/invoices")).StatusCode);
+
+        await using (var db = database.CreateContext())
+        {
+            var account = await db.ClientPortalAccounts.SingleAsync();
+            account.IsActive = false;
+            account.SessionVersion++;
+            await db.SaveChangesAsync();
+        }
+        Assert.Equal(HttpStatusCode.Unauthorized,
+            (await client.GetAsync("/api/client/quotations")).StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized,
+            (await client.GetAsync("/api/client/invoices")).StatusCode);
+    }
+
     private static async Task<HttpClient> AdminClient(WebApplicationFactory<Program> host)
     {
         using var scope = host.Services.CreateScope();

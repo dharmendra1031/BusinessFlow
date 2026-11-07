@@ -246,3 +246,17 @@ button { cursor: pointer; }
 .tracking-panel input { display: block; min-height: 49px; width: 100%; padding: 12px; border: 1px solid #c6d2da; border-radius: 5px; margin-bottom: 18px; font: inherit; }
 .tracking-panel .button { margin-right: 8px; margin-top: 6px; }
 #login-message { margin-top: 20px; font-size: .88rem; }
+
+/* Client documents: compact tables with horizontal overflow on narrow screens. */
+.client-documents { margin: 36px 0; }
+.client-documents > h2 { font-size: 1.35rem; margin: 30px 0 8px; }
+.client-documents > p { font-size: .86rem; color: #5e7180; }
+.client-table-wrap { width: 100%; overflow-x: auto; border: 1px solid var(--line); border-radius: 5px; }
+.client-table { width: 100%; border-collapse: collapse; min-width: 530px; font-size: .85rem; }
+.client-table th, .client-table td { padding: 12px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
+.client-table th { font-size: .77rem; color: #546979; font-weight: 650; background: #f6f8f9; }
+.client-table tbody tr:last-child td { border-bottom: 0; }
+.client-view, .client-pager button { border: 1px solid #a5b6c1; background: #fff; color: #18516e; border-radius: 4px; padding: 6px 10px; cursor: pointer; font: inherit; }
+.client-pager { display: flex; justify-content: flex-end; gap: 10px; margin: 12px 0; }
+.client-pager button:disabled { opacity: .45; cursor: default; }
+#document-body { overflow-wrap: anywhere; }

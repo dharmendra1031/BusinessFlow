@@ -8,7 +8,15 @@
 <div class="tracking-panel"><h2 id="account-company">Checking access…</h2><p id="account-person"></p><p id="account-email"></p>
 <p id="account-message" role="status" aria-live="polite">Authenticating your session.</p>
 <button id="client-logout" type="button" class="button button-outline" hidden>Sign out</button></div>
-<div class="tracking-note"><h2>Project information</h2><p>Quotation, invoice and approved project views will be enabled in the next client portal release after customer-level access tests. No internal staff records or financial information are exposed here.</p>
+<section id="client-documents" class="client-documents" hidden>
+<h2>Your quotations</h2><p id="quotations-status" role="status" aria-live="polite"></p><div id="quotations-list"></div>
+<h2>Your invoices</h2><p id="invoices-status" role="status" aria-live="polite"></p><div id="invoices-list"></div>
+<div id="document-detail" class="tracking-panel" hidden>
+<h2 id="document-title" tabindex="-1"></h2><div id="document-body"></div>
+<button id="document-close" type="button" class="button button-outline">Back to documents</button>
+</div></section>
+<div class="tracking-note"><h2>Project updates</h2>
+<p>Approved project milestones and online approvals are not available yet. Your verified account shows only the quotations and invoices linked to your customer record.</p>
 <a class="text-link dark-link" href="/client/">Track a recent enquiry ↗</a></div>
 </div></main>
 <footer class="site-footer"><div class="container footer-row"><a class="brand" href="/"><span class="brand-mark small">R<span>.</span></span><span>Resmoh <strong>IT</strong></span></a><span>Software & IT Solutions</span><div><a href="/">Home</a><a href="/privacy/">Privacy</a></div><span>© 2026 Resmoh IT</span></div></footer>

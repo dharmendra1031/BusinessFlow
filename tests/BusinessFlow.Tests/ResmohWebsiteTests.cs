@@ -216,9 +216,22 @@ public sealed class ResmohWebsiteTests
         Assert.Equal("Resmoh.Client=example-ticket", crm.ForwardedCookie);
         Assert.DoesNotContain("OtherCookie", crm.ForwardedCookie);
 
-        Assert.Equal(HttpStatusCode.NotFound,
+        Assert.Equal(HttpStatusCode.Unauthorized,
             (await client.GetAsync("/api/client/quotations")).StatusCode);
-        Assert.Equal(2, crm.Requests);
+        using var documents = new HttpRequestMessage(HttpMethod.Get, "/api/client/quotations?page=2");
+        documents.Headers.TryAddWithoutValidation("Cookie", "Resmoh.Client=example-ticket; CRM.Session=ignored");
+        Assert.Equal(HttpStatusCode.OK, (await client.SendAsync(documents)).StatusCode);
+        Assert.Equal("https://businessflow.test/api/client/quotations?page=2", crm.LastUrl);
+        Assert.Equal("Resmoh.Client=example-ticket", crm.ForwardedCookie);
+        using var invoice = new HttpRequestMessage(HttpMethod.Get, "/api/client/invoices/14");
+        invoice.Headers.TryAddWithoutValidation("Cookie", "Resmoh.Client=example-ticket");
+        Assert.Equal(HttpStatusCode.OK, (await client.SendAsync(invoice)).StatusCode);
+        Assert.Equal("https://businessflow.test/api/client/invoices/14", crm.LastUrl);
+        Assert.Equal(HttpStatusCode.NotFound,
+            (await client.GetAsync("/api/client/projects")).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound,
+            (await client.GetAsync("/api/client/quotations/0")).StatusCode);
+        Assert.Equal(5, crm.Requests);
     }
 
     private sealed class RecordingCrm : HttpMessageHandler
@@ -249,6 +262,15 @@ public sealed class ResmohWebsiteTests
                             email = "example@test.local"
                         })
                     };
+                if (request.Method == HttpMethod.Get &&
+                    (LastUrl.Contains("/quotations", StringComparison.Ordinal) ||
+                     LastUrl.Contains("/invoices", StringComparison.Ordinal)))
+                    return ForwardedCookie is null
+                        ? new HttpResponseMessage(HttpStatusCode.Unauthorized)
+                        : new HttpResponseMessage(HttpStatusCode.OK)
+                        {
+                            Content = JsonContent.Create(new { items = Array.Empty<object>(), total = 0, page = 1, pageSize = 20 })
+                        };
                 return new HttpResponseMessage(HttpStatusCode.Accepted);
             }
             Body = await request.Content!.ReadAsStringAsync(cancellationToken);
