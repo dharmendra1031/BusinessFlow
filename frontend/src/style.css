@@ -236,6 +236,16 @@ td small { display: block; font-size: 11px; max-width: 210px; overflow: hidden; 
   display: flex; justify-content: flex-end; animation: fadeIn .17s ease; }
 .detail-drawer { background: white; height: 100%; width: min(480px, 100%); overflow-y: auto; padding: 30px;
   box-shadow: -15px 0 50px #00132d20; animation: slideIn .2s ease; }
+.detail-drawer.wide-drawer { width: min(800px, 100%); }
+.wide-drawer .drawer-form { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px 20px; }
+.wide-drawer .drawer-form > h3, .wide-drawer .drawer-form > .drawer-actions,
+.wide-drawer .drawer-form > .field-help, .wide-drawer .drawer-form > fieldset,
+.wide-drawer .drawer-form > label:has(textarea) { grid-column: 1 / -1; }
+.drawer-form label:has(> input[type="checkbox"]) { display: flex; align-items: center; gap: 10px; }
+.drawer-form input[type="checkbox"] { width: 16px; height: 16px; padding: 0; flex-shrink: 0; }
+@media (max-width: 700px) {
+  .wide-drawer .drawer-form { grid-template-columns: 1fr; }
+}
 .drawer-header { display: flex; gap: 12px; align-items: flex-start; justify-content: space-between; }
 .drawer-header h2 { margin: 6px 0 6px; font-size: 23px; letter-spacing: -.6px; }
 .drawer-header p { color: var(--muted); margin: 0 0 25px; font-size: 12px; }
@@ -400,5 +410,12 @@ td small { display: block; font-size: 11px; max-width: 210px; overflow: hidden; 
 }
 
 /* Secondary billing actions stay collapsed until the user chooses them. */
+.quotation-next-step { display: flex; align-items: baseline; gap: 10px;
+  margin: 12px 24px 20px; padding: 12px 0; border-block: 1px solid var(--border);
+  color: #293d57; font-size: 13px; }
+.quotation-next-step strong { white-space: nowrap; }
+@media (max-width: 600px) {
+  .quotation-next-step { margin-inline: 18px; flex-direction: column; gap: 4px; }
+}
 .billing-reports > summary { cursor: pointer; font-size: 16px; font-weight: 700; color: #293d57; padding: 5px 0 12px; }
 .billing-reports[open] > summary { margin-bottom: 12px; border-bottom: 1px solid var(--border); }
