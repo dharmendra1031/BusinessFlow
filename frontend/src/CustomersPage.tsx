@@ -466,11 +466,13 @@ export default function CustomersPage({ token }: { token: string }) {
           {([
             ['overview', 'Overview'], ['contacts', 'Contacts'],
             ['relationships', 'Leads & projects'], ['history', 'Activity'],
-            ...(detail.customer.isActive ? [['merge', 'Merge']] : []),
           ] as const).map(([id, label]) =>
             <button type="button" key={id} role="tab" aria-selected={detailTab === id}
               className={detailTab === id ? 'selected' : ''}
               onClick={() => setDetailTab(id)}>{label}</button>)}
+          {detail.customer.isActive && <button type="button" role="tab"
+            aria-selected={detailTab === 'merge'} className={detailTab === 'merge' ? 'selected' : ''}
+            onClick={() => setDetailTab('merge')}>Merge</button>}
         </div>}
         {detail.customer.mergedIntoCustomerId == null && <>
         {detailTab === 'overview' && <>
@@ -535,7 +537,7 @@ export default function CustomersPage({ token }: { token: string }) {
               <button className="primary" disabled={working}>Save contact</button>
             </div>
           </form>
-        </section>
+        </section>}
 
         {detailTab === 'relationships' && <>
         <section className="project-section" aria-label="Linked leads">
