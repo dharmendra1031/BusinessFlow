@@ -297,7 +297,7 @@ export default function ProjectsPage({ token, user, permissions }: {
     </div>}
 
     {selected && <div className="drawer-backdrop">
-      <aside className="detail-drawer" role="dialog" aria-modal="true" aria-label={'Project ' + selected.title}
+      <aside className="detail-drawer wide-drawer" role="dialog" aria-modal="true" aria-label={'Project ' + selected.title}
         onKeyDown={event => handleDialogKeyDown(event, () => { if (!working) setSelected(null); })}>
         <div className="drawer-header"><div><span className="section-kicker">DEVELOPMENT PROJECT</span>
           <h2>{selected.title}</h2><p>{selected.customer} · {label(selected.status)}</p></div>
