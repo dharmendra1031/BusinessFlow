@@ -14,9 +14,10 @@ type Props = {
   token: string;
   onClose: () => void;
   onSaved: () => Promise<void>;
+  onCreateQuotation?: (lead: Lead) => void;
 };
 
-export default function LeadDetails({ lead, sources, canEdit, canManageFollowUps, canViewFollowUps, token, onClose, onSaved }: Props) {
+export default function LeadDetails({ lead, sources, canEdit, canManageFollowUps, canViewFollowUps, token, onClose, onSaved, onCreateQuotation }: Props) {
   const { notify } = useFeedback();
   const [name, setName] = useState(lead.name);
   const [phone, setPhone] = useState(lead.phone);
@@ -114,6 +115,8 @@ export default function LeadDetails({ lead, sources, canEdit, canManageFollowUps
         <a href={'tel:' + lead.phone}><Icon name="phone" size={17} /> Call</a>
         {lead.email && <a href={'mailto:' + lead.email}><Icon name="mail" size={17} /> Email</a>}
         <span className="source-tag">{lead.status}</span>
+        {onCreateQuotation && <button type="button" disabled={saving}
+          onClick={() => onCreateQuotation(lead)}>New quotation</button>}
       </div>
       <div className="drawer-tabs">
         <button disabled={saving} className={tab === 'details' ? 'selected' : ''} onClick={() => setTab('details')}>Lead information</button>
