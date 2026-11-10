@@ -123,6 +123,7 @@ test('Admin navigation and creation screens show actions only when needed', asyn
   await expect(page.getByRole('region', { name: 'Add customer' })).toHaveCount(0);
   await page.getByRole('button', { name: 'Add customer', exact: true }).click();
   await expect(page.getByRole('region', { name: 'Add customer' })).toBeVisible();
+  await expect(page.getByRole('region', { name: 'Add customer' }).locator('form.form-grid')).toHaveCSS('display', 'grid');
   await page.getByRole('button', { name: 'Close form' }).click();
   await expect(page.getByRole('region', { name: 'Add customer' })).toHaveCount(0);
 
@@ -1053,6 +1054,7 @@ test('Phase 4: audit history is paginated and restricted to administrators', asy
   expect(denied.status()).toBe(403);
 
   await signIn(page);
+  await page.getByRole('button', { name: 'Administration', exact: true }).click();
   await page.getByRole('button', { name: 'Audit history' }).click();
   await expect(page.getByRole('heading', { name: 'Audit history' })).toBeVisible();
   await page.getByLabel('Module').fill('Leads');
@@ -1120,6 +1122,7 @@ test('Phase 4: role permission override is enforced by API and cannot escalate e
   expect(cannotElevate.status()).toBe(400);
 
   await signIn(page);
+  await page.getByRole('button', { name: 'Administration', exact: true }).click();
   await page.getByRole('button', { name: 'Role permissions' }).click();
   await expect(page.getByRole('heading', { name: 'Role permissions' })).toBeVisible();
   await expect(page.getByRole('checkbox', { name: 'Manager reports.view' })).toBeChecked();
