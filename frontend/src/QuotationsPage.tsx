@@ -282,6 +282,17 @@ export default function QuotationsPage({ token }: { token: string }) {
     } finally { setWorking(false); }
   }
 
+  const nextStep = selected ? (
+    selected.quotation.status === 'Draft' ? 'Submit for internal approval when the quotation is ready.' :
+    selected.quotation.status === 'PendingApproval' ? 'Review the quotation and approve it or return it to draft.' :
+    selected.quotation.status === 'Approved' ? 'Send the approved quotation to the client.' :
+    selected.quotation.status === 'Sent' ? 'Record the client response and its evidence reference.' :
+    selected.quotation.status === 'Rejected' ? 'The client declined this quotation. Review the response before proceeding.' :
+    selected.contract?.status === 'Signed' ? 'Contract signed. Create an invoice under Finance when billing is due.' :
+    selected.contract ? 'Record the signed contract and its supporting reference.' :
+    selected.quotation.status === 'Accepted' ? 'Create a contract draft for the accepted quotation.' : ''
+  ) : '';
+
   return <section>
     <header className="page-header"><div>
       <span className="section-kicker">SALES OPERATIONS</span>
@@ -359,6 +370,9 @@ export default function QuotationsPage({ token }: { token: string }) {
         Lead: {selected.quotation.leadName} (#{selected.quotation.leadId}) ·
         Status: {selected.quotation.status} · Revision {selected.quotation.currentRevision}
       </p>}
+      {selected && nextStep && <div className="quotation-next-step" aria-label="Quotation next step">
+        <strong>Next step</strong><span>{nextStep}</span>
+      </div>}
       {selected?.quotation.status === 'Draft' && <div className="drawer-actions">
         <button disabled={working} onClick={() => void submitForApproval()}>Submit for approval</button>
       </div>}
