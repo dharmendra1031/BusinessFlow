@@ -249,7 +249,7 @@ td small { display: block; font-size: 11px; max-width: 210px; overflow: hidden; 
 .drawer-header { display: flex; gap: 12px; align-items: flex-start; justify-content: space-between; }
 .drawer-header h2 { margin: 6px 0 6px; font-size: 23px; letter-spacing: -.6px; }
 .drawer-header p { color: var(--muted); margin: 0 0 25px; font-size: 12px; }
-.lead-quick-actions { display: flex; gap: 8px; align-items: center; margin-bottom: 24px; }
+.lead-quick-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 24px; }
 .lead-quick-actions a { display: inline-flex; align-items: center; gap: 6px;
   border: 1px solid #dce5f2; border-radius: 8px; padding: 9px 13px;
   color: #315dd0; text-decoration: none; font-weight: 650; }
@@ -410,6 +410,18 @@ td small { display: block; font-size: 11px; max-width: 210px; overflow: hidden; 
 }
 
 /* Secondary billing actions stay collapsed until the user chooses them. */
+.invoice-summary { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1px; margin: 14px 24px 20px; border: 1px solid var(--border);
+  border-radius: 10px; background: var(--border); overflow: hidden; }
+.invoice-summary > div { display: grid; gap: 5px; min-width: 0; padding: 13px 16px; background: #fff; }
+.invoice-summary span { color: var(--muted); font-size: 12px; }
+.invoice-summary strong { font-size: 16px; overflow-wrap: anywhere; }
+@media (max-width: 760px) {
+  .invoice-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); margin-inline: 18px; }
+}
+@media (max-width: 480px) {
+  .invoice-summary { grid-template-columns: 1fr; }
+}
 .quotation-next-step { display: flex; align-items: baseline; gap: 10px;
   margin: 12px 24px 20px; padding: 12px 0; border-block: 1px solid var(--border);
   color: #293d57; font-size: 13px; }
