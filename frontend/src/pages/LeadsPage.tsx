@@ -9,9 +9,10 @@ import EmployeeSearchSelect from '../EmployeeSearchSelect';
 import type { Employee, Lead, Lookup, Paged, User } from '../types';
 import { EmptyState, ErrorState, useResource } from './Shared';
 
-export function LeadsPage({ token, user, permissions, newLeadRequest, onNewLeadOpened }: {
+export function LeadsPage({ token, user, permissions, newLeadRequest, onNewLeadOpened, onCreateQuotation }: {
   token: string; user: User; permissions: Record<string, boolean>;
   newLeadRequest: number; onNewLeadOpened: () => void;
+  onCreateQuotation: (lead: Lead) => void;
 }) {
   const { notify, confirm } = useFeedback();
   const [search, setSearch] = useState('');
@@ -224,6 +225,7 @@ export function LeadsPage({ token, user, permissions, newLeadRequest, onNewLeadO
     {selectedLead && <LeadDetails key={selectedLead.id} lead={selectedLead} sources={sources ?? []}
       canEdit={canEdit} canManageFollowUps={permissions['followups.manage'] === true}
       canViewFollowUps={permissions['followups.view'] === true} token={token} onClose={() => setSelectedLead(null)}
+      onCreateQuotation={user.roles.includes('Admin') ? onCreateQuotation : undefined}
       onSaved={async () => {
         await refresh();
         const latest = await api<Partial<Lead>>('/api/leads/' + selectedLead.id, token);
