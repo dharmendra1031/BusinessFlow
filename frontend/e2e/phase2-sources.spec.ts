@@ -10,8 +10,9 @@ test('Admin can add rename deactivate and reactivate lead sources', async ({ pag
     sessionStorage.setItem('crmSession', JSON.stringify(session));
   }, { token, user: JSON.parse(process.env.E2E_ADMIN_USER!) });
   await page.goto('/');
-  await page.getByRole('navigation', { name: 'Main navigation' })
-    .getByRole('button', { name: 'Lead sources' }).click();
+  const nav = page.getByRole('navigation', { name: 'Main navigation' });
+  await nav.getByRole('button', { name: 'Administration', exact: true }).click();
+  await nav.getByRole('button', { name: 'Lead sources' }).click();
 
   const form = page.getByRole('region', { name: 'Manage lead sources' });
   await form.getByRole('textbox', { name: 'Source name' }).fill(name);
