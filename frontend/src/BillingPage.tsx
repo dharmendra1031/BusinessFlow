@@ -413,11 +413,13 @@ export default function BillingPage({ token }: { token: string }) {
       <div className="panel-heading"><h2>Invoice INV-{selected.invoice.id}</h2>
         <p>{selected.invoice.status} · {selected.invoice.billToName}</p></div>
       <p>{selected.invoice.description} · Due {selected.invoice.dueDate}</p>
-      <p>Amount: {money(selected.invoice.amount, selected.invoice.currency)} ·
-        Net collected: {money(selected.invoice.paidAmount, selected.invoice.currency)} ·
-        Credited: {money(selected.invoice.creditedAmount, selected.invoice.currency)} ·
-        Outstanding: <strong>{money(selected.invoice.outstanding, selected.invoice.currency)}</strong> ·
-        Refund due: <strong>{money(selected.invoice.refundDue, selected.invoice.currency)}</strong></p>
+      <div className="invoice-summary" aria-label="Invoice balance summary">
+        <div><span>Amount:</span> <strong>{money(selected.invoice.amount, selected.invoice.currency)}</strong></div>
+        <div><span>Net collected:</span> <strong>{money(selected.invoice.paidAmount, selected.invoice.currency)}</strong></div>
+        <div><span>Credited:</span> <strong>{money(selected.invoice.creditedAmount, selected.invoice.currency)}</strong></div>
+        <div><span>Outstanding:</span> <strong>{money(selected.invoice.outstanding, selected.invoice.currency)}</strong></div>
+        <div><span>Refund due:</span> <strong>{money(selected.invoice.refundDue, selected.invoice.currency)}</strong></div>
+      </div>
       <div className="drawer-actions">
         <button type="button" onClick={() => void viewLedger(selected.invoice.contractId)}>
           View contract ledger</button>
