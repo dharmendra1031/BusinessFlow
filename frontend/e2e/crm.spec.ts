@@ -152,7 +152,7 @@ test('Admin starts a quotation from the selected lead', async ({ page, request }
   await page.getByRole('button', { name: 'All leads', exact: true }).click();
   await page.getByRole('textbox', { name: 'Search leads' }).fill(leadName);
   await page.getByRole('button', { name: leadName, exact: true }).click();
-  await page.getByRole('dialog', { name: /Lead details/i })
+  await page.getByRole('dialog', { name: leadName })
     .getByRole('button', { name: 'New quotation' }).click();
 
   await expect(page.getByRole('heading', { name: 'Sales quotations' })).toBeVisible();
