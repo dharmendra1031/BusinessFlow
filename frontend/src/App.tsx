@@ -19,7 +19,7 @@ import CustomersPage from './CustomersPage';
 import QuotationsPage from './QuotationsPage';
 import BillingPage from './BillingPage';
 import CustomerDirectoryPage from './CustomerDirectoryPage';
-import type { User } from './types';
+import type { Lead, User } from './types';
 
 type Session = { token: string; user: User };
 type CurrentSession = User & { csrfToken: string };
@@ -86,6 +86,7 @@ function Workspace() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [adminMenuOpen, setAdminMenuOpen] = useState(false);
   const [newLeadRequest, setNewLeadRequest] = useState(0);
+  const [quotationLead, setQuotationLead] = useState<Pick<Lead, 'id' | 'name' | 'companyName'> | null>(null);
   const [allowed, setAllowed] = useState<Record<string, boolean> | null>(null);
   useEffect(() => {
     if (!session) return;
@@ -131,8 +132,14 @@ function Workspace() {
   }, [session?.user.id, session?.token, allowed?.['followups.view']]);
 
   function navigate(next: Screen) {
+    if (next !== 'quotations') setQuotationLead(null);
     setScreen(next);
     setMenuOpen(false);
+  }
+
+  function createQuotation(lead: Lead) {
+    setQuotationLead({ id: lead.id, name: lead.name, companyName: lead.companyName });
+    navigate('quotations');
   }
 
   async function logout() {
@@ -237,7 +244,8 @@ function Workspace() {
       <main className="content" id="main-content" tabIndex={-1}>
         {screen === 'dashboard' && <DashboardPage token={session.token} onNavigate={navigate} />}
         {screen === 'leads' && <LeadsPage token={session.token} user={user} permissions={allowed ?? {}}
-          newLeadRequest={newLeadRequest} onNewLeadOpened={() => setNewLeadRequest(0)} />}
+          newLeadRequest={newLeadRequest} onNewLeadOpened={() => setNewLeadRequest(0)}
+          onCreateQuotation={createQuotation} />}
         {screen === 'projects' && <ProjectsPage token={session.token} user={user} permissions={allowed ?? {}} />}
         {screen === 'followups' && <FollowUpsPage token={session.token} />}
         {screen === 'employees' && canSeeTeam && <EmployeesPage token={session.token} user={user} />}
@@ -251,7 +259,8 @@ function Workspace() {
         {screen === 'sources' && user.roles.includes('Admin') && <LeadSourcesPage token={session.token} />}
         {screen === 'duplicates' && user.roles.includes('Admin') && <LeadDuplicatesPage token={session.token} />}
         {screen === 'routing' && user.roles.includes('Admin') && <LeadRoutingPage token={session.token} />}
-        {screen === 'quotations' && user.roles.includes('Admin') && <QuotationsPage token={session.token} />}
+        {screen === 'quotations' && user.roles.includes('Admin') &&
+          <QuotationsPage token={session.token} initialLead={quotationLead} />}
         {screen === 'billing' && user.roles.includes('Admin') && <BillingPage token={session.token} />}
         {screen === 'customers' && allowed?.['customers.view'] === true &&
           (user.roles.includes('Admin') ? <CustomersPage token={session.token} /> :
