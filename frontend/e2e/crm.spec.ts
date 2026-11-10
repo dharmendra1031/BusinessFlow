@@ -110,7 +110,9 @@ test('Admin navigation and creation screens show actions only when needed', asyn
   const nav = page.getByRole('navigation', { name: 'Main navigation' });
   const advanced = nav.getByRole('button', { name: 'Administration', exact: true });
 
-  await expect(nav.getByText('Sales & customers')).toBeVisible();
+  await expect(nav.getByText('Sales & CRM')).toBeVisible();
+  await expect(nav.getByText('Project delivery')).toBeVisible();
+  await expect(nav.getByText('Finance')).toBeVisible();
   await expect(advanced).toHaveAttribute('aria-expanded', 'false');
   await expect(nav.getByRole('button', { name: 'Organization', exact: true })).toHaveCount(0);
   await advanced.click();
