@@ -34,6 +34,7 @@ test('Admin configures and enables website lead routing from the master', async 
     token: process.env.E2E_ADMIN_TOKEN!, user: JSON.parse(process.env.E2E_ADMIN_USER!),
   });
   await page.goto('/');
+  await page.getByRole('button', { name: 'Administration', exact: true }).click();
   await page.getByRole('button', { name: 'Lead routing', exact: true }).click();
 
   const editor = page.getByRole('region', { name: 'Routing rule editor' });
