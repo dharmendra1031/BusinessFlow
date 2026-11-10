@@ -123,6 +123,21 @@ button.secondary-action:hover, button:not(.primary):hover:not(:disabled) { borde
   padding: 22px 24px 17px; }
 .panel-heading h2 { font-size: 16px; margin: 0 0 5px; letter-spacing: -.2px; }
 .panel-heading p { font-size: 12px; color: var(--muted); margin: 0; }
+.form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px 20px; align-items: end; }
+.panel > .form-grid { padding: 0 24px 24px; }
+.form-grid > label { display: grid; gap: 7px; min-width: 0; font-size: 13px;
+  font-weight: 650; color: #293d57; }
+.form-grid input:not([type="checkbox"]):not([type="radio"]),
+.form-grid select, .form-grid textarea { width: 100%; min-width: 0; border: 1px solid #dce4ee;
+  border-radius: 8px; padding: 10px 12px; background: white; color: #1b2b45; }
+.form-grid textarea { min-height: 90px; resize: vertical; }
+.form-grid > h3, .form-grid > .field-help, .form-grid > fieldset,
+.form-grid > .form-grid, .form-grid > .project-section { grid-column: 1 / -1; }
+@media (max-width: 700px) {
+  .form-grid { grid-template-columns: 1fr; gap: 14px; }
+  .panel > .form-grid { padding: 0 18px 18px; }
+}
 .text-action { display: inline-flex; align-items: center; gap: 6px; border: 0; background: none;
   color: #315bd0; font-size: 12px; font-weight: 700; white-space: nowrap; }
 .pipeline-bar { display: flex; gap: 2px; overflow: hidden; margin: 34px 25px 27px;
