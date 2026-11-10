@@ -28,6 +28,7 @@ test('Admin completes quotation, contract, invoice and partial payment', async (
   await editor.getByRole('spinbutton', { name: 'Unit price' }).fill('2500.500');
   await editor.getByRole('button', { name: 'Create quotation' }).click();
   await expect(editor.getByRole('heading', { name: /Quotation #/ })).toBeVisible();
+  await expect(editor.getByLabel('Quotation next step')).toContainText('Submit for internal approval');
   const revisions = editor.locator('details[aria-label="Quotation revision history"]');
   await expect(revisions.locator('summary')).toHaveText('Revision history (1)');
   await editor.getByRole('button', { name: 'Create new revision' }).click();
@@ -40,11 +41,13 @@ test('Admin completes quotation, contract, invoice and partial payment', async (
 
   await editor.getByRole('button', { name: 'Submit for approval' }).click();
   const review = editor.getByRole('heading', { name: 'Internal quotation review' });
+  await expect(editor.getByLabel('Quotation next step')).toContainText('Review the quotation');
   await expect(review).toBeVisible();
   await editor.getByRole('textbox', { name: 'Review comment' })
     .fill('Approved by administrator for quotation testing');
   await editor.getByRole('button', { name: 'Approve quotation' }).click();
   await expect(editor.getByRole('button', { name: 'Mark as sent' })).toBeVisible();
+  await expect(editor.getByLabel('Quotation next step')).toContainText('Send the approved quotation');
   await editor.getByRole('button', { name: 'Mark as sent' }).click();
   await page.getByRole('alertdialog', { name: 'Mark quotation as sent?' })
     .getByRole('button', { name: 'Mark sent' }).click();
@@ -70,6 +73,7 @@ test('Admin completes quotation, contract, invoice and partial payment', async (
   await page.getByRole('alertdialog', { name: 'Record signed contract?' })
     .getByRole('button', { name: 'Record signature' }).click();
   await expect(contract).toContainText('Signed');
+  await expect(editor.getByLabel('Quotation next step')).toContainText('Create an invoice under Finance');
 
   await page.getByRole('navigation', { name: 'Main navigation' })
     .getByRole('button', { name: 'Invoices & collections' }).click();
