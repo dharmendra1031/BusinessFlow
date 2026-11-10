@@ -145,6 +145,22 @@ test('Admin navigation and creation screens show actions only when needed', asyn
   await expect(page.getByRole('button', { name: 'Run report' })).toBeVisible();
 });
 
+test('Admin starts a quotation from the selected lead', async ({ page, request }) => {
+  const leadName = 'Handoff Lead ' + unique();
+  await createLead(request, leadName);
+  await signIn(page);
+  await page.getByRole('button', { name: 'All leads', exact: true }).click();
+  await page.getByRole('textbox', { name: 'Search leads' }).fill(leadName);
+  await page.getByRole('button', { name: leadName, exact: true }).click();
+  await page.getByRole('dialog', { name: /Lead details/i })
+    .getByRole('button', { name: 'New quotation' }).click();
+
+  await expect(page.getByRole('heading', { name: 'Sales quotations' })).toBeVisible();
+  const editor = page.getByRole('region', { name: 'Quotation editor' });
+  await expect(editor.getByText('Selected lead: ' + leadName, { exact: false })).toBeVisible();
+  await expect(editor.getByRole('textbox', { name: 'Find an existing lead' })).toHaveValue(leadName);
+});
+
 test('Leads: create, search, edit, status, schedule and history', async ({ page }) => {
   const customer = 'Playwright Customer ' + unique();
   await signIn(page);
