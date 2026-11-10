@@ -5,6 +5,7 @@ test('Feedback dialogs show loading, success and actionable server errors', asyn
     token: process.env.E2E_ADMIN_TOKEN!, user: JSON.parse(process.env.E2E_ADMIN_USER!),
   });
   await page.goto('/');
+  await page.getByRole('button', { name: 'Administration', exact: true }).click();
   await page.getByRole('button', { name: 'Organization', exact: true }).click();
   const name = 'Feedback department ' + Date.now();
   await page.getByRole('textbox', { name: 'Department name', exact: true }).fill(name);
