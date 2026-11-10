@@ -3,7 +3,9 @@ import type { SVGProps } from 'react';
 type Name = 'grid' | 'users' | 'clipboard' | 'calendar' | 'menu' | 'close' |
   'plus' | 'arrow' | 'search' | 'check' | 'clock' | 'target' | 'logout' |
   'refresh' | 'chevron' | 'phone' | 'mail' | 'filter' | 'briefcase' |
-  'edit' | 'warning' | 'info' | 'download' | 'lock';
+  'edit' | 'warning' | 'info' | 'download' | 'lock' |
+  'checklist' | 'file-text' | 'receipt' | 'chart' | 'building' |
+  'shield' | 'layers' | 'copy' | 'route' | 'history';
 
 const paths: Record<Name, string> = {
   grid: 'M3 3h7v7H3z M14 3h7v7h-7z M3 14h7v7H3z M14 14h7v7h-7z',
@@ -29,7 +31,17 @@ const paths: Record<Name, string> = {
   warning: 'M12 3 2 21h20L12 3z M12 9v5 M12 18h.01',
   info: 'M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20 M12 11v6 M12 7h.01',
   download: 'M12 3v12 M7 10l5 5 5-5 M5 19h14',
-  lock: 'M5 11h14v10H5z M8 11V7a4 4 0 0 1 8 0v4'
+  lock: 'M5 11h14v10H5z M8 11V7a4 4 0 0 1 8 0v4',
+  checklist: 'M3 5l2 2 3-3 M11 6h10 M3 12l2 2 3-3 M11 13h10 M3 19l2 2 3-3 M11 20h10',
+  'file-text': 'M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z M14 2v6h6 M8 13h8 M8 17h8',
+  receipt: 'M4 2h16v20l-4-2-4 2-4-2-4 2V2z M8 7h8 M8 11h8 M8 15h5',
+  chart: 'M4 3v18h17 M8 17v-4 M13 17V9 M18 17V5',
+  building: 'M3 21V5l9-3 9 3v16 M9 21v-5h6v5 M7 9h.01 M12 9h.01 M17 9h.01 M7 13h.01 M17 13h.01',
+  shield: 'M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z',
+  layers: 'M12 2 2 8l10 6 10-6-10-6z M2 12l10 6 10-6 M2 16l10 6 10-6',
+  copy: 'M8 8h12v12H8z M16 8V4a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h4',
+  route: 'M6 19h12 M6 19a2 2 0 1 0 0-4 2 2 0 0 0 0 4 M18 7a2 2 0 1 0 0-4 2 2 0 0 0 0 4 M18 7v5a3 3 0 0 1-3 3H9a3 3 0 0 0-3 3',
+  history: 'M3 12a9 9 0 1 0 3-6.7 M3 3v6h6 M12 7v5l3 2'
 };
 
 export function Icon({ name, size = 20, ...props }: SVGProps<SVGSVGElement> & { name: Name; size?: number }) {

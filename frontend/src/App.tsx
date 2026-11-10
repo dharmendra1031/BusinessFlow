@@ -27,29 +27,30 @@ type Screen = 'dashboard' | 'leads' | 'projects' | 'followups' | 'employees' | '
 
 const navigation = [
   { id: 'dashboard', label: 'Dashboard', icon: 'grid' },
-  { id: 'approvals', label: 'Lead approvals', icon: 'clipboard' },
   { id: 'leads', label: 'All leads', icon: 'clipboard' },
-  { id: 'projects', label: 'Development projects', icon: 'briefcase' },
-  { id: 'customers', label: 'Customer master', icon: 'users' },
-  { id: 'quotations', label: 'Sales quotations', icon: 'clipboard' },
-  { id: 'billing', label: 'Invoices & collections', icon: 'clipboard' },
   { id: 'followups', label: 'Follow-ups', icon: 'calendar' },
+  { id: 'customers', label: 'Customer master', icon: 'users' },
+  { id: 'approvals', label: 'Lead approvals', icon: 'checklist' },
+  { id: 'quotations', label: 'Sales quotations', icon: 'file-text' },
+  { id: 'projects', label: 'Development projects', icon: 'briefcase' },
+  { id: 'billing', label: 'Invoices & collections', icon: 'receipt' },
   { id: 'employees', label: 'Team', icon: 'users' },
-  { id: 'reports', label: 'Reports', icon: 'clipboard' },
-  { id: 'audit', label: 'Audit history', icon: 'clipboard' },
+  { id: 'reports', label: 'Reports', icon: 'chart' },
+  { id: 'organization', label: 'Organization', icon: 'building' },
+  { id: 'roles', label: 'Custom roles', icon: 'shield' },
   { id: 'permissions', label: 'Role permissions', icon: 'lock' },
-  { id: 'organization', label: 'Organization', icon: 'users' },
-  { id: 'roles', label: 'Custom roles', icon: 'lock' },
-  { id: 'sources', label: 'Lead sources', icon: 'clipboard' },
-  { id: 'duplicates', label: 'Duplicate review', icon: 'clipboard' },
-  { id: 'routing', label: 'Lead routing', icon: 'users' },
+  { id: 'sources', label: 'Lead sources', icon: 'layers' },
+  { id: 'duplicates', label: 'Duplicate review', icon: 'copy' },
+  { id: 'routing', label: 'Lead routing', icon: 'route' },
+  { id: 'audit', label: 'Audit history', icon: 'history' },
   { id: 'settings', label: 'Change password', icon: 'lock' },
 ] as const;
 
 const navigationGroups: { label: string; ids: Screen[] }[] = [
   { label: 'Overview', ids: ['dashboard'] },
-  { label: 'Sales & customers', ids: ['leads', 'approvals', 'followups', 'customers', 'quotations', 'billing'] },
-  { label: 'Delivery', ids: ['projects'] },
+  { label: 'Sales & CRM', ids: ['leads', 'followups', 'customers', 'approvals', 'quotations'] },
+  { label: 'Project delivery', ids: ['projects'] },
+  { label: 'Finance', ids: ['billing'] },
   { label: 'Team & reports', ids: ['employees', 'reports'] },
   { label: 'Administration', ids: ['organization', 'roles', 'permissions', 'sources', 'duplicates', 'routing', 'audit'] },
   { label: 'Account', ids: ['settings'] },
@@ -176,6 +177,8 @@ function Workspace() {
     (allowed?.[moduleAccess[item.id] || ''] !== false));
   const pageTitle = { dashboard: 'Dashboard', leads: 'All leads', projects: 'Development projects', followups: 'Follow-ups', employees: 'Team', reports: 'Reports', audit: 'Audit history', permissions: 'Role permissions', roles: 'Custom roles', organization: 'Organization', sources: 'Lead sources', duplicates: 'Duplicate review', routing: 'Lead routing', customers: 'Customer master', quotations: 'Sales quotations', billing: 'Invoices & collections', approvals: 'Lead approvals', settings: 'Change password' }[screen];
 
+  const pageSection = navigationGroups.find(group => group.ids.includes(screen))?.label ?? 'Workspace';
+
   return <div className="app-shell">
     <a className="skip-link" href="#main-content">Skip to main content</a>
     {menuOpen && <button className="mobile-backdrop" aria-label="Close navigation"
@@ -213,7 +216,7 @@ function Workspace() {
         <div className="topbar-left">
           <button className="icon-button menu-button" onClick={() => setMenuOpen(true)}
             aria-label="Open navigation"><Icon name="menu" /></button>
-          <div><span className="eyebrow">WORKSPACE / {pageTitle.toUpperCase()}</span>
+          <div><span className="eyebrow">{pageSection.toUpperCase()}</span>
             <strong>{pageTitle}</strong></div>
         </div>
         <div className="topbar-actions">
