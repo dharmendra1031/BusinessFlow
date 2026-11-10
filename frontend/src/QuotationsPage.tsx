@@ -55,7 +55,7 @@ const blank = (): Form => ({
   title: '', scope: '', amount: '', currency: 'INR', validUntil: '', paymentTerms: '',
 });
 
-export default function QuotationsPage({ token }: { token: string }) {
+export default function QuotationsPage({ token, initialLead }: { token: string; initialLead?: Lead | null }) {
   const { notify, confirm } = useFeedback();
   const [items, setItems] = useState<Quote[]>([]);
   const [total, setTotal] = useState(0);
@@ -63,7 +63,7 @@ export default function QuotationsPage({ token }: { token: string }) {
   const [search, setSearch] = useState('');
   const [query, setQuery] = useState('');
   const [selected, setSelected] = useState<QuoteDetail | null>(null);
-  const [creating, setCreating] = useState(false);
+  const [creating, setCreating] = useState(Boolean(initialLead));
   const [editingRevision, setEditingRevision] = useState(false);
   const [form, setForm] = useState<Form>(blank);
   const [lines, setLines] = useState<LineForm[]>([blankLine()]);
@@ -74,9 +74,9 @@ export default function QuotationsPage({ token }: { token: string }) {
   const [signedBy, setSignedBy] = useState('');
   const [signatureReference, setSignatureReference] = useState('');
   const [signedOn, setSignedOn] = useState('');
-  const [leadQuery, setLeadQuery] = useState('');
+  const [leadQuery, setLeadQuery] = useState(initialLead?.name ?? '');
   const [leads, setLeads] = useState<Lead[]>([]);
-  const [lead, setLead] = useState<Lead | null>(null);
+  const [lead, setLead] = useState<Lead | null>(initialLead ?? null);
   const [loading, setLoading] = useState(true);
   const [working, setWorking] = useState(false);
   const [error, setError] = useState('');
