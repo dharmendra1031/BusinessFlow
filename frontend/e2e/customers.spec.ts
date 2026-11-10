@@ -32,12 +32,14 @@ test('Admin creates customer, contact and links an existing CRM lead', async ({ 
   await detail.getByText('Edit customer', { exact: true }).click();
   await expect(detail.getByRole('textbox', { name: 'GSTIN (India)' })).toHaveValue('09ABCDE1234F1Z5');
   await expect(detail.getByRole('textbox', { name: 'Billing city' })).toHaveValue('Kanpur');
+  await detail.getByRole('tab', { name: 'Contacts' }).click();
   const contact = detail.getByRole('region', { name: 'Customer contacts' });
   await contact.getByRole('textbox', { name: 'Contact name' }).fill('Primary contact');
   await contact.getByRole('checkbox', { name: 'Primary contact' }).check();
   await contact.getByRole('button', { name: 'Save contact' }).click();
   await expect(contact.getByText('Primary contact', { exact: true })).toBeVisible();
 
+  await detail.getByRole('tab', { name: 'Leads & projects' }).click();
   const leads = detail.getByRole('region', { name: 'Linked leads' });
   await leads.getByRole('textbox', { name: 'Find existing unlinked lead' }).fill(leadName);
   await leads.getByRole('button', { name: 'Find leads' }).click();
@@ -45,6 +47,7 @@ test('Admin creates customer, contact and links an existing CRM lead', async ({ 
   await leads.getByRole('button', { name: 'Link to customer' }).click();
   await expect(leads.getByText(leadName, { exact: true })).toBeVisible();
   await expect(leads.getByRole('button', { name: 'Unlink' })).toBeVisible();
+  await detail.getByRole('tab', { name: 'Activity' }).click();
   await expect(detail.getByRole('region', { name: 'Customer activity history' })
     .getByText('Link · Leads')).toBeVisible();
 
@@ -84,6 +87,7 @@ test('Admin reviews a source customer and merges it into the selected customer',
     .getByRole('button', { name: 'View customer' }).click();
 
   const target = page.getByRole('dialog', { name: 'Customer ' + targetName });
+  await target.getByRole('tab', { name: 'Merge' }).click();
   const merge = target.getByRole('region', { name: 'Merge customers' });
   await merge.getByRole('spinbutton', { name: 'Source customer ID' }).fill(String(sourceId));
   await merge.getByRole('button', { name: 'Review source' }).click();
