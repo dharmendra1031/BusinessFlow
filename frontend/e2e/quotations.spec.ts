@@ -18,6 +18,7 @@ test('Admin completes quotation, contract, invoice and partial payment', async (
   await page.getByRole('navigation', { name: 'Main navigation' })
     .getByRole('button', { name: 'Sales quotations' }).click();
 
+  await page.getByRole('button', { name: 'New quotation', exact: true }).click();
   const editor = page.getByRole('region', { name: 'Quotation editor' });
   await editor.getByRole('textbox', { name: 'Find an existing lead' }).fill(leadName);
   await editor.getByRole('button', { name: 'Find leads' }).click();
@@ -27,11 +28,13 @@ test('Admin completes quotation, contract, invoice and partial payment', async (
   await editor.getByRole('spinbutton', { name: 'Unit price' }).fill('2500.500');
   await editor.getByRole('button', { name: 'Create quotation' }).click();
   await expect(editor.getByRole('heading', { name: /Quotation #/ })).toBeVisible();
-  await expect(editor.getByRole('heading', { name: 'Revision history (1)' })).toBeVisible();
-
+  const revisions = editor.locator('details[aria-label="Quotation revision history"]');
+  await expect(revisions.locator('summary')).toHaveText('Revision history (1)');
+  await editor.getByRole('button', { name: 'Create new revision' }).click();
   await editor.getByRole('textbox', { name: 'Quotation title' }).fill('Updated proposal');
   await editor.getByRole('button', { name: 'Save new revision' }).click();
-  await expect(editor.getByRole('heading', { name: 'Revision history (2)' })).toBeVisible();
+  await expect(revisions.locator('summary')).toHaveText('Revision history (2)');
+  await revisions.locator('summary').click();
   await expect(editor.getByText('Revision 1 · Initial proposal')).toBeVisible();
   await expect(editor.getByText('Revision 2 · Updated proposal')).toBeVisible();
 
@@ -70,6 +73,7 @@ test('Admin completes quotation, contract, invoice and partial payment', async (
 
   await page.getByRole('navigation', { name: 'Main navigation' })
     .getByRole('button', { name: 'Invoices & collections' }).click();
+  await page.getByRole('button', { name: 'Create invoice', exact: true }).click();
   const editorBilling = page.getByRole('region', { name: 'New invoice' });
   await editorBilling.getByRole('textbox', { name: 'Find signed contract' }).fill(leadName);
   await editorBilling.getByRole('button', { name: 'Find contracts' }).click();
@@ -81,6 +85,7 @@ test('Admin completes quotation, contract, invoice and partial payment', async (
   const invoice = page.getByRole('region', { name: 'Invoice details' });
   await expect(invoice).toContainText('Outstanding: INR 300.000');
 
+  await invoice.locator('details > summary').filter({ hasText: 'Record payment' }).click();
   const paymentForm = invoice.locator('form[aria-label="Record payment"]');
   await paymentForm.getByRole('spinbutton', { name: 'Amount' }).fill('200');
   await paymentForm.getByRole('textbox', { name: 'Unique payment reference' })
@@ -91,13 +96,15 @@ test('Admin completes quotation, contract, invoice and partial payment', async (
   await expect(page.getByRole('region', { name: 'Contract ledger' }))
     .toContainText('Invoice outstanding: INR 100.000');
 
-  const reports = page.getByRole('region', { name: 'Billing reports' });
+  const reports = page.locator('details.billing-reports');
+  await reports.locator('summary').click();
   await reports.getByRole('button', { name: 'Run report' }).click();
   await expect(reports).toContainText('INR 100.000');
   await reports.getByRole('combobox', { name: 'Report type' }).selectOption('collections');
   await reports.getByRole('button', { name: 'Run report' }).click();
   await expect(reports).toContainText('INR 200.000');
 
+  await invoice.locator('details > summary').filter({ hasText: 'Request credit note' }).click();
   const credit = invoice.locator('form[aria-label="Issue credit note"]');
   await credit.getByRole('spinbutton', { name: 'Credit amount' }).fill('150');
   await credit.getByRole('textbox', { name: 'Reason' })
