@@ -5,6 +5,7 @@ test('Organization: admin creates department and team and sees safe disable erro
     token: process.env.E2E_ADMIN_TOKEN!, user: JSON.parse(process.env.E2E_ADMIN_USER!),
   });
   await page.goto('/');
+  await page.getByRole('button', { name: 'Administration', exact: true }).click();
   await page.getByRole('button', { name: 'Organization', exact: true }).click({ timeout: 5000 });
   const department = 'Engineering ' + Date.now();
   const teamName = 'Platform ' + Date.now();
@@ -26,6 +27,7 @@ test('Custom roles: admin creates a role and configures an action with its data 
     token: process.env.E2E_ADMIN_TOKEN!, user: JSON.parse(process.env.E2E_ADMIN_USER!),
   });
   await page.goto('/');
+  await page.getByRole('button', { name: 'Administration', exact: true }).click();
   await page.getByRole('button', { name: 'Custom roles', exact: true }).click({ timeout: 5000 });
   const role = 'Quality ' + Date.now();
   await page.getByRole('textbox', { name: 'Role name', exact: true }).fill(role);
