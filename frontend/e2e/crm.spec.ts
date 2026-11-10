@@ -1044,8 +1044,11 @@ test('Planning UI: create milestones and sprints and assign a development task',
   await details.getByLabel('Sprint', { exact: true }).selectOption({ label: 'Sprint Alpha' });
   await details.getByRole('button', { name: 'Add task' }).click();
   await expect(details.locator('.project-task').getByText('Deliver sprint tasks', { exact: true })).toBeVisible();
+  await details.getByRole('tab', { name: 'Planning' }).click();
   await expect(details.getByText('0/1 tasks (0%)').first()).toBeVisible();
+  await details.getByRole('tab', { name: 'Tasks' }).click();
   await details.getByLabel('Status for Deliver sprint tasks').selectOption('Done');
+  await details.getByRole('tab', { name: 'Planning' }).click();
   await expect(details.getByText('1/1 tasks (100%)').first()).toBeVisible();
 });
 
