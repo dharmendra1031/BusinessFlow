@@ -179,8 +179,9 @@ button { cursor: pointer; }
   .industry-layout { gap: 45px; }
 }
 @media (max-width: 800px) {
-  .desktop-nav { display: none; }
-  .nav-row { justify-content: space-between; min-height: 75px; }
+  .nav-row { justify-content: space-between; min-height: 75px; flex-wrap: wrap; }
+  .desktop-nav { display: flex; order: 3; flex: 0 0 100%; gap: 20px; margin-left: 0;
+    overflow-x: auto; white-space: nowrap; padding: 0 0 12px; }
   .hero-grid, .form-layout { grid-template-columns: 1fr; }
   .hero-grid { padding-top: 65px; padding-bottom: 75px; }
   .hero-visual { max-width: 630px; }
