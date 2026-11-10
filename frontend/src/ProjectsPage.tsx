@@ -35,6 +35,7 @@ export default function ProjectsPage({ token, user, permissions }: {
   const [leadSearch, setLeadSearch] = useState('');
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [selected, setSelected] = useState<DevelopmentProject | null>(null);
+  const [detailTab, setDetailTab] = useState<'tasks' | 'planning' | 'activity'>('tasks');
   const [conflict, setConflict] = useState(false);
   const [projectVersion, setProjectVersion] = useState('');
   const [taskVersion, setTaskVersion] = useState('');
@@ -96,6 +97,7 @@ export default function ProjectsPage({ token, user, permissions }: {
     ? Math.round(project.doneCount / project.taskCount * 100) : 0;
 
   async function openProject(id: number) {
+    if (selected?.id !== id) setDetailTab('tasks');
     if (selected?.id !== id) setEditingTask(null);
     try {
       const [project, plan] = await Promise.all([
@@ -330,16 +332,28 @@ export default function ProjectsPage({ token, user, permissions }: {
             <button className="primary" disabled={working}>Save project</button>
           </form>
         </details>}
-        {allowed('planning.view') && <ProjectPlanning project={selected} token={token} planning={planning}
-          canManage={canManagePlanning && mayManage(selected)} canPublish={user.roles.includes('Admin')}
-           onSaved={() => openProject(selected.id)} />}
-        <ProjectTaskList project={selected} userId={user.id}
-          canChangeTask={canChangeTask} canEditTask={canEditTask}
-          canManage={mayManage(selected)} taskSaving={taskSaving}
-          onChangeStatus={(item, nextStatus) => { void changeTask(item, nextStatus); }}
-          onEditTask={startEditTask} />
-        <ProjectActivity project={selected} token={token} user={user}
-          canManage={mayManage(selected)} permissions={permissions} />
+        <div className="drawer-tabs" role="tablist" aria-label="Project sections">
+          <button type="button" role="tab" aria-selected={detailTab === 'tasks'}
+            className={detailTab === 'tasks' ? 'selected' : ''} onClick={() => setDetailTab('tasks')}>Tasks</button>
+          {allowed('planning.view') && <button type="button" role="tab"
+            aria-selected={detailTab === 'planning'} className={detailTab === 'planning' ? 'selected' : ''}
+            onClick={() => setDetailTab('planning')}>Planning</button>}
+          {(permissions['bugs.view'] === true || permissions['worklogs.view'] === true ||
+            permissions['bugs.create'] === true || permissions['worklogs.post'] === true) &&
+            <button type="button" role="tab" aria-selected={detailTab === 'activity'}
+              className={detailTab === 'activity' ? 'selected' : ''}
+              onClick={() => setDetailTab('activity')}>Bugs &amp; worklogs</button>}
+        </div>
+        {detailTab === 'planning' && allowed('planning.view') &&
+          <ProjectPlanning project={selected} token={token} planning={planning}
+            canManage={canManagePlanning && mayManage(selected)} canPublish={user.roles.includes('Admin')}
+            onSaved={() => openProject(selected.id)} />}
+        {detailTab === 'tasks' && <>
+          <ProjectTaskList project={selected} userId={user.id}
+            canChangeTask={canChangeTask} canEditTask={canEditTask}
+            canManage={mayManage(selected)} taskSaving={taskSaving}
+            onChangeStatus={(item, nextStatus) => { void changeTask(item, nextStatus); }}
+            onEditTask={startEditTask} />
         {(editingTask ? canEditTask : canCreateTask) && mayManage(selected) && selected.status !== 'Completed' &&
           <details className="project-section" open={editingTask !== null ? true : undefined}>
           <summary>{editingTask ? 'Edit development task' : 'Add development task'}</summary>
@@ -378,6 +392,9 @@ export default function ProjectsPage({ token, user, permissions }: {
             </div>
           </form>
         </details>}
+        </>}
+        {detailTab === 'activity' && <ProjectActivity project={selected} token={token} user={user}
+          canManage={mayManage(selected)} permissions={permissions} />}
       </aside>
     </div>}
   </section>;
