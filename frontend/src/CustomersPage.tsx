@@ -442,7 +442,7 @@ export default function CustomersPage({ token }: { token: string }) {
     </section>
 
     {detail && <div className="drawer-backdrop">
-      <aside className="detail-drawer" role="dialog" aria-modal="true" aria-label={'Customer ' + detail.customer.name}
+      <aside className="detail-drawer wide-drawer" role="dialog" aria-modal="true" aria-label={'Customer ' + detail.customer.name}
         onKeyDown={event => handleDialogKeyDown(event, () => { if (!working) close(); })}>
         <div className="drawer-header"><div><span className="section-kicker">CUSTOMER DETAILS</span>
           <h2>{detail.customer.name}</h2>
