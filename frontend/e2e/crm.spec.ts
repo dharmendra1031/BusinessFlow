@@ -631,6 +631,7 @@ test('Development: convert a won lead, assign tasks and complete progress', asyn
   await details.getByLabel('Project status').selectOption('Completed');
   await details.getByRole('button', { name: 'Save project' }).click();
   await expect(details.locator('.drawer-header')).toContainText('Completed');
+  await details.getByRole('tab', { name: 'Bugs & worklogs' }).click();
   await expect(details.getByText('Report a bug', { exact: true })).toHaveCount(0);
   await details.getByRole('button', { name: 'Close' }).click();
   await expect(page.getByRole('row').filter({ hasText: title })).toContainText('100%');
@@ -749,6 +750,7 @@ test('Development activity: bug tracking and daily worklog are usable from keybo
   await page.getByRole('button', { name: 'Development projects' }).click();
   await page.getByRole('row').filter({ hasText: title }).getByRole('button', { name: 'View project' }).click();
   const details = page.getByRole('dialog', { name: 'Project ' + title });
+  await details.getByRole('tab', { name: 'Bugs & worklogs' }).click();
   await expect(details.getByRole('heading', { name: 'Bug tracking (0 open)' })).toBeVisible();
 
   await details.getByText('Report a bug', { exact: true }).click();
@@ -1020,6 +1022,7 @@ test('Planning UI: create milestones and sprints and assign a development task',
   await page.getByRole('button', { name: 'Development projects' }).click();
   await page.getByRole('row').filter({ hasText: title }).getByRole('button', { name: 'View project' }).click();
   const details = page.getByRole('dialog', { name: 'Project ' + title });
+  await details.getByRole('tab', { name: 'Planning' }).click();
   await details.getByText('Add milestone', { exact: true }).click();
   await details.getByLabel('Milestone title').fill('MVP release');
   await details.getByLabel('Milestone deadline').fill('2026-11-15');
@@ -1033,6 +1036,7 @@ test('Planning UI: create milestones and sprints and assign a development task',
   await details.getByRole('button', { name: 'Create sprint' }).click();
   await expect(details.locator('.project-task').getByText('Sprint Alpha', { exact: true })).toBeVisible();
 
+  await details.getByRole('tab', { name: 'Tasks' }).click();
   await details.getByText('Add development task').click();
   await details.getByLabel('Task title').fill('Deliver sprint tasks');
   await details.getByLabel('Priority').selectOption('High');
