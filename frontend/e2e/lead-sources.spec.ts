@@ -5,6 +5,7 @@ test('Admin manages lead sources without exposing inactive sources in new-lead f
     token: process.env.E2E_ADMIN_TOKEN!, user: JSON.parse(process.env.E2E_ADMIN_USER!),
   });
   await page.goto('/');
+  await page.getByRole('button', { name: 'Administration', exact: true }).click();
   await page.getByRole('button', { name: 'Lead sources', exact: true }).click();
   const name = 'Referral Source ' + Date.now();
   const renamed = name + ' Updated';
