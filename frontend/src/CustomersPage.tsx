@@ -60,6 +60,7 @@ export default function CustomersPage({ token }: { token: string }) {
   const [search, setSearch] = useState('');
   const [query, setQuery] = useState('');
   const [detail, setDetail] = useState<Detail | null>(null);
+  const [detailTab, setDetailTab] = useState<'overview' | 'contacts' | 'relationships' | 'history' | 'merge'>('overview');
   const [loading, setLoading] = useState(true);
   const [working, setWorking] = useState(false);
   const [showCreate, setShowCreate] = useState(false);
@@ -105,6 +106,7 @@ export default function CustomersPage({ token }: { token: string }) {
 
   async function openCustomer(id: number) {
     try {
+      if (detail?.customer.id !== id) setDetailTab('overview');
       const [current, recentHistory] = await Promise.all([
         api<Detail>('/api/admin/customers/' + id, token),
         api<Paged<CustomerHistory>>('/api/admin/customers/' + id + '/history', token),
@@ -130,6 +132,7 @@ export default function CustomersPage({ token }: { token: string }) {
 
   function close() {
     setDetail(null);
+    setDetailTab('overview');
     setHistory(null);
     setHistoryPage(1);
     setLeadPage(1);
@@ -459,7 +462,23 @@ export default function CustomersPage({ token }: { token: string }) {
             onClick={() => void openCustomer(detail.customer.mergedIntoCustomerId!)}>
             Open current customer</button>
         </section>}
+        {detail.customer.mergedIntoCustomerId == null && <div className="drawer-tabs" role="tablist" aria-label="Customer sections">
+          {([
+            ['overview', 'Overview'], ['contacts', 'Contacts'],
+            ['relationships', 'Leads & projects'], ['history', 'Activity'],
+            ...(detail.customer.isActive ? [['merge', 'Merge']] : []),
+          ] as const).map(([id, label]) =>
+            <button type="button" key={id} role="tab" aria-selected={detailTab === id}
+              className={detailTab === id ? 'selected' : ''}
+              onClick={() => setDetailTab(id)}>{label}</button>)}
+        </div>}
         {detail.customer.mergedIntoCustomerId == null && <>
+        {detailTab === 'overview' && <>
+          <section className="project-section" aria-label="Customer overview">
+            <h3>Customer overview</h3>
+            <p>{detail.customer.email || 'No email'} · {detail.customer.phone || 'No phone'}</p>
+            <p>{detail.contacts.length} contacts · {detail.leadCount} linked leads · {detail.projectCount} projects</p>
+          </section>
         <details className="project-section">
           <summary>Edit customer</summary>
           <form className="drawer-form" onSubmit={saveCustomer} onInput={clearFieldError}
@@ -478,8 +497,9 @@ export default function CustomersPage({ token }: { token: string }) {
             <button className="primary" disabled={working}>Save customer</button>
           </form>
         </details>
+        </>}
 
-        <section className="project-section" aria-label="Customer contacts">
+        {detailTab === 'contacts' && <section className="project-section" aria-label="Customer contacts">
           <h3>Contacts ({detail.contacts.length})</h3>
           {detail.contacts.length ? <div className="project-tasks">{detail.contacts.map(item =>
             <div className="project-task" key={item.id}>
@@ -517,6 +537,7 @@ export default function CustomersPage({ token }: { token: string }) {
           </form>
         </section>
 
+        {detailTab === 'relationships' && <>
         <section className="project-section" aria-label="Linked leads">
           <h3>Linked leads ({detail.leadCount})</h3>
           <p className="field-help">Linking does not change the lead status or owner.</p>
@@ -547,8 +568,9 @@ export default function CustomersPage({ token }: { token: string }) {
             onClick={() => void loadMoreLinked('projects')}>Load more projects</button>}
           {!detail.projects.length && <p className="field-help">No linked development projects.</p>}
         </section>
+        </>}
 
-        {detail.customer.isActive && <section className="project-section" aria-label="Merge customers">
+        {detailTab === 'merge' && detail.customer.isActive && <section className="project-section" aria-label="Merge customers">
           <h3>Merge another customer</h3>
           <p className="field-help">Keep this customer's details. Move the other customer's
             contacts and linked leads here; their projects stay linked to the same leads.
@@ -578,7 +600,8 @@ export default function CustomersPage({ token }: { token: string }) {
         </section>}
         </>}
 
-        <section className="project-section" aria-label="Customer activity history">
+        {(detail.customer.mergedIntoCustomerId != null || detailTab === 'history') &&
+          <section className="project-section" aria-label="Customer activity history">
           <h3>Activity history ({history?.total ?? 0})</h3>
           {history?.items.map(entry => <div key={entry.id} className="project-task">
             <div><strong>{entry.action} · {entry.tableName}</strong>
@@ -587,7 +610,7 @@ export default function CustomersPage({ token }: { token: string }) {
           {history && history.items.length < history.total &&
             <button type="button" onClick={() => void loadMoreHistory()}>Load more history</button>}
           {history?.items.length === 0 && <p className="field-help">No activity recorded yet.</p>}
-        </section>
+        </section>}
       </aside>
     </div>}
   </section>;
