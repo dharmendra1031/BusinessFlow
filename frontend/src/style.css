@@ -383,3 +383,7 @@ td small { display: block; font-size: 11px; max-width: 210px; overflow: hidden; 
   .project-task { align-items: stretch; flex-direction: column; }
   .project-task select { max-width: 100%; }
 }
+
+/* Secondary billing actions stay collapsed until the user chooses them. */
+.billing-reports > summary { cursor: pointer; font-size: 16px; font-weight: 700; color: #293d57; padding: 5px 0 12px; }
+.billing-reports[open] > summary { margin-bottom: 12px; border-bottom: 1px solid var(--border); }

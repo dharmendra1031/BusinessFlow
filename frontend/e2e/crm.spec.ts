@@ -136,6 +136,10 @@ test('Admin navigation and creation screens show actions only when needed', asyn
   await expect(page.getByRole('region', { name: 'New invoice' })).toHaveCount(0);
   await page.getByRole('button', { name: 'Create invoice', exact: true }).click();
   await expect(page.getByRole('region', { name: 'New invoice' })).toBeVisible();
+  const billingReports = page.locator('.billing-reports');
+  await expect(billingReports).not.toHaveAttribute('open');
+  await billingReports.locator('summary').click();
+  await expect(page.getByRole('button', { name: 'Run report' })).toBeVisible();
 });
 
 test('Leads: create, search, edit, status, schedule and history', async ({ page }) => {

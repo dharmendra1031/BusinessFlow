@@ -427,9 +427,10 @@ export default function BillingPage({ token }: { token: string }) {
       <p className="field-help">Commercial billing document. Tax registration and tax breakup are not configured.</p>
 
       {selected.invoice.outstanding > 0 && selected.invoice.status !== 'Void' &&
+        <details className="project-section">
+          <summary>Record payment</summary>
         <form className="form-grid" aria-label="Record payment" onSubmit={receivePayment}
           onInput={clearFieldError} onKeyDown={handleFormKeyDown}>
-          <h3>Receive payment</h3>
           <label>Amount *<input type="number" min="0.001" max={selected.invoice.outstanding}
             step="0.001" required value={receivedAmount}
             onChange={event => setReceivedAmount(event.target.value)} /></label>
@@ -442,20 +443,23 @@ export default function BillingPage({ token }: { token: string }) {
           <label>Received on *<input type="date" required value={receivedOn}
             onChange={event => setReceivedOn(event.target.value)} /></label>
           <div><button className="primary" disabled={busy}>Record payment</button></div>
-        </form>}
+        </form></details>}
       {selected.invoice.status === 'Issued' && selected.invoice.paidAmount === 0 &&
         selected.invoice.creditedAmount === 0 &&
+        <details className="project-section">
+          <summary>Void invoice</summary>
         <form className="form-grid" aria-label="Void invoice" onSubmit={voidInvoice}
           onInput={clearFieldError} onKeyDown={handleFormKeyDown}>
           <label>Void reason<input required minLength={10} maxLength={500} value={voidReason}
             onChange={event => setVoidReason(event.target.value)} /></label>
           <div><button type="submit" disabled={busy}>Void invoice</button></div>
-        </form>}
+        </form></details>}
       {selected.invoice.voidReason && <p>Void reason: {selected.invoice.voidReason}</p>}
       {selected.invoice.status !== 'Void' && selected.invoice.creditedAmount < selected.invoice.amount &&
+        <details className="project-section">
+          <summary>Request credit note</summary>
         <form className="form-grid" aria-label="Issue credit note" onSubmit={issueCreditNote}
           onInput={clearFieldError} onKeyDown={handleFormKeyDown}>
-          <h3>Request credit note</h3>
           <p className="field-help">Reducing the invoice may create a refund due if the customer has paid more than the revised amount.</p>
           <label>Credit amount *<input required type="number" min="0.001" step="0.001"
             max={selected.invoice.amount - selected.invoice.creditedAmount} value={creditAmount}
@@ -465,7 +469,7 @@ export default function BillingPage({ token }: { token: string }) {
           <label>Issue date *<input type="date" required value={creditDate}
             onChange={event => setCreditDate(event.target.value)} /></label>
           <div><button type="submit" disabled={busy}>Submit credit request</button></div>
-        </form>}
+        </form></details>}
       {!!selected.credits.length && <section aria-label="Credit note history">
         <h3>Credit note history</h3>
         {selected.credits.map(credit => <p key={credit.id}>
@@ -473,10 +477,10 @@ export default function BillingPage({ token }: { token: string }) {
           {money(credit.amount, selected.invoice.currency)} · {credit.reason}
         </p>)}
       </section>}
-      {selected.invoice.refundDue > 0 && <form className="form-grid"
-        aria-label="Record refund" onSubmit={recordRefund}
+      {selected.invoice.refundDue > 0 && <details className="project-section">
+        <summary>Request refund: {money(selected.invoice.refundDue, selected.invoice.currency)} due</summary>
+        <form className="form-grid" aria-label="Record refund" onSubmit={recordRefund}
         onInput={clearFieldError} onKeyDown={handleFormKeyDown}>
-        <h3>Request refund: {money(selected.invoice.refundDue, selected.invoice.currency)} due</h3>
         <label>Original payment *<select required value={refundPaymentId}
           onChange={event => setRefundPaymentId(event.target.value)}>
           <option value="">Choose payment</option>
@@ -500,7 +504,7 @@ export default function BillingPage({ token }: { token: string }) {
         <label>Refund date *<input required type="date" value={refundDate}
           onChange={event => setRefundDate(event.target.value)} /></label>
         <div><button type="submit" disabled={busy}>Submit refund request</button></div>
-      </form>}
+      </form></details>}
       {!!selected.refunds.length && <section aria-label="Refund history">
         <h3>Refund history</h3>
         {selected.refunds.map(refund => <p key={refund.id}>
@@ -519,9 +523,9 @@ export default function BillingPage({ token }: { token: string }) {
         </tr>)}</tbody></table></div> : <p className="empty-state">No payments recorded.</p>}
     </section>}
 
-    <section className="panel" aria-label="Billing reports">
-      <div className="panel-heading"><h2>Outstanding &amp; collection reports</h2>
-        <p>Currency-wise totals, never mixed across currencies</p></div>
+    <details className="panel billing-reports" aria-label="Billing reports">
+      <summary>Outstanding &amp; collection reports</summary>
+      <p className="field-help">Currency-wise totals are never mixed.</p>
       <form className="form-grid" onSubmit={runReport}>
         <label>Report type
           <select value={reportMode} onChange={event => {
@@ -599,7 +603,7 @@ export default function BillingPage({ token }: { token: string }) {
           reportPage * 25 >= ((outstanding ?? collections)?.total ?? 0)}
           onClick={() => void loadReport(reportMode, reportPage + 1)}>Next</button>
       </div>}
-    </section>
+    </details>
 
     <FinancialApprovalsSection token={token} refreshKey={approvalsRefresh}
       onDecision={id => {

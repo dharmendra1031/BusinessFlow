@@ -64,6 +64,7 @@ export default function QuotationsPage({ token }: { token: string }) {
   const [query, setQuery] = useState('');
   const [selected, setSelected] = useState<QuoteDetail | null>(null);
   const [creating, setCreating] = useState(false);
+  const [editingRevision, setEditingRevision] = useState(false);
   const [form, setForm] = useState<Form>(blank);
   const [lines, setLines] = useState<LineForm[]>([blankLine()]);
   const [reviewComment, setReviewComment] = useState('');
@@ -100,6 +101,7 @@ export default function QuotationsPage({ token }: { token: string }) {
       const result = await api<QuoteDetail>('/api/admin/quotations/' + id, token);
       setSelected(result);
       setCreating(false);
+      setEditingRevision(false);
       setContractTerms(result.revisions[0].paymentTerms ?? '');
       const latest = result.revisions[0];
       setLines(latest.items.map(item => ({
@@ -324,7 +326,7 @@ export default function QuotationsPage({ token }: { token: string }) {
       <div className="panel-heading">
         <h2>{selected ? 'Quotation #' + selected.quotation.id : 'New quotation'}</h2>
         <button type="button" disabled={working} onClick={() => {
-          setSelected(null); setCreating(false); setLead(null);
+          setSelected(null); setCreating(false); setLead(null); setEditingRevision(false);
         }}>Close</button>
       </div>
 
@@ -343,9 +345,16 @@ export default function QuotationsPage({ token }: { token: string }) {
         {lead && <p className="field-help">Selected lead: {lead.name} (#{lead.id})</p>}
       </>}
 
-      {selected && <button type="button" disabled={working}
-        onClick={() => void downloadPdf(selected.quotation.id, selected.quotation.currentRevision)}>
-        Download quotation PDF</button>}
+      {selected && <div className="drawer-actions">
+        <button type="button" disabled={working}
+          onClick={() => void downloadPdf(selected.quotation.id, selected.quotation.currentRevision)}>
+          Download quotation PDF</button>
+        {['Draft', 'Approved', 'Sent'].includes(selected.quotation.status) &&
+          <button type="button" disabled={working} aria-expanded={editingRevision}
+            onClick={() => setEditingRevision(value => !value)}>
+            {editingRevision ? 'Close revision form' : 'Create new revision'}
+          </button>}
+      </div>}
       {selected && <p className="field-help">
         Lead: {selected.quotation.leadName} (#{selected.quotation.leadId}) ·
         Status: {selected.quotation.status} · Revision {selected.quotation.currentRevision}
@@ -381,7 +390,8 @@ export default function QuotationsPage({ token }: { token: string }) {
           <button disabled={working} onClick={() => void changeStatus('Rejected')}>Record rejected</button>
         </div>
       </section>}
-      {(!selected || ['Draft', 'Approved', 'Sent'].includes(selected.quotation.status)) && <form
+      {((creating && !selected) || (editingRevision && selected &&
+        ['Draft', 'Approved', 'Sent'].includes(selected.quotation.status))) && <form
         className="form-grid" onSubmit={save} onInput={clearFieldError} onKeyDown={handleFormKeyDown}>
         <label>Quotation title *<input required minLength={2} maxLength={150}
           value={form.title} onChange={event => update('title', event.target.value)} /></label>
