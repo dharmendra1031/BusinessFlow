@@ -18,6 +18,7 @@ test('Admin creates customer, contact and links an existing CRM lead', async ({ 
   await page.goto('/');
   await page.getByRole('navigation', { name: 'Main navigation' })
     .getByRole('button', { name: 'Customer master' }).click();
+  await page.getByRole('button', { name: 'Add customer', exact: true }).click();
 
   const form = page.getByRole('region', { name: 'Add customer' });
   await form.getByRole('textbox', { name: 'Customer / company name' }).fill(name);
