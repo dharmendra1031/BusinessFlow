@@ -62,6 +62,7 @@ export default function CustomersPage({ token }: { token: string }) {
   const [detail, setDetail] = useState<Detail | null>(null);
   const [loading, setLoading] = useState(true);
   const [working, setWorking] = useState(false);
+  const [showCreate, setShowCreate] = useState(false);
   const [error, setError] = useState('');
   const [newName, setNewName] = useState('');
   const [newEmail, setNewEmail] = useState('');
@@ -154,6 +155,7 @@ export default function CustomersPage({ token }: { token: string }) {
         }),
       });
       setNewName(''); setNewEmail(''); setNewPhone(''); setNewBilling(emptyCustomerBilling());
+      setShowCreate(false);
       await load();
       await openCustomer(created.id);
       notify('success', 'Customer created');
@@ -389,13 +391,18 @@ export default function CustomersPage({ token }: { token: string }) {
     <header className="page-header"><div>
       <span className="section-kicker">CLIENT RELATIONSHIPS</span>
       <h1>Customer master</h1>
-      <p>One customer record for contacts, leads and multiple development projects.</p>
-    </div></header>
+      <p>Find a customer first. Open a record to manage contacts, leads and billing information.</p>
+    </div>
+    <button type="button" className="primary" disabled={working}
+      aria-expanded={showCreate} aria-controls="customer-create"
+      onClick={() => setShowCreate(value => !value)}>
+      {showCreate ? 'Close form' : 'Add customer'}
+    </button></header>
 
-    <section className="panel" aria-label="Add customer">
+    {showCreate && <section id="customer-create" className="panel" aria-label="Add customer">
       <div className="panel-heading"><h2>Add customer</h2><p>Duplicate phone, email or GSTIN requires review. Leads are never linked automatically.</p></div>
       <form className="form-grid" onSubmit={createCustomer} onInput={clearFieldError} onKeyDown={handleFormKeyDown}>
-        <label>Customer / company name *<input required minLength={2} maxLength={200}
+        <label>Customer / company name *<input autoFocus required minLength={2} maxLength={200}
           value={newName} onChange={event => setNewName(event.target.value)} /></label>
         <label>Email<input type="email" maxLength={256}
           value={newEmail} onChange={event => setNewEmail(event.target.value)} /></label>
@@ -404,7 +411,7 @@ export default function CustomersPage({ token }: { token: string }) {
         <CustomerBillingFields value={newBilling} onChange={setNewBilling} />
         <div><button className="primary" disabled={working}>Add customer</button></div>
       </form>
-    </section>
+    </section>}
 
     <section className="panel" aria-label="Customer directory">
       <div className="panel-heading"><h2>Customer directory</h2><p>{total} customer records</p></div>

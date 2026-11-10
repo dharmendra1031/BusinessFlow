@@ -63,9 +63,15 @@ button.secondary-action:hover, button:not(.primary):hover:not(:disabled) { borde
   background: #4278eb; border-radius: 11px; color: #fff; flex-shrink: 0; }
 .brand strong { display: block; font-size: 19px; letter-spacing: -.5px; }
 .brand small { display: block; font-size: 11px; color: #e0eaff; margin-top: 2px; }
-.nav-label { color: #c6d7f0; font-size: 10px; font-weight: 800; letter-spacing: 1.8px;
-  margin: 48px 13px 14px; }
-.sidebar nav { display: flex; flex-direction: column; gap: 6px; min-height: 0; overflow-y: auto; }
+.nav-label, .nav-group-toggle { color: #c6d7f0; font-size: 10px; font-weight: 700; letter-spacing: 1.2px; }
+.nav-label { margin: 17px 13px 8px; }
+.sidebar nav { display: block; min-height: 0; overflow-y: auto; }
+.nav-group + .nav-group { border-top: 1px solid #354866; margin-top: 9px; padding-top: 5px; }
+.nav-group .nav-link { margin-bottom: 2px; }
+.nav-group-toggle { width: 100%; display: flex; justify-content: space-between; align-items: center;
+  margin: 10px 0 5px; padding: 10px 13px; border: 0; background: none; text-align: left; }
+.nav-group-toggle:hover, .nav-group-toggle:focus-visible { color: #fff; background: #2b426b; }
+.nav-group-toggle[aria-expanded="true"] svg { transform: rotate(90deg); }
 .sidebar .nav-link { display: flex; align-items: center; gap: 12px; width: 100%; border: 0;
   border-radius: 10px; background: transparent; color: #e7efff; padding: 13px 13px;
   font-weight: 550; text-align: left; transition: .15s ease; }

@@ -73,6 +73,7 @@ export default function BillingPage({ token }: { token: string }) {
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [total, setTotal] = useState(0);
   const [selected, setSelected] = useState<InvoiceDetails | null>(null);
+  const [showCreate, setShowCreate] = useState(false);
   const [contractSearch, setContractSearch] = useState('');
   const [contracts, setContracts] = useState<Contract[]>([]);
   const [contract, setContract] = useState<Contract | null>(null);
@@ -213,6 +214,7 @@ export default function BillingPage({ token }: { token: string }) {
         }),
       });
       setContract(null); setContracts([]); setAmount(''); setDescription('');
+      setShowCreate(false);
       setOutstanding(null); setCollections(null);
       await openInvoice(result.id);
       await load();
@@ -337,8 +339,13 @@ export default function BillingPage({ token }: { token: string }) {
     <header className="page-header"><div>
       <span className="section-kicker">SALES OPERATIONS</span>
       <h1>Invoices &amp; collections</h1>
-      <p>Create invoices from signed contracts, receive payments and review outstanding balances.</p>
-    </div></header>
+      <p>Open an invoice to record payments or review its balance.</p>
+    </div>
+    <button type="button" className="primary" disabled={busy}
+      aria-expanded={showCreate} aria-controls="invoice-create"
+      onClick={() => setShowCreate(value => !value)}>
+      {showCreate ? 'Close form' : 'Create invoice'}
+    </button></header>
 
     <section className="panel" aria-label="Invoice directory">
       <div className="panel-heading"><h2>Invoices</h2><p>{total} records</p></div>
@@ -369,10 +376,10 @@ export default function BillingPage({ token }: { token: string }) {
       </div>
     </section>
 
-    <section className="panel" aria-label="New invoice">
+    {showCreate && <section id="invoice-create" className="panel" aria-label="New invoice">
       <div className="panel-heading"><h2>New invoice</h2><p>Signed contracts only</p></div>
       <form className="form-grid" onSubmit={findContracts}>
-        <label>Find signed contract<input value={contractSearch} maxLength={150}
+        <label>Find signed contract<input autoFocus value={contractSearch} maxLength={150}
           onChange={event => { setContractSearch(event.target.value); setContract(null); }}
           placeholder="Client name or quotation title" /></label>
         <div><button type="submit" disabled={busy}>Find contracts</button></div>
@@ -400,7 +407,7 @@ export default function BillingPage({ token }: { token: string }) {
           onChange={event => setDueDate(event.target.value)} /></label>
         <div><button className="primary" disabled={busy}>Create invoice</button></div>
       </form>}
-    </section>
+    </section>}
 
     {selected && <section className="panel" aria-label="Invoice details">
       <div className="panel-heading"><h2>Invoice INV-{selected.invoice.id}</h2>

@@ -105,6 +105,39 @@ test('Admin: every main screen loads with a real API', async ({ page }, testInfo
   expect(pageErrors).toEqual([]);
 });
 
+test('Admin navigation and creation screens show actions only when needed', async ({ page }) => {
+  await signIn(page);
+  const nav = page.getByRole('navigation', { name: 'Main navigation' });
+  const advanced = nav.getByRole('button', { name: 'Administration', exact: true });
+
+  await expect(nav.getByText('Sales & customers')).toBeVisible();
+  await expect(advanced).toHaveAttribute('aria-expanded', 'false');
+  await expect(nav.getByRole('button', { name: 'Organization', exact: true })).toHaveCount(0);
+  await advanced.click();
+  await expect(nav.getByRole('button', { name: 'Organization', exact: true })).toBeVisible();
+  await advanced.click();
+
+  await nav.getByRole('button', { name: 'Customer master' }).click();
+  await expect(page.getByRole('region', { name: 'Add customer' })).toHaveCount(0);
+  await page.getByRole('button', { name: 'Add customer', exact: true }).click();
+  await expect(page.getByRole('region', { name: 'Add customer' })).toBeVisible();
+  await page.getByRole('button', { name: 'Close form' }).click();
+  await expect(page.getByRole('region', { name: 'Add customer' })).toHaveCount(0);
+
+  await nav.getByRole('button', { name: 'Sales quotations' }).click();
+  await expect(page.getByRole('region', { name: 'Quotation editor' })).toHaveCount(0);
+  await page.getByRole('button', { name: 'New quotation', exact: true }).click();
+  await expect(page.getByRole('region', { name: 'Quotation editor' })).toBeVisible();
+  await page.getByRole('region', { name: 'Quotation editor' })
+    .getByRole('button', { name: 'Close' }).click();
+  await expect(page.getByRole('region', { name: 'Quotation editor' })).toHaveCount(0);
+
+  await nav.getByRole('button', { name: 'Invoices & collections' }).click();
+  await expect(page.getByRole('region', { name: 'New invoice' })).toHaveCount(0);
+  await page.getByRole('button', { name: 'Create invoice', exact: true }).click();
+  await expect(page.getByRole('region', { name: 'New invoice' })).toBeVisible();
+});
+
 test('Leads: create, search, edit, status, schedule and history', async ({ page }) => {
   const customer = 'Playwright Customer ' + unique();
   await signIn(page);

@@ -46,6 +46,15 @@ const navigation = [
   { id: 'settings', label: 'Change password', icon: 'lock' },
 ] as const;
 
+const navigationGroups: { label: string; ids: Screen[] }[] = [
+  { label: 'Overview', ids: ['dashboard'] },
+  { label: 'Sales & customers', ids: ['leads', 'approvals', 'followups', 'customers', 'quotations', 'billing'] },
+  { label: 'Delivery', ids: ['projects'] },
+  { label: 'Team & reports', ids: ['employees', 'reports'] },
+  { label: 'Administration', ids: ['organization', 'roles', 'permissions', 'sources', 'duplicates', 'routing', 'audit'] },
+  { label: 'Account', ids: ['settings'] },
+];
+
 export default function App() {
   return <FeedbackProvider><Workspace /></FeedbackProvider>;
 }
@@ -74,6 +83,7 @@ function Workspace() {
   }, []);
   const [screen, setScreen] = useState<Screen>('dashboard');
   const [menuOpen, setMenuOpen] = useState(false);
+  const [adminMenuOpen, setAdminMenuOpen] = useState(false);
   const [newLeadRequest, setNewLeadRequest] = useState(0);
   const [allowed, setAllowed] = useState<Record<string, boolean> | null>(null);
   useEffect(() => {
@@ -176,13 +186,22 @@ function Workspace() {
         <button className="icon-button mobile-close" aria-label="Close menu"
           onClick={() => setMenuOpen(false)}><Icon name="close" /></button>
       </div>
-      <p className="nav-label">WORKSPACE</p>
-      <nav aria-label="Main navigation">{items.map(item =>
-        <button key={item.id} className={'nav-link ' + (screen === item.id ? 'active' : '')}
-          aria-current={screen === item.id ? 'page' : undefined} onClick={() => navigate(item.id)}>
-          <Icon name={item.icon} size={19} /><span>{item.label}</span>
-          {screen === item.id && <Icon name="chevron" size={16} className="nav-chevron" />}
-        </button>)}</nav>
+      <nav aria-label="Main navigation">{navigationGroups.map(group => {
+        const links = items.filter(item => group.ids.includes(item.id));
+        const advanced = group.label === 'Administration';
+        return links.length ? <div className="nav-group" key={group.label}>
+          {advanced ? <button type="button" className="nav-group-toggle"
+            aria-expanded={adminMenuOpen} onClick={() => setAdminMenuOpen(open => !open)}>
+            {group.label}<Icon name="chevron" size={14} />
+          </button> : <p className="nav-label">{group.label}</p>}
+          {(!advanced || adminMenuOpen) && links.map(item => <button key={item.id}
+            className={'nav-link ' + (screen === item.id ? 'active' : '')}
+            aria-current={screen === item.id ? 'page' : undefined} onClick={() => navigate(item.id)}>
+            <Icon name={item.icon} size={19} /><span>{item.label}</span>
+            {screen === item.id && <Icon name="chevron" size={16} className="nav-chevron" />}
+          </button>)}
+        </div> : null;
+      })}</nav>
       <div className="sidebar-bottom">
         <div className="sidebar-user"><span className="avatar">{initials(user.fullName)}</span>
           <div className="user-meta"><strong>{user.fullName}</strong><small>{user.roles.join(', ')}</small></div></div>

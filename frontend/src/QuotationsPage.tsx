@@ -63,6 +63,7 @@ export default function QuotationsPage({ token }: { token: string }) {
   const [search, setSearch] = useState('');
   const [query, setQuery] = useState('');
   const [selected, setSelected] = useState<QuoteDetail | null>(null);
+  const [creating, setCreating] = useState(false);
   const [form, setForm] = useState<Form>(blank);
   const [lines, setLines] = useState<LineForm[]>([blankLine()]);
   const [reviewComment, setReviewComment] = useState('');
@@ -98,6 +99,7 @@ export default function QuotationsPage({ token }: { token: string }) {
     try {
       const result = await api<QuoteDetail>('/api/admin/quotations/' + id, token);
       setSelected(result);
+      setCreating(false);
       setContractTerms(result.revisions[0].paymentTerms ?? '');
       const latest = result.revisions[0];
       setLines(latest.items.map(item => ({
@@ -114,6 +116,11 @@ export default function QuotationsPage({ token }: { token: string }) {
       notify('error', 'Unable to open quotation', err instanceof Error ? err.message : undefined);
     }
   }
+
+  useEffect(() => {
+    if (selected || creating)
+      document.getElementById('quotation-editor')?.scrollIntoView({ block: 'start' });
+  }, [selected?.quotation.id, creating]);
 
   function update(field: keyof Form, value: string) {
     setForm(previous => ({ ...previous, [field]: value }));
@@ -277,8 +284,13 @@ export default function QuotationsPage({ token }: { token: string }) {
     <header className="page-header"><div>
       <span className="section-kicker">SALES OPERATIONS</span>
       <h1>Sales quotations</h1>
-      <p>One quotation per lead, with a preserved revision history and tracked status.</p>
-    </div></header>
+      <p>Select a quotation to review it, or create one from an existing lead.</p>
+    </div>
+    <button type="button" className="primary" disabled={working}
+      onClick={() => {
+        setSelected(null); setCreating(true); setForm(blank());
+        setLines([blankLine()]); setLead(null); setLeads([]); setLeadQuery('');
+      }}>New quotation</button></header>
 
     <section className="panel" aria-label="Quotation directory">
       <div className="panel-heading"><h2>Quotations</h2><p>{total} records</p></div>
@@ -308,12 +320,12 @@ export default function QuotationsPage({ token }: { token: string }) {
       </div>
     </section>
 
-    <section className="panel" aria-label="Quotation editor">
+    {(creating || selected) && <section id="quotation-editor" className="panel" aria-label="Quotation editor">
       <div className="panel-heading">
         <h2>{selected ? 'Quotation #' + selected.quotation.id : 'New quotation'}</h2>
-        {selected && <button type="button" disabled={working} onClick={() => {
-          setSelected(null); setForm(blank()); setLines([blankLine()]); setLead(null);
-        }}>New quotation</button>}
+        <button type="button" disabled={working} onClick={() => {
+          setSelected(null); setCreating(false); setLead(null);
+        }}>Close</button>
       </div>
 
       {!selected && <>
@@ -448,8 +460,8 @@ export default function QuotationsPage({ token }: { token: string }) {
             <div><button className="primary" disabled={working}>Record signature</button></div>
           </form>}
       </section>}
-      {selected && <section className="project-section" aria-label="Quotation revision history">
-        <h3>Revision history ({selected.revisions.length})</h3>
+      {selected && <details className="project-section" aria-label="Quotation revision history">
+        <summary>Revision history ({selected.revisions.length})</summary>
         {selected.revisions.map(revision => <div className="project-task" key={revision.id}>
           <div><strong>Revision {revision.revision} · {revision.title}</strong>
             <button type="button" onClick={() => void downloadPdf(selected.quotation.id, revision.revision)}>
@@ -470,7 +482,7 @@ export default function QuotationsPage({ token }: { token: string }) {
             {revision.paymentTerms && <p>Terms: {revision.paymentTerms}</p>}
           </div>
         </div>)}
-      </section>}
-    </section>
+      </details>}
+    </section>}
   </section>;
 }
